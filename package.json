@@ -3,11 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit",
-    "smoke": "node eggshell.smoke.ts"
+    "postinstall": "node node_modules/eggshell-kernel/install.js",
+    "check": "tsc --noEmit && node plugins.check.ts",
+    "check:types": "tsc --noEmit",
+    "check:plugins": "node plugins.check.ts",
+    "boot": "node packages/boot/src/main.ts",
+    "smoke": "node eggshell.smoke.ts",
+    "conversation": "node conversation.smoke.ts"
   },
   "devDependencies": {
     "@types/node": ">=22",
+    "eggshell-kernel": "link:../eggshellmod/npm",
     "typescript": ">=5.6"
   }
 }

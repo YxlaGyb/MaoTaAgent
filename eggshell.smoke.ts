@@ -8,10 +8,17 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fixture as fixtureBin, kernel as kernelBin } from "eggshell-kernel";
+
 import { boot, KernelError, type Chunk, type Event } from "./eggshell.ts";
 
-const [eggshell, fixture] = process.argv.slice(2);
-if (!eggshell || !fixture) throw new Error("用法: node eggshell.smoke.ts <eggshell> <eggshell-fixture>");
+// 缺省用 pnpm install 装进来的那一对；也可以显式给路径。
+const [eggshellArg, fixtureArg] = process.argv.slice(2);
+const eggshell = eggshellArg ?? kernelBin;
+const fixture = fixtureArg ?? fixtureBin;
+if (!eggshell || !fixture) {
+  throw new Error("用法: node eggshell.smoke.ts [eggshell] [eggshell-fixture]（缺省用 node_modules/eggshell-kernel/bin 里的）");
+}
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

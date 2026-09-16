@@ -1,4 +1,4 @@
-// eggshellmod 宿主桥 —— 纯 TypeScript，零依赖，不含任何 Rust。
+// eggshellmod 宿主桥
 //
 // 内核是一个子进程: fd 0 收宿主的请求，fd 1 发回复与通知，fd 2 是日志。
 // 这里只做三件事: 起进程、按 Content-Length 分帧、把帧交给等它的人。

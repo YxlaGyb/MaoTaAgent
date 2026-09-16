@@ -1,0 +1,57 @@
+# MaoTa 的插件集。一个能力 id 一个提供方; 槽必须被指向的插件真的覆盖，否则启动失败。
+# 能力图（右边提供左边的能力）:
+#
+#   agent.loop        <- agent               requires api / tools / skill?
+#   api               <- api                 模型网关（openai 兼容 或 scripted 离线）
+#   tools             <- tools               工具目录; 不声明 requires，start 时从路由表里发现 tool.*
+#   tool.shell        <- shell               一个工具一个插件
+#   skill             <- skill               requires skill.filesystem
+#   skill.filesystem  <- skill-filesystem    技能从磁盘上来
+#
+# command 是裸名字时交给 PATH; args 里的相对路径按插件自己的 cwd 解析（缺省 = 本文件所在目录）。
+
+[plugins.api]
+command = "node"
+args = ["packages/api/src/main.ts"]
+[plugins.api.config]
+backend = "openai"                 # 想离线跑就写 "scripted"
+base_url = "https://api.deepseek.com/v1"
+model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"   # 也可以直接写 api_key = "..."
+
+[plugins.shell]
+command = "node"
+args = ["packages/shell/src/main.ts"]
+[plugins.shell.config]
+timeout_ms = 30000
+max_output_bytes = 65536
+
+[plugins.tools]
+command = "node"
+args = ["packages/tools/src/main.ts"]
+
+[plugins.skill-filesystem]
+command = "node"
+args = ["packages/skill-filesystem/src/main.ts"]
+[plugins.skill-filesystem.config]
+dirs = ["skills"]
+
+[plugins.skill]
+command = "node"
+args = ["packages/skill/src/main.ts"]
+
+[plugins.agent]
+command = "node"
+args = ["packages/agent/src/main.ts"]
+[plugins.agent.config]
+max_steps = 8
+# 模型不知道自己在哪、工具在哪儿跑 —— 这里补上。技能表由 skill 插件自己追加。
+system = "你是 MaoTa 的编码助手，跑在 Windows 上，工作目录就是 MaoTa 仓库根。要看代码、要看目录、要跑命令就用 shell 工具，别凭印象猜，也别用 tail/sed 这类 Unix 命令。回答用用户的语言，短。"
+
+[capability]
+"api" = "api"
+"tool.shell" = "shell"
+"tools" = "tools"
+"skill.filesystem" = "skill-filesystem"
+"skill" = "skill"
+"agent.loop" = "agent"
