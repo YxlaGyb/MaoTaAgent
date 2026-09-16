@@ -1,0 +1,13 @@
+{
+  "name": "maota",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "smoke": "node eggshell.smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": ">=22",
+    "typescript": ">=5.6"
+  }
+}
