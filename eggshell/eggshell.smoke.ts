@@ -46,10 +46,6 @@ args = ["--provides", "demo.text=1.0.0", "--chunks", "3"]
 [plugins.doomed]
 command = '${fixture}'
 args = ["--provides", "demo.other=1.0.0", "--exit-on-invoke"]
-
-[capability]
-"demo.text" = "provider"
-"demo.other" = "doomed"
 `,
 );
 

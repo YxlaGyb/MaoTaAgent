@@ -39,6 +39,7 @@ export type Method = (params: any, call: Call) => Promise<unknown> | unknown;
 export interface Definition {
   provides: Provide[];
   requires?: Require[];
+  configKeys?: readonly string[];
   /** initialize 时一次: 读 config，建连接之类。 */
   setup?(wiring: Wiring): void | Promise<void>;
   /** 依赖的 start 都回来了，路由表就绪。 */
@@ -120,6 +121,34 @@ export function serve(definition: Definition): void {
   channel.listen();
 }
 
+/**
+ * config 里有、configKeys 里没有的键。不声明 configKeys 就整个跳过检查 —— 那是
+ * 明确说"这个插件的键谁也别管"，跟声明空数组（一个键都不读）不是一回事。
+ */
+export function unknownConfigKeys(known: readonly string[] | undefined, config: Record<string, unknown>): string[] {
+  if (!known) return [];
+  return Object.keys(config).filter((key) => !known.includes(key));
+}
+
+/** 拼错的键必须有人说话，否则它会静默退回默认值。 */
+export function unknownConfigWarning(id: string, known: readonly string[], unknown: readonly string[]): string {
+  const reads = known.length > 0 ? `this plugin reads: ${known.join(", ")}` : "this plugin reads no config";
+  const keys = unknown.length === 1 ? "key" : "keys";
+  return `unknown config ${keys} in plugins.${id}.config: ${unknown.join(", ")} (${reads})`;
+}
+
+/**
+ * 报出 [plugins.<id>.config] 里这个插件不读的键。只报不拦: 配置可能比插件新，
+ * 那是升级顺序，不是错误。
+ */
+function warnUnknownConfig(definition: Definition, params: any, wiring: Wiring): void {
+  const known = definition.configKeys;
+  const unknown = unknownConfigKeys(known, wiring.config);
+  if (known === undefined || unknown.length === 0) return;
+  const id = String(params?.plugin_id ?? "?");
+  wiring.channel.log("warn", unknownConfigWarning(id, known, unknown), { plugin_id: id, unknown, known });
+}
+
 async function handle(
   definition: Definition,
   wiring: Wiring,
@@ -131,6 +160,7 @@ async function handle(
   switch (method) {
     case "initialize": {
       wiring.config = { ...(params?.config ?? {}) };
+      warnUnknownConfig(definition, params, wiring);
       await definition.setup?.(wiring);
       reply({ protocol: 1, provides: definition.provides, requires: definition.requires ?? [] });
       return;
@@ -233,6 +263,9 @@ async function check(definition: Definition): Promise<void> {
   }
   for (const item of definition.requires ?? []) {
     if (item.version.trim() === "") problems.push(`requires ${item.capability}: empty range`);
+  }
+  if (definition.configKeys === undefined) {
+    problems.push("configKeys is not declared: list the config keys initialize reads ([] if none)");
   }
   try {
     problems.push(...((await definition.selfCheck?.()) ?? []));

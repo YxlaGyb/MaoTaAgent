@@ -16,5 +16,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["*.ts", "packages/*/src/**/*.ts"]
+  "include": ["*.ts", "packages/*/src/**/*.ts", "eggshell/eggshell.ts", "eggshell/eggshell.smoke.ts"]
 }

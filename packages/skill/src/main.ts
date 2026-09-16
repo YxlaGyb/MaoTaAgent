@@ -23,6 +23,7 @@ async function rescan(wiring: Wiring, dirs: readonly string[]): Promise<Skill[]>
 export const definition: Definition = {
   provides: [{ capability: "skill", version: "1.0.0" }],
   requires: [{ capability: "skill.filesystem", version: "^1" }],
+  configKeys: ["dirs"],
 
   setup(wiring) {
     settings = {

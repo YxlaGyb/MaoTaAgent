@@ -19,6 +19,7 @@ let step = 0;
 
 export const definition: Definition = {
   provides: [{ capability: "api", version: "1.0.0" }],
+  configKeys: ["backend", "model", "base_url", "api_key", "api_key_env", "script"],
 
   setup(wiring) {
     const config = wiring.config;

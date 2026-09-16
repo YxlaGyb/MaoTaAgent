@@ -11,6 +11,7 @@ function message(error: unknown): string {
 
 export const definition: Definition = {
   provides: [{ capability: "tools", version: "1.0.0" }],
+  configKeys: [],
 
   start(wiring) {
     tools = discover(wiring.capabilities);

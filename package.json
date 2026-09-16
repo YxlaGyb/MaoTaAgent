@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "postinstall": "node node_modules/eggshell-kernel/install.js",
-    "check": "tsc --noEmit && node plugins.check.ts",
+    "check": "tsc --noEmit && node packages/plugin-kit/src/config-keys.check.ts && node plugins.check.ts",
     "check:types": "tsc --noEmit",
     "check:plugins": "node plugins.check.ts",
+    "check:config": "node packages/boot/src/main.ts --check",
     "boot": "node packages/boot/src/main.ts",
     "smoke": "node eggshell.smoke.ts",
     "conversation": "node conversation.smoke.ts"

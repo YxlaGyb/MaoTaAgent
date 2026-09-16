@@ -12,17 +12,15 @@ import { join } from "node:path";
 
 import { kernel as installedKernel } from "eggshell-kernel";
 
-import { boot, type Chunk } from "./eggshell.ts";
+import { boot, type Chunk } from "./eggshell/eggshell.ts";
 
 const root = import.meta.dirname;
-// 内核从哪来: 命令行 > 环境变量 > pnpm install 装进来的那份 > 旁边仓库的构建产物
 const kernelBin =
   process.argv[2] ??
   process.env.EGGSHELL_BIN ??
   installedKernel ??
   join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
 
-/** 一个 [plugins.<id>] 段。这里写绝对路径: 插件 cwd 是配置文件所在目录（这次是个临时目录）。 */
 function plugin(id: string, name: string): string[] {
   return [
     `[plugins.${id}]`,
@@ -39,11 +37,24 @@ writeFileSync(
   "---\nname: hello\ndescription: greet the user\n---\n\nSay hello politely.\n",
 );
 
-const config = join(dir, "eggshell.toml");
+writeFileSync(
+  join(dir, "eggshell.toml"),
+  [
+    ...plugin("api", "api"),
+    ...plugin("shell", "shell"),
+    ...plugin("tools", "tools"),
+    ...plugin("skill-filesystem", "skill-filesystem"),
+    ...plugin("skill", "skill"),
+    ...plugin("agent", "agent"),
+    "",
+  ].join("\n"),
+);
+const config = join(dir, "eggshell.local.toml");
 writeFileSync(
   config,
   [
-    ...plugin("api", "api"),
+    'extends = ["eggshell.toml"]',
+    "",
     "[plugins.api.config]",
     'backend = "scripted"',
     'model = "smoke"',
@@ -54,21 +65,8 @@ writeFileSync(
     '  { text = "second turn" },',
     "]",
     "",
-    ...plugin("shell", "shell"),
-    ...plugin("tools", "tools"),
-    ...plugin("skill-filesystem", "skill-filesystem"),
     "[plugins.skill-filesystem.config]",
     `dirs = ['${join(dir, "skills").replace(/\\/g, "/")}']`,
-    "",
-    ...plugin("skill", "skill"),
-    ...plugin("agent", "agent"),
-    "[capability]",
-    '"api" = "api"',
-    '"tool.shell" = "shell"',
-    '"tools" = "tools"',
-    '"skill.filesystem" = "skill-filesystem"',
-    '"skill" = "skill"',
-    '"agent.loop" = "agent"',
     "",
   ].join("\n"),
 );
@@ -100,13 +98,11 @@ function show(label: string, events: any[]): void {
   }
 }
 
-// 能力表: 六个都在，且都指向配置里写的那个插件
 const table = await kernel.capabilities();
 for (const [capability, route] of Object.entries(table)) console.log(`  ${capability} = ${route.plugin} (${route.version})`);
 assert.equal(table["agent.loop"]?.plugin, "agent");
 assert.equal(table["tool.shell"]?.plugin, "shell");
 
-// 插件各自的接口直连一遍（不经模型）
 const tools = (await kernel.invoke("tools", "list", {})) as { tools: Array<{ name: string }> };
 assert.deepEqual(
   tools.tools.map((tool) => tool.name),
@@ -121,7 +117,6 @@ const ran = (await kernel.invoke("tool.shell", "run", { command: "echo hi" })) a
 assert.equal(ran.exit_code, 0);
 assert.ok(ran.stdout.includes("hi"), `shell printed ${JSON.stringify(ran.stdout)}`);
 
-// 第一轮: 模型先要 shell，再要 skill，然后收口
 console.log("\nturn 1 (say hi)");
 const first = await turn({ session_id: "smoke", input: "say hi" });
 show("1", first);
@@ -136,7 +131,6 @@ assert.equal(done?.type, "done");
 assert.equal(done?.text, "all done");
 assert.equal(done?.steps, 3);
 
-// 第二轮: 同一个 session_id，历史还在（脚本下一步就是收口）
 console.log("\nturn 2 (again)");
 const second = await turn({ session_id: "smoke", input: "again" });
 show("2", second);

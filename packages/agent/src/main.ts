@@ -32,6 +32,7 @@ async function listSkills(ctx: Call): Promise<SkillSummary[]> {
 
 export const definition: Definition = {
   provides: [{ capability: "agent.loop", version: "1.0.0" }],
+  configKeys: ["max_steps", "system"],
   requires: [
     { capability: "api", version: "^1" },
     { capability: "tools", version: "^1" },

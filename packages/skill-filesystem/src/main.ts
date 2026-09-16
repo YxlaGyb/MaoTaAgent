@@ -15,6 +15,7 @@ let known = new Map<string, SkillFile>();
 
 export const definition: Definition = {
   provides: [{ capability: "skill.filesystem", version: "1.0.0" }],
+  configKeys: ["dirs", "max_bytes"],
 
   setup(wiring) {
     settings = {

@@ -20,6 +20,7 @@ function positive(value: unknown, fallback: number): number {
 
 export const definition: Definition = {
   provides: [{ capability: "tool.shell", version: "1.0.0" }],
+  configKeys: ["timeout_ms", "max_output_bytes", "cwd"],
 
   setup(wiring) {
     settings = {
