@@ -1,5 +1,3 @@
-// 跑一条命令。没有沙箱、没有白名单 —— 这个工具的全部价值就是把命令跑起来;
-// 该不该跑由调用方（宿主）决定，插件只负责跑、收、超时、截断。
 import { spawn } from "node:child_process";
 
 export interface CommandOptions {
@@ -18,7 +16,6 @@ export interface CommandResult {
   stderr: string;
 }
 
-/** win32 上 shell:true 是 cmd.exe，别处是 /bin/sh。 */
 export function runCommand(command: string, options: CommandOptions): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve, reject) => {
     const child = spawn(command, {
@@ -48,8 +45,6 @@ export function runCommand(command: string, options: CommandOptions): Promise<Co
       stderr = take(stderr, chunk);
     });
 
-    // ponytail: kill() 只杀直接子进程，shell 拉起来的孙子进程在 Windows 上会活下来。
-    // 需要连坐时换成 taskkill /T 或 Job Object。
     const timer = setTimeout(() => {
       timed_out = true;
       child.kill();

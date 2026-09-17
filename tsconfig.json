@@ -1,10 +1,14 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "lib": ["es2023"],
+    "lib": [
+      "es2023"
+    ],
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -16,5 +20,12 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["*.ts", "packages/*/src/**/*.ts", "eggshell/eggshell.ts", "eggshell/eggshell.smoke.ts"]
+  "include": [
+    "*.ts",
+    "packages/*/src/**/*.ts",
+    "apps/web/src/**/*.ts",
+    "eggshell/eggshell.ts",
+    "eggshell/eggshell.smoke.ts",
+    "eggshell/conversation.smoke.ts"
+, "apps/web/tests/web.smoke.ts", "packages/plugin-kit/src/plugins.check.ts"  ]
 }

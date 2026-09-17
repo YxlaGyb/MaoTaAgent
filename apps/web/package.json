@@ -1,0 +1,25 @@
+{
+  "name": "maota-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "dompurify": "^3",
+    "maotaui": "link:../../../MaoTaUI",
+    "marked": "^16",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5",
+    "typescript": "^7.0.2",
+    "vite": "^7"
+  }
+}

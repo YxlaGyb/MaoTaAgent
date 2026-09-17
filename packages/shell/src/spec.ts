@@ -1,4 +1,3 @@
-// 模型看见的那一面。工具名 = 能力 id 去掉 tool. 前缀。
 export const SPEC = {
   name: "shell",
   description: "Run a shell command and return its exit code, stdout and stderr.",

@@ -1,20 +1,28 @@
 {
-  "name": "maota",
+  "name": "MaoTaAgent",
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node node_modules/eggshell-kernel/install.js",
-    "check": "tsc --noEmit && node packages/plugin-kit/src/config-keys.check.ts && node plugins.check.ts",
+    "postinstall": "node node_modules/eggshell-kernel/install.js && pnpm -C apps/web install",
+    "check": "tsc --noEmit && node packages/plugin-kit/src/config-keys.check.ts && node packages/plugin-kit/src/plugins.check.ts && pnpm -C apps/web check",
     "check:types": "tsc --noEmit",
-    "check:plugins": "node plugins.check.ts",
+    "check:plugins": "node packages/plugin-kit/src/plugins.check.ts",
     "check:config": "node packages/boot/src/main.ts --check",
     "boot": "node packages/boot/src/main.ts",
-    "smoke": "node eggshell.smoke.ts",
-    "conversation": "node conversation.smoke.ts"
+    "smoke": "node eggshell/eggshell.smoke.ts",
+    "conversation": "node eggshell/conversation.smoke.ts",
+    "web": "node packages/boot/src/main.ts --serve",
+    "web:build": "pnpm -C apps/web build",
+    "web:smoke": "node apps/web/tests/web.smoke.ts"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "devDependencies": {
-    "@types/node": ">=22",
-    "eggshell-kernel": "link:../eggshellmod/npm",
-    "typescript": ">=5.6"
+    "@types/node": "^22.20.2",
+    "eggshell-kernel": "link:..\\eggshellmod\\npm"
+  },
+  "dependencies": {
+    "typescript": "^7.0.2"
   }
 }

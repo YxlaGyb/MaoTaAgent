@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// shell: 一个工具就是一个插件。能力 tool.shell（工具名 shell），方法 describe / run。
 import { CallError, runPlugin, type Definition } from "../../plugin-kit/src/index.ts";
 import { runCommand } from "./command.ts";
 import { SPEC } from "./spec.ts";

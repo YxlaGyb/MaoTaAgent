@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// skill: 技能的目录。正文从 skill.filesystem 拿，这一层管"谁在哪、缓存、按名取"。
 import { CallError, runPlugin, type Call, type Channel, type Definition, type Wiring } from "../../plugin-kit/src/index.ts";
 
 interface Skill {
@@ -40,7 +39,6 @@ export const definition: Definition = {
         count: skills.length,
       });
     } catch (error) {
-      // 目录读不了不拦住启动: 没有技能也能对话。
       skills = [];
       wiring.channel.log("warn", "skill scan failed", {
         error: error instanceof Error ? error.message : String(error),
@@ -90,7 +88,6 @@ export const definition: Definition = {
       await load?.({ name: "nope" }, call);
       problems.push("load accepted an unknown skill name");
     } catch {
-      // 要的就是这个
     }
     return problems;
   },

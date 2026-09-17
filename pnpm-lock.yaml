@@ -7,16 +7,17 @@ settings:
 importers:
 
   .:
+    dependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
     devDependencies:
       '@types/node':
-        specifier: '>=22'
+        specifier: ^22.20.2
         version: 22.20.2
       eggshell-kernel:
-        specifier: link:../eggshellmod/npm
+        specifier: link:..\eggshellmod\npm
         version: link:../eggshellmod/npm
-      typescript:
-        specifier: '>=5.6'
-        version: 7.0.2
 
 packages:
 

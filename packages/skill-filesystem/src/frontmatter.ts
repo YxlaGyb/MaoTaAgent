@@ -1,4 +1,3 @@
-// SKILL.md 开头那段 `---` 块。只认单行的 key: value —— 够用，不是 YAML 解析器。
 export interface Frontmatter {
   name?: string;
   description?: string;
@@ -21,7 +20,6 @@ export function parseFrontmatter(text: string): Frontmatter {
   return out;
 }
 
-/** 没写 description 时，取正文第一个既不是空行也不是标题的行。 */
 export function firstParagraph(text: string): string {
   const body = text.replace(/^---[\s\S]*?\r?\n---\r?\n?/, "");
   for (const line of body.split(/\r?\n/)) {

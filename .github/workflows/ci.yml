@@ -7,8 +7,17 @@ on:
 jobs:
   types:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: MaoTa
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: MaoTa
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/MaoTaUI
+          path: MaoTaUI
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -16,6 +25,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # 冒烟测试要一个真内核进程（eggshellmod 的构建产物），所以 CI 只做类型检查。
+          cache-dependency-path: MaoTa/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm -C apps/web install --frozen-lockfile
       - run: pnpm run check

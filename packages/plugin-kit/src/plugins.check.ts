@@ -1,6 +1,3 @@
-// 每个插件自检: 声明合法 + selfCheck 过。不起内核、不碰网络。
-//   node plugins.check.ts                      # 全部
-//   node packages/tools/src/main.ts --check        # 单个
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -11,20 +8,22 @@ interface Report {
   problems?: string[];
 }
 
-const root = import.meta.dirname;
-const names = readdirSync(join(root, "packages"), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort();
+const root = join(import.meta.dirname, "..", "..", "..");
+const mains = [join(root, "packages"), join(root, "apps")]
+  .flatMap((dir) =>
+    readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({ name: entry.name, main: join(dir, entry.name, "src", "main.ts") })),
+  )
+  .sort((left, right) => left.name.localeCompare(right.name));
 
-const hostOnly = new Set(["boot"]); // 宿主入口，不是插件: 插件都经 plugin-kit 声明
+const hostOnly = new Set(["boot"]);
 
 let failed = 0;
 let checked = 0;
-for (const name of names) {
-  const main = join(root, "packages", name, "src", "main.ts");
+for (const { name, main } of mains) {
   if (hostOnly.has(name)) continue;
-  if (!existsSync(main)) continue; // 还没写的包（hooks / jobs / mcp / session / ssh ...）先跳过
+  if (!existsSync(main)) continue;
   checked += 1;
 
   const run = spawnSync(process.execPath, [main, "--check"], { encoding: "utf8", cwd: root });
@@ -33,7 +32,6 @@ for (const name of names) {
   try {
     report = JSON.parse(line) as Report;
   } catch {
-    // 插件在报告之前就炸了: 下面按运行失败处理
   }
   const problems = report.problems ?? [];
   if (run.status !== 0 || problems.length > 0) {

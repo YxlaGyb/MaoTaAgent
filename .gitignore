@@ -1,2 +1,3 @@
 node_modules/
 eggshell.local.toml
+apps/web/dist/

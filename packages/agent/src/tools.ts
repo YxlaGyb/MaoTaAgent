@@ -1,5 +1,3 @@
-// 模型看的工具表。一个来自 tools（能力槽 tool.*），
-// 另一个是 loop 自己加的 skill —— 技能不是 shell 命令，不该混进工具插件里。
 export interface ToolSpec {
   name: string;
   description?: string;
@@ -20,4 +18,14 @@ export function readToolList(reply: unknown): ToolSpec[] {
     const spec = tool as ToolSpec | undefined;
     return typeof spec?.name === "string" && spec.name !== "" ? [spec] : [];
   });
+}
+
+export function injectCwd(spec: ToolSpec | undefined, args: unknown, cwd: string | null): unknown {
+  if (cwd === null || spec === undefined) return args;
+  const schema = spec.input_schema as { properties?: Record<string, unknown> } | undefined;
+  if (!schema?.properties || !("cwd" in schema.properties)) return args;
+  if (args === null || typeof args !== "object") return args;
+  const input = args as Record<string, unknown>;
+  if (typeof input.cwd === "string" && input.cwd !== "") return input;
+  return { ...input, cwd };
 }

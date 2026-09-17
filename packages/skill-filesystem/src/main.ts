@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// skill-filesystem: 技能从磁盘上来。能力 skill.filesystem，方法 scan / read。
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +9,6 @@ import { scanDirs, type SkillFile } from "./scan.ts";
 const DEFAULTS = { dirs: ["skills"], max_bytes: 64 * 1024 };
 
 let settings = { ...DEFAULTS };
-/** scan 认得的名字 → 文件。read 只认这张表: 名字可以来自模型，路径不行。 */
 let known = new Map<string, SkillFile>();
 
 export const definition: Definition = {
@@ -27,7 +25,6 @@ export const definition: Definition = {
           ? wiring.config.max_bytes
           : DEFAULTS.max_bytes,
     };
-    // 起手扫一次，读的人不必先自己 scan。
     known = new Map(scanDirs(settings.dirs).map((skill) => [skill.name, skill]));
   },
 

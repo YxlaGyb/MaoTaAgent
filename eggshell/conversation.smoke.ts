@@ -1,10 +1,3 @@
-// 整条链路跑一遍: 真内核 + 六个真插件 + 一个假模型（api 的 scripted 后端，不碰网络）。
-//
-// 先在 eggshellmod 里构建内核:
-//   cargo build -p eggshell-kernel --features fixture,host
-// 再跑:
-//   pnpm run conversation            # 用 pnpm install 装好的内核
-//   node conversation.smoke.ts [eggshell.exe]
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,9 +5,9 @@ import { join } from "node:path";
 
 import { kernel as installedKernel } from "eggshell-kernel";
 
-import { boot, type Chunk } from "./eggshell/eggshell.ts";
+import { boot, type Chunk } from "./eggshell.ts";
 
-const root = import.meta.dirname;
+const root = join(import.meta.dirname, "..");
 const kernelBin =
   process.argv[2] ??
   process.env.EGGSHELL_BIN ??
@@ -45,6 +38,7 @@ writeFileSync(
     ...plugin("tools", "tools"),
     ...plugin("skill-filesystem", "skill-filesystem"),
     ...plugin("skill", "skill"),
+    ...plugin("session", "session"),
     ...plugin("agent", "agent"),
     "",
   ].join("\n"),
@@ -74,6 +68,7 @@ writeFileSync(
 const logs: string[] = [];
 const kernel = await boot(config, {
   bin: kernelBin,
+  env: { ...process.env, MAOTA_HOME: dir },
   onLog: (line) => logs.push(String(line.message ?? JSON.stringify(line))),
 });
 
@@ -138,6 +133,6 @@ assert.equal(second.at(-1)?.text, "second turn");
 assert.equal(second.at(-1)?.steps, 1, "第二轮不该再要工具");
 
 assert.equal(await kernel.shutdown("kernel_exit"), 0, "干净关机的退出码是 0");
-console.log(`\n插件日志 ${logs.length} 条，最后几条:`);
+console.log(`\n${logs.length} plugin log lines, the last few:`);
 for (const line of logs.slice(-6)) console.log(`  ${line}`);
-console.log("\n对话过了: capabilities / tools.list / skill.list / tool.shell.run / agent.loop(两轮) / shutdown");
+console.log("\nconversation ok: capabilities / tools.list / skill.list / tool.shell.run / agent.loop (two turns) / shutdown");

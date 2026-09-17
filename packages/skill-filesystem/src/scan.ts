@@ -1,5 +1,3 @@
-// 目录结构就是约定: <dir>/<name>/SKILL.md，只扫一层。
-// 名字重复时先扫到的赢 —— 顺序就是 dirs 的顺序，写配置的人能预料。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -20,7 +18,7 @@ export function scanDirs(dirs: readonly string[]): SkillFile[] {
     try {
       entries = readdirSync(dir);
     } catch {
-      continue; // 目录不存在不是错误: 配置里可能列了一堆可选目录
+      continue;
     }
     for (const entry of entries) {
       const path = join(dir, entry, SKILL_FILE);

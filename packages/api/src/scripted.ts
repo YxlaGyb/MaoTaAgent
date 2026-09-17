@@ -1,5 +1,3 @@
-// 离线后端: 按脚本一步步回。用来跑通整条链路（测试、无网环境、脱机演示），
-// 或者把"模型"钉死来量 loop 的行为。
 import { CallError } from "../../plugin-kit/src/index.ts";
 import type { ChatReply } from "./messages.ts";
 

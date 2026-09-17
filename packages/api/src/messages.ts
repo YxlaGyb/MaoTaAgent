@@ -1,5 +1,3 @@
-// 模型协议那一层。只认 OpenAI 那套字段 —— 别的形状一律拒掉，
-// 免得"模型协议"在几个插件之间悄悄漂移。
 import { CallError } from "../../plugin-kit/src/index.ts";
 
 export interface Message {

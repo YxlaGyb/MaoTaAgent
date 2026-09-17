@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// tools: 工具目录。模型看的是工具名，路由要的是能力 id —— 这一层把它们对上。
 import { CallError, runPlugin, type Definition } from "../../plugin-kit/src/index.ts";
 import { discover, type ToolRoute } from "./registry.ts";
 
@@ -26,7 +25,6 @@ export const definition: Definition = {
           const spec = await ctx.channel.call(tool.capability, "describe", {}, { signal: ctx.signal });
           listed.push({ ...(spec as Record<string, unknown>), capability: tool.capability });
         } catch (error) {
-          // 一个坏工具不该让整张表消失: 记一条，跳过。
           ctx.channel.log("warn", `tool ${tool.name} describe failed`, { error: message(error) });
         }
       }

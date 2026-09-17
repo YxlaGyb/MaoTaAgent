@@ -1,0 +1,213 @@
+import { randomUUID } from "node:crypto";
+
+import { CallError, type Channel, type InboundStream } from "../../../packages/plugin-kit/src/index.ts";
+
+import type { BridgeFacts, HostEvent, SessionFile } from "./protocol.ts";
+
+interface LoopEvent {
+  type?: string;
+  text?: string;
+  step?: number;
+  tool?: string;
+  args?: unknown;
+  ok?: boolean;
+  output?: unknown;
+  steps?: number;
+}
+
+interface Turn {
+  session_id: string;
+  abort: AbortController;
+  stream: InboundStream | null;
+  cancelled: boolean;
+}
+
+export interface Bridge {
+  facts(): Promise<BridgeFacts>;
+  handle(method: string, params: Record<string, unknown>): Promise<unknown>;
+  onEvent(listener: (event: HostEvent) => void): () => void;
+  close(): void;
+}
+
+export function createBridge(channel: Channel): Bridge {
+  const turns = new Map<string, Turn>();
+  const listeners = new Set<(event: HostEvent) => void>();
+
+  const emit = (event: HostEvent): void => {
+    for (const listener of listeners) listener(event);
+  };
+
+  function busy(sessionId: string): Turn | null {
+    for (const turn of turns.values()) if (turn.session_id === sessionId) return turn;
+    return null;
+  }
+
+  function forward(turnId: string, data: unknown): boolean {
+    const event = (data ?? {}) as LoopEvent;
+    switch (event.type) {
+      case "text":
+        emit({ event: "text", turn_id: turnId, text: String(event.text ?? "") });
+        return false;
+      case "reasoning":
+        emit({ event: "reasoning", turn_id: turnId, text: String(event.text ?? "") });
+        return false;
+      case "step":
+        emit({ event: "step", turn_id: turnId, step: Number(event.step ?? 0) });
+        return false;
+      case "tool_call":
+        emit({ event: "tool_call", turn_id: turnId, tool: String(event.tool ?? ""), args: event.args });
+        return false;
+      case "tool_result":
+        emit({
+          event: "tool_result",
+          turn_id: turnId,
+          tool: String(event.tool ?? ""),
+          ok: event.ok !== false,
+          output: event.output,
+        });
+        return false;
+      case "done":
+        emit({
+          event: "turn.done",
+          turn_id: turnId,
+          steps: Number(event.steps ?? 0),
+          text: String(event.text ?? ""),
+        });
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  async function run(turnId: string, turn: Turn, params: Record<string, unknown>): Promise<void> {
+    try {
+      const stream = await channel.stream("agent.loop", "run", params, { signal: turn.abort.signal });
+      turn.stream = stream;
+      if (turn.cancelled) {
+        stream.cancel();
+        return;
+      }
+      for await (const data of stream) {
+        if (turn.cancelled) break;
+        if (forward(turnId, data)) return;
+      }
+      if (!turn.cancelled) {
+        emit({ event: "turn.error", turn_id: turnId, code: -32603, message: "agent 没给出收尾事件, 这一轮断了" });
+      }
+    } catch (error) {
+      if (!turn.cancelled) {
+        emit({
+          event: "turn.error",
+          turn_id: turnId,
+          code: error instanceof CallError ? error.code : -32603,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } finally {
+      turns.delete(turnId);
+    }
+  }
+
+  async function send(params: Record<string, unknown>): Promise<{ turn_id: string }> {
+    const session_id = typeof params.session_id === "string" ? params.session_id : "";
+    if (session_id === "") throw new CallError(-32602, "chat.send: session_id is required");
+    const input = typeof params.input === "string" ? params.input : "";
+    if (input.trim() === "") throw new CallError(-32602, "chat.send: input is empty");
+
+    const running = busy(session_id);
+    if (running) {
+      throw new CallError(
+        -32602,
+        running.cancelled ? `Session ${session_id} is still wrapping up the previous turn; please wait a moment` : `Session ${session_id} already has a running round; stop it first`,
+      );
+    }
+
+    const turn_id = randomUUID();
+    const turn: Turn = { session_id, abort: new AbortController(), stream: null, cancelled: false };
+    turns.set(turn_id, turn);
+    emit({ event: "turn.start", turn_id, session_id });
+    void run(turn_id, turn, {
+      session_id,
+      cwd: typeof params.cwd === "string" ? params.cwd : "",
+      input,
+      thinking: typeof params.thinking === "string" && params.thinking !== "" ? params.thinking : "off",
+    });
+    return { turn_id };
+  }
+
+  function cancel(params: Record<string, unknown>): { cancelled: boolean } {
+    const turnId = typeof params.turn_id === "string" ? params.turn_id : "";
+    const turn = turns.get(turnId);
+    if (!turn) throw new CallError(-32602, `unknown turn_id: ${JSON.stringify(turnId)}`);
+    if (!turn.cancelled) {
+      turn.cancelled = true;
+      turn.abort.abort();
+      turn.stream?.cancel();
+      emit({ event: "turn.cancelled", turn_id: turnId });
+    }
+    return { cancelled: true };
+  }
+
+  return {
+    async facts(): Promise<BridgeFacts> {
+      const listed = await channel
+        .call("session", "list", {})
+        .then((reply) => (reply as { dir?: unknown } | null)?.dir)
+        .catch(() => null);
+      const agent = await channel
+        .call("agent.loop", "info", {})
+        .then((reply) => reply as { levels?: string[]; thinking?: unknown } | null)
+        .catch(() => null);
+      const keyed = await channel
+        .call("api", "key", {})
+        .then((reply) => (reply as { has_key?: unknown } | null)?.has_key)
+        .catch(() => null);
+      return {
+        sessions_dir: typeof listed === "string" ? listed : null,
+        levels: agent?.levels ?? [],
+        thinking: (agent?.thinking as BridgeFacts["thinking"]) ?? null,
+        has_key: typeof keyed === "boolean" ? keyed : null,
+      };
+    },
+
+    async handle(method: string, params: Record<string, unknown>): Promise<unknown> {
+      switch (method) {
+        case "sessions.list":
+          return await channel.call("session", "list", {});
+        case "sessions.load":
+          return await channel.call("session", "load", {
+            id: params.id,
+            cwd: typeof params.cwd === "string" ? params.cwd : "",
+          });
+        case "settings.set_key":
+          return await channel.call("api", "key_set", {
+            api_key: typeof params.api_key === "string" ? params.api_key : "",
+          });
+        case "chat.send":
+          return await send(params);
+        case "chat.cancel":
+          return cancel(params);
+        default:
+          throw new CallError(-32601, `unknown method: ${method}`);
+      }
+    },
+
+    onEvent(listener: (event: HostEvent) => void): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+
+    close(): void {
+      for (const [turnId, turn] of turns) {
+        turn.cancelled = true;
+        turn.abort.abort();
+        turn.stream?.cancel();
+        turns.delete(turnId);
+      }
+    },
+  };
+}
+
+export type { SessionFile };

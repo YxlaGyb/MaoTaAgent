@@ -1,5 +1,3 @@
-// 一根管道上的两个方向: 内核发来的请求（我们回结果），我们发出去的请求（内核回结果）。
-// 分帧在 frame.ts，生命周期在 plugin.ts —— 这里只管"话怎么说"。
 import { frameReader, writeFrame } from "./frame.ts";
 
 export interface Route {
@@ -7,7 +5,6 @@ export interface Route {
   version: string;
 }
 
-/** 内核回的错。code 见 PROTOCOL.md 第 10 节。 */
 export class CallError extends Error {
   readonly code: number;
   readonly data: unknown;
@@ -20,7 +17,6 @@ export class CallError extends Error {
   }
 }
 
-/** 我当调用方收到的一条流（PROTOCOL.md 7.1）。break 出 for-await 就是放弃它。 */
 export interface InboundStream extends AsyncIterable<unknown> {
   readonly stream_id: string;
   cancel(): void;
@@ -31,7 +27,6 @@ type Waiter = {
   reject(error: Error): void;
 };
 
-/** 没人取就先攒着；关掉之后到达的东西直接丢。 */
 class Queue implements AsyncIterable<unknown> {
   private items: unknown[] = [];
   private readonly waiters: Waiter[] = [];
@@ -85,7 +80,6 @@ class Queue implements AsyncIterable<unknown> {
   }
 }
 
-/** Channel 把收到的帧交给这三件事；它们的含义由 plugin.ts 定。 */
 export interface ChannelHooks {
   request(method: string, params: any, reply: (result: unknown) => void): Promise<void> | void;
   notification(method: string, params: any): void;
@@ -93,9 +87,7 @@ export interface ChannelHooks {
 }
 
 export interface CallOptions {
-  /** 给这次调用的超时；不写就用提供方自己的默认值。 */
   timeout_ms?: number;
-  /** 取消时发 $/cancel（PROTOCOL.md 7.6）。 */
   signal?: AbortSignal;
 }
 
@@ -107,26 +99,23 @@ interface PendingCall {
 export class Channel {
   private readonly hooks: ChannelHooks;
   private readonly pending = new Map<string, PendingCall>();
-  /** 我们当调用方的流，键是内核起的 f-N。 */
   private readonly streams = new Map<string, Queue>();
+  private readonly parked = new Map<string, Array<{ method: string; params: any }>>();
   private next = 0;
 
   constructor(hooks: ChannelHooks) {
     this.hooks = hooks;
   }
 
-  /** 开始读 fd 0。内核关掉 stdin 就是"该走了"。 */
   listen(): void {
     process.stdin.on("data", frameReader((body) => this.receive(JSON.parse(body.toString("utf8")))));
     process.stdin.on("end", () => process.exit(0));
   }
 
-  /** 一问一答。 */
   call(capability: string, method: string, params: unknown, options: CallOptions = {}): Promise<unknown> {
     return this.invoke(capability, method, params, {}, options);
   }
 
-  /** 要一条流: 先拿到内核起的 stream_id，再收块。 */
   async stream(capability: string, method: string, params: unknown, options: CallOptions = {}): Promise<InboundStream> {
     const reply = (await this.invoke(capability, method, params, { stream: true }, options)) as {
       stream_id?: string;
@@ -140,7 +129,6 @@ export class Channel {
     writeFrame({ jsonrpc: "2.0", method, params });
   }
 
-  /** 唯一推荐的日志通道（PROTOCOL.md 4.4）: 结构化、内核补 plugin 字段、按行截断。 */
   log(level: string, message: string, fields: Record<string, unknown> = {}): void {
     this.notify("kernel.log", { level, message, fields });
   }
@@ -186,7 +174,10 @@ export class Channel {
   private attach(streamId: string): InboundStream {
     const queue = new Queue();
     this.streams.set(streamId, queue);
+    for (const { method, params } of this.parked.get(streamId) ?? []) this.deliver(method, streamId, params, queue);
+    this.parked.delete(streamId);
     const cancel = (): void => {
+      this.parked.delete(streamId);
       if (!this.streams.delete(streamId)) return;
       queue.close();
       this.notify("$/cancel", { stream_id: streamId });
@@ -216,7 +207,7 @@ export class Channel {
   private settle(frame: any): void {
     const key = String(frame?.id);
     const call = this.pending.get(key);
-    if (!call) return; // 不是给我们的回复
+    if (!call) return;
     this.pending.delete(key);
     if (frame.error) call.reject(new CallError(frame.error.code, frame.error.message, frame.error.data));
     else call.resolve(frame.result);
@@ -233,7 +224,6 @@ export class Channel {
       await this.hooks.request(method, params, reply);
       reply({});
     } catch (error) {
-      // 已经回过包说明这是条流 —— plugin.ts 那边用 $/stream/error 收的尾。
       if (replied) return;
       writeFrame({
         jsonrpc: "2.0",
@@ -248,26 +238,12 @@ export class Channel {
 
   private notification(method: string, params: any): void {
     switch (method) {
-      case "$/stream/chunk": {
-        const streamId = String(params?.stream_id);
-        const queue = this.streams.get(streamId);
-        if (!queue) return; // 我们放弃掉的那条流: 块到得比 $/cancel 晚
-        if (params?.done === true) {
-          this.streams.delete(streamId);
-          queue.close();
-        } else {
-          queue.push(params?.data);
-        }
-        return;
-      }
+      case "$/stream/chunk":
       case "$/stream/error": {
         const streamId = String(params?.stream_id);
         const queue = this.streams.get(streamId);
-        if (!queue) return;
-        this.streams.delete(streamId);
-        queue.fail(
-          new CallError(Number(params?.code ?? -32603), String(params?.message ?? "stream failed"), params?.data),
-        );
+        if (queue) this.deliver(method, streamId, params, queue);
+        else this.park(streamId, method, params);
         return;
       }
       case "$/event":
@@ -275,6 +251,33 @@ export class Channel {
         return;
       default:
         this.hooks.notification(method, params);
+    }
+  }
+
+  private deliver(method: string, streamId: string, params: any, queue: Queue): void {
+    if (method === "$/stream/error") {
+      this.streams.delete(streamId);
+      queue.fail(
+        new CallError(Number(params?.code ?? -32603), String(params?.message ?? "stream failed"), params?.data),
+      );
+      return;
+    }
+    if (params?.done === true) {
+      this.streams.delete(streamId);
+      queue.close();
+      return;
+    }
+    queue.push(params?.data);
+  }
+
+  private park(streamId: string, method: string, params: any): void {
+    const parked = this.parked.get(streamId) ?? [];
+    parked.push({ method, params });
+    this.parked.set(streamId, parked);
+    while (this.parked.size > 32) {
+      const oldest = this.parked.keys().next().value;
+      if (oldest === undefined) break;
+      this.parked.delete(oldest);
     }
   }
 }

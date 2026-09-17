@@ -1,5 +1,3 @@
-// 工具目录: 一个能力槽 tool.<name> 就是一个工具 <name>。
-// 热重载会换掉整张路由表，所以 start 时抓一次快照 —— 别把"哪个插件"缓存太久。
 import type { Route } from "../../plugin-kit/src/index.ts";
 
 export const TOOL_PREFIX = "tool.";

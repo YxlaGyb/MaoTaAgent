@@ -1,18 +1,27 @@
-// 一轮对话的引擎: 问模型 → 跑它要的工具 → 再问，直到它不再要工具（或撞上限）。
-// 这里不认识 shell，也不认识 HTTP —— 工具和模型都是能力 id，由调用方接进来。
 import type { Message } from "./session.ts";
 import type { ToolSpec } from "./tools.ts";
 
 export type LoopEvent =
   | { type: "step"; step: number }
   | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
   | { type: "tool_call"; tool: string; args: unknown }
   | { type: "tool_result"; tool: string; ok: boolean; output: unknown }
   | { type: "tick" }
   | { type: "done"; steps: number; text: string };
 
+export interface ChatDelta {
+  text?: string;
+  reasoning?: string;
+}
+
 export interface LoopDeps {
-  chat(messages: Message[], tools: ToolSpec[], signal: AbortSignal): Promise<Message>;
+  chat(
+    messages: Message[],
+    tools: ToolSpec[],
+    signal: AbortSignal,
+    emit: (delta: ChatDelta) => void,
+  ): Promise<Message>;
   callTool(name: string, args: unknown, signal: AbortSignal): Promise<unknown>;
   tools: ToolSpec[];
   max_steps: number;
@@ -32,7 +41,10 @@ export async function runLoop(
   for (let step = 1; step <= deps.max_steps; step += 1) {
     if (signal.aborted) return { steps: step - 1, text: "" };
     emit({ type: "step", step });
-    const message = await deps.chat(messages, deps.tools, signal);
+    const message = await deps.chat(messages, deps.tools, signal, (delta) => {
+      if (typeof delta.text === "string" && delta.text !== "") emit({ type: "text", text: delta.text });
+      if (typeof delta.reasoning === "string" && delta.reasoning !== "") emit({ type: "reasoning", text: delta.reasoning });
+    });
     messages.push(message);
 
     const calls = toolCalls(message);
@@ -48,7 +60,6 @@ export async function runLoop(
         messages.push({ role: "tool", tool_call_id: call.id, name: call.name, content: asText(output) });
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        // 工具炸了不是这一轮的终点: 把失败原样告诉模型，让它决定下一步。
         emit({ type: "tool_result", tool: call.name, ok: false, output: reason });
         messages.push({
           role: "tool",
@@ -78,7 +89,6 @@ function toolCalls(message: Message): ToolCall[] {
   });
 }
 
-/** 参数是模型给的 JSON 字符串（OpenAI 的约定）。坏 JSON 原样往下传，让工具自己说不。 */
 function parseArgs(raw: unknown): unknown {
   if (typeof raw !== "string" || raw.trim() === "") return {};
   try {
