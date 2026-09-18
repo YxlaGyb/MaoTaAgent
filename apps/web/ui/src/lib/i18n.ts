@@ -12,17 +12,40 @@ const DICT: Record<string, Record<string, string>> = {
     newChat: "新对话",
     tasks: "定时任务",
     plugins: "插件",
-    workspaces: "工作区",
+    pluginList: "已装配的插件",
+    capability: "能力",
+    provider: "插件",
+    workspaces: "项目",
     sessions: "会话",
-    addWorkspace: "添加工作区（选一个文件夹）",
-    noWorkdir: "没有工作目录: 落在 sessions/default",
+    addProject: "添加项目",
+    noWorkdir: "无项目: 会话落在 sessions/default",
     pathPlaceholder: "绝对路径, 回车确认",
-    noSessions: "这个工作区还没有对话",
+    noSessions: "还没有对话",
     running: "在跑",
     settings: "设置",
-    defaultProject: "默认",
+    defaultProject: "无项目",
+    pinned: "置顶",
+    archived: "已归档",
+    newSession: "新建会话",
+    more: "更多",
+    rename: "重命名",
+    removeProject: "删除项目",
+    pin: "置顶",
+    unpin: "取消置顶",
+    archive: "归档",
+    restore: "取消归档",
+    searchChats: "搜索对话",
+    quick: "快捷操作",
+    openFolder: "打开文件夹",
+    clear: "清空",
+    followSystem: "系统",
+    appearance: "外观",
+    dark: "深色",
+    light: "浅色",
+    chats: "聊天",
+    noChats: "没有匹配的对话",
     retry: "重试",
-    inputPlaceholder: "随心输入",
+    inputPlaceholder: "随心所欲",
     permission: "权限",
     askApproval: "请求批准",
     autoApprove: "帮我批准",
@@ -30,8 +53,7 @@ const DICT: Record<string, Record<string, string>> = {
     permissionAsk: "应如何批准 MaoTa 的操作？",
     askNote: "编辑外部文件和使用互联网时始终询问",
     autoNote: "仅对检测到的风险操作请求批准",
-    fullNote: "可不受限制地访问互联网和你电脑上的任何文件",
-    reset: "重置",
+    fullNote: "不受限制的访问一切",
     send: "发送",
     stop: "停止",
     thinking: "思考档位",
@@ -41,19 +63,15 @@ const DICT: Record<string, Record<string, string>> = {
     keyMissing: "还没配 API Key —— 填一个就能开始聊",
     save: "保存",
     saving: "保存中…",
-    configured: "已配置",
-    general: "通用设置",
+    general: "通用",
+    personalization: "个性化",
     language: "语言",
     backToApp: "返回应用",
     searchSettings: "搜索设置…",
-    personal: "个人",
-    system: "系统",
-    about: "关于",
-    version: "版本",
-    sessionsDir: "会话目录",
+    personal: "常规",
+    system: "集成",
+    about: "插件",
     languageNote: "界面显示语言",
-    keyNote: "调用模型服务用的密钥",
-    permissionNote: "运行工具时怎么向你确认",
     noMatch: "没有匹配的设置",
     errKey: "API key 无效或没权限",
     errRate: "网关限流, 稍后再试",
@@ -70,17 +88,40 @@ const DICT: Record<string, Record<string, string>> = {
     newChat: "New chat",
     tasks: "Scheduled tasks",
     plugins: "Plugins",
-    workspaces: "Workspaces",
+    pluginList: "Wired plugins",
+    capability: "Capability",
+    provider: "Plugin",
+    workspaces: "Projects",
     sessions: "Sessions",
-    addWorkspace: "Add a workspace (pick a folder)",
-    noWorkdir: "No working directory: sessions/default",
+    addProject: "Add project",
+    noWorkdir: "No project: sessions land in sessions/default",
     pathPlaceholder: "Absolute path, Enter to confirm",
-    noSessions: "No conversations in this workspace yet",
+    noSessions: "No chats yet",
     running: "Running",
     settings: "Settings",
-    defaultProject: "Default",
+    defaultProject: "No project",
+    pinned: "Pinned",
+    archived: "Archived",
+    newSession: "New session",
+    more: "More",
+    rename: "Rename",
+    removeProject: "Delete project",
+    pin: "Pin",
+    unpin: "Unpin",
+    archive: "Archive",
+    restore: "Unarchive",
+    searchChats: "Search chats",
+    quick: "Quick actions",
+    openFolder: "Open folder",
+    clear: "Clear",
+    followSystem: "System",
+    appearance: "Appearance",
+    dark: "Dark",
+    light: "Light",
+    chats: "Chats",
+    noChats: "No matching chats",
     retry: "Retry",
-    inputPlaceholder: "Type anything",
+    inputPlaceholder: "Whatever you want",
     permission: "Permission",
     askApproval: "Ask for approval",
     autoApprove: "Approve for me",
@@ -88,8 +129,7 @@ const DICT: Record<string, Record<string, string>> = {
     permissionAsk: "How should MaoTa actions be approved?",
     askNote: "Always ask before touching files outside or using the internet",
     autoNote: "Only ask for approval on actions flagged as risky",
-    fullNote: "Unrestricted access to the internet and any file on your computer",
-    reset: "Reset",
+    fullNote: "Unrestricted access to everything",
     send: "Send",
     stop: "Stop",
     thinking: "Thinking level",
@@ -99,19 +139,15 @@ const DICT: Record<string, Record<string, string>> = {
     keyMissing: "No API key yet — add one to start chatting",
     save: "Save",
     saving: "Saving…",
-    configured: "Configured",
-    general: "General",
+    general: "Common",
+    personalization: "Personalization",
     language: "Language",
     backToApp: "Back to app",
     searchSettings: "Search settings…",
-    personal: "Personal",
-    system: "System",
-    about: "About",
-    version: "Version",
-    sessionsDir: "Sessions directory",
+    personal: "General",
+    system: "Integrations",
+    about: "Plugins",
     languageNote: "Language used by the interface",
-    keyNote: "Credential used to call the model service",
-    permissionNote: "How to confirm with you before running tools",
     noMatch: "No matching settings",
     errKey: "API key is invalid or not permitted",
     errRate: "Gateway rate limit, try again later",
@@ -128,29 +164,48 @@ const DICT: Record<string, Record<string, string>> = {
 
 const listeners = new Set<() => void>();
 
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
 function read(): string {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw !== null && DICT[raw] !== undefined ? raw : "zh-CN";
+    return raw === "system" || (raw !== null && DICT[raw] !== undefined) ? raw : "system";
   } catch {
-    return "zh-CN";
+    return "system";
   }
 }
 
-let lang = read();
+function resolve(preference: string): string {
+  if (DICT[preference] !== undefined) return preference;
+  const spoken = typeof navigator === "undefined" ? "" : navigator.language.toLowerCase();
+  return spoken.startsWith("zh") ? "zh-CN" : "en";
+}
+
+let preference = read();
+let lang = resolve(preference);
 
 export function getLang(): string {
   return lang;
 }
 
+export function getLangPref(): string {
+  return preference;
+}
+
 export function setLang(next: string): void {
-  if (DICT[next] === undefined) return;
-  lang = next;
+  if (next !== "system" && DICT[next] === undefined) return;
+  preference = next;
+  lang = resolve(next);
   try {
     localStorage.setItem(KEY, next);
   } catch {
   }
-  document.documentElement.lang = next;
+  document.documentElement.lang = lang;
   for (const listener of listeners) listener();
 }
 
@@ -161,12 +216,11 @@ export function tr(lang: string, key: string, vars?: Record<string, string | num
 }
 
 export function useLang(): string {
-  return useSyncExternalStore((listener) => {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  }, getLang);
+  return useSyncExternalStore(subscribe, getLang);
+}
+
+export function useLangPref(): string {
+  return useSyncExternalStore(subscribe, getLangPref);
 }
 
 export function useT(): (key: string, vars?: Record<string, string | number>) => string {

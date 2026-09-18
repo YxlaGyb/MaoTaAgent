@@ -52,6 +52,7 @@ let settings = settingsFrom({}, process.env.NODE_ENV);
 let bridge!: Bridge;
 let server!: Server;
 let dev: { middlewares: Middleware; close(): Promise<void> } | null = null;
+let capabilities: Record<string, { plugin: string; version: string }> = {};
 
 function codeOf(error: unknown): number {
   return error instanceof CallError ? error.code : -32603;
@@ -68,7 +69,14 @@ function url(): string {
 }
 
 async function info(): Promise<AppInfo> {
-  return { version: VERSION, url: url(), listening: server.listening, dev: settings.dev, ...(await bridge.facts()) };
+  return {
+    version: VERSION,
+    url: url(),
+    listening: server.listening,
+    dev: settings.dev,
+    capabilities,
+    ...(await bridge.facts()),
+  };
 }
 
 function openBrowser(target: string, channel: Channel): void {
@@ -254,6 +262,7 @@ export const definition: Definition = {
   },
 
   async start(wiring) {
+    capabilities = wiring.capabilities ?? {};
     await new Promise<void>((resolve) => {
       server.once("error", () => resolve());
       server.listen(settings.port, settings.host, resolve);

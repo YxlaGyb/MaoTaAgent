@@ -1,14 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { Select } from "maotaui";
+import { MaoSegmented, MaoSelect } from "maotaui";
 
-import { LANGS, setLang, useLang, useT } from "../lib/i18n.ts";
+import { LANGS, setLang, useLangPref, useT } from "../lib/i18n.ts";
 import type { AppInfo } from "../lib/rpc.ts";
 import { Icon, ICON } from "./Icon.tsx";
-import { KeyPrompt } from "./KeyPrompt.tsx";
-import { PERMISSION_OPTIONS } from "./PermissionPicker.tsx";
 
 interface Row {
-  value?: string;
   name: string;
   note?: string;
   control?: ReactNode;
@@ -24,18 +21,16 @@ interface Section {
 
 export function SettingsView({
   info,
-  permission,
-  onPermission,
-  onKeySaved,
+  theme,
+  onTheme,
   onBack,
 }: {
   info: AppInfo | null;
-  permission: string;
-  onPermission: (mode: string) => void;
-  onKeySaved: () => void;
+  theme: string;
+  onTheme: (theme: string) => void;
   onBack: () => void;
 }) {
-  const lang = useLang();
+  const lang = useLangPref();
   const t = useT();
   const [section, setSection] = useState("general");
   const [query, setQuery] = useState("");
@@ -51,48 +46,73 @@ export function SettingsView({
           name: t("language"),
           note: t("languageNote"),
           control: (
-            <Select
+            <MaoSelect
               className="settings-lang"
               aria-label={t("language")}
-              options={LANGS}
+              options={[{ value: "system", label: t("followSystem") }, ...LANGS]}
               value={lang}
               onChange={(event) => setLang(event.target.value)}
             />
           ),
         },
+      ],
+    },
+    {
+      id: "appearance",
+      group: t("personal"),
+      icon: ICON.art,
+      label: t("personalization"),
+      rows: [
         {
-          name: "API Key",
-          note: t("keyNote"),
-          control: info?.has_key === true ? <span className="settings-value">{t("configured")}</span> : <KeyPrompt onSaved={onKeySaved} />,
+          name: t("appearance"),
+          control: (
+            <MaoSegmented
+              label={t("appearance")}
+              options={[
+                { value: "system", label: t("followSystem") },
+                { value: "dark", label: t("dark") },
+                { value: "light", label: t("light") },
+              ]}
+              value={theme}
+              onChange={onTheme}
+            />
+          ),
         },
       ],
     },
     {
-      id: "permission",
-      group: t("personal"),
-      icon: ICON.shield,
-      label: t("permission"),
-      rows: PERMISSION_OPTIONS.map((option) => ({ value: option.value, name: t(option.name), note: t(option.note) })),
-    },
-    {
       id: "about",
       group: t("system"),
-      icon: ICON.info,
+      icon: ICON.plug,
       label: t("about"),
-      rows: [
-        { name: t("version"), control: <span className="settings-value">{info?.version ?? "—"}</span> },
-        { name: t("sessionsDir"), note: info?.sessions_dir ?? "—" },
-      ],
+      rows: [...new Set(Object.values(info?.capabilities ?? {}).map((route) => route.plugin))]
+        .sort()
+        .map((plugin) => ({
+          name: plugin,
+          note: Object.entries(info?.capabilities ?? {})
+            .filter(([, route]) => route.plugin === plugin)
+            .map(([capability, route]) => `${capability} ${route.version}`)
+            .join(" · "),
+        })),
     },
   ];
 
   const needle = query.trim().toLowerCase();
-  const matches = (row: Row): boolean => `${row.name} ${row.note ?? ""}`.toLowerCase().includes(needle);
   const hunting = needle !== "";
-  const shown = hunting ? sections.filter((item) => item.rows.some(matches)) : sections.filter((item) => item.id === section);
-  const nav = hunting ? sections.filter((item) => item.label.toLowerCase().includes(needle) || item.rows.some(matches)) : sections;
+  const matches = (row: Row): boolean => `${row.name} ${row.note ?? ""}`.toLowerCase().includes(needle);
+  const hits = sections
+    .map((item) => ({
+      section: item,
+      rows: item.rows.some(matches) ? item.rows.filter(matches) : item.label.toLowerCase().includes(needle) ? item.rows : [],
+    }))
+    .filter((hit) => hit.rows.length > 0);
+  const shown = sections.filter((item) => item.id === section);
+  const groups = [...new Set(sections.map((item) => item.group))];
 
-  const groups = [...new Set(nav.map((item) => item.group))];
+  const go = (id: string): void => {
+    setSection(id);
+    setQuery("");
+  };
 
   return (
     <main className="settings">
@@ -102,7 +122,7 @@ export function SettingsView({
           {t("backToApp")}
         </button>
 
-        <label className="settings-search">
+        <div className="settings-search">
           <Icon d={ICON.search} className="icon icon-sm" />
           <input
             value={query}
@@ -110,69 +130,68 @@ export function SettingsView({
             aria-label={t("searchSettings")}
             onChange={(event) => setQuery(event.target.value)}
           />
-        </label>
+          {query === "" ? null : (
+            <button type="button" className="settings-search-clear" title={t("clear")} aria-label={t("clear")} onClick={() => setQuery("")}>
+              <Icon d={ICON.close} className="icon icon-sm" />
+            </button>
+          )}
+        </div>
 
-        <nav className="settings-nav">
-          {groups.map((group) => (
-            <div key={group}>
-              <div className="settings-group">{group}</div>
-              {nav
-                .filter((item) => item.group === group)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`settings-nav-item${item.id === section ? " is-on" : ""}`}
-                    onClick={() => {
-                      setSection(item.id);
-                      setQuery("");
-                    }}
-                  >
-                    <Icon d={item.icon} className="icon icon-sm" />
-                    {item.label}
+        {hunting ? (
+          <div className="settings-hits">
+            {hits.length === 0 ? <div className="settings-empty">{t("noMatch")}</div> : null}
+            {hits.map((hit) => (
+              <div key={hit.section.id}>
+                <button type="button" className="settings-hit-head" onClick={() => go(hit.section.id)}>
+                  <Icon d={hit.section.icon} className="icon icon-sm" />
+                  {hit.section.label}
+                </button>
+                {hit.rows.map((row) => (
+                  <button key={row.name} type="button" className="settings-hit" onClick={() => go(hit.section.id)}>
+                    {row.name}
                   </button>
                 ))}
-            </div>
-          ))}
-        </nav>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <nav className="settings-nav">
+            {groups.map((group) => (
+              <div key={group}>
+                <div className="settings-group">{group}</div>
+                {sections
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`settings-nav-item${item.id === section ? " is-on" : ""}`}
+                      onClick={() => setSection(item.id)}
+                    >
+                      <Icon d={item.icon} className="icon icon-sm" />
+                      {item.label}
+                    </button>
+                  ))}
+              </div>
+            ))}
+          </nav>
+        )}
       </aside>
 
       <div className="settings-pane">
-        {shown.length === 0 ? <div className="settings-empty">{t("noMatch")}</div> : null}
         {shown.map((item) => (
           <section key={item.id} className="settings-section">
             <h1 className="settings-title">{item.label}</h1>
             <div className="settings-card">
-              {(hunting ? item.rows.filter(matches) : item.rows).map((row) => {
-                const option = PERMISSION_OPTIONS.find((candidate) => candidate.value === row.value);
-                if (option === undefined) {
-                  return (
-                    <div key={row.name} className="settings-item">
-                      <div className="settings-item-text">
-                        <div className="settings-item-name">{row.name}</div>
-                        {row.note === undefined ? null : <div className="settings-item-note">{row.note}</div>}
-                      </div>
-                      {row.control === undefined ? null : <div className="settings-item-control">{row.control}</div>}
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`option${option.value === permission ? " is-on" : ""}${option.tone}`}
-                    aria-pressed={option.value === permission}
-                    onClick={() => onPermission(option.value)}
-                  >
-                    <Icon d={option.icon} className="icon option-icon" />
-                    <span className="option-text">
-                      <span className="option-name">{row.name}</span>
-                      <span className="option-note">{row.note}</span>
-                    </span>
-                    {option.value === permission ? <Icon d={ICON.check} className="icon icon-sm option-check" /> : null}
-                  </button>
-                );
-              })}
+              {item.rows.map((row) => (
+                <div key={row.name} className="settings-item">
+                  <div className="settings-item-text">
+                    <div className="settings-item-name">{row.name}</div>
+                    {row.note === undefined ? null : <div className="settings-item-note">{row.note}</div>}
+                  </div>
+                  {row.control === undefined ? null : <div className="settings-item-control">{row.control}</div>}
+                </div>
+              ))}
             </div>
           </section>
         ))}

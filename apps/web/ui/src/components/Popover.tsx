@@ -1,7 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { Icon, ICON } from "./Icon.tsx";
-
 export function Popover({
   label,
   title,
@@ -53,7 +51,6 @@ export function Popover({
         onClick={onToggle}
       >
         {label}
-        <Icon d={ICON.chevron} className="icon icon-sm popover-caret" />
       </button>
       {open ? <div className={`popover-panel${align === "end" ? " is-end" : ""}`}>{children}</div> : null}
     </div>

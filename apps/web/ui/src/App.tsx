@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ChatView } from "./components/ChatView.tsx";
 import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
+import { PluginsView } from "./components/PluginsView.tsx";
+import { SearchPalette } from "./components/SearchPalette.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
-import { DEFAULT_PROJECT, Sidebar } from "./components/Sidebar.tsx";
+import { DEFAULT_PROJECT, projectLabel, Sidebar } from "./components/Sidebar.tsx";
 import { describe, errorText } from "./lib/errors.ts";
+import { useT } from "./lib/i18n.ts";
 import {
   call,
   subscribe,
@@ -36,6 +39,10 @@ export function App() {
   const [kernelError, setKernelError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [projects, setProjects] = useState<string[]>(() => load<string[]>("maota.projects", []));
+  const [names, setNames] = useState<Record<string, string>>(() => load<Record<string, string>>("maota.names", {}));
+  const [removed, setRemoved] = useState<string[]>(() => load<string[]>("maota.removed", []));
+  const [pinned, setPinned] = useState<string[]>(() => load<string[]>("maota.pinned", []));
+  const [archived, setArchived] = useState<string[]>(() => load<string[]>("maota.archived", []));
   const [project, setProject] = useState<string>(() => load<string>("maota.project", DEFAULT_PROJECT));
   const [active, setActive] = useState<{ id: string; cwd: string } | null>(() =>
     load<{ id: string; cwd: string } | null>("maota.active", null),
@@ -43,11 +50,16 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "settings">("chat");
+  const [page, setPage] = useState<"chat" | "settings" | "plugins">("chat");
+  const [palette, setPalette] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [manualPath, setManualPath] = useState(false);
   const [thinking, setThinking] = useState<string>(() => load<string>("maota.thinking", "off"));
   const [permission, setPermission] = useState<string>(() => load<string>("maota.permission", "ask"));
+  const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
 
+  const t = useT();
   const activeRef = useRef(active);
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
@@ -57,9 +69,24 @@ export function App() {
     remember("maota.active", active);
   }, [active]);
   useEffect(() => remember("maota.projects", projects), [projects]);
+  useEffect(() => remember("maota.names", names), [names]);
+  useEffect(() => remember("maota.removed", removed), [removed]);
+  useEffect(() => remember("maota.pinned", pinned), [pinned]);
+  useEffect(() => remember("maota.archived", archived), [archived]);
   useEffect(() => remember("maota.project", project), [project]);
   useEffect(() => remember("maota.thinking", thinking), [thinking]);
   useEffect(() => remember("maota.permission", permission), [permission]);
+  useEffect(() => remember("maota.theme", theme), [theme]);
+  useEffect(() => {
+    const system = window.matchMedia("(prefers-color-scheme: light)");
+    const paint = (): void => {
+      document.documentElement.dataset.theme =
+        theme === "light" || (theme === "system" && system.matches) ? "light" : "dark";
+    };
+    paint();
+    system.addEventListener("change", paint);
+    return () => system.removeEventListener("change", paint);
+  }, [theme]);
 
   const openSession = useCallback(async (id: string, cwd: string): Promise<void> => {
     const seq = ++loadSeq.current;
@@ -207,10 +234,12 @@ export function App() {
     }
   };
 
-  const newChat = (): void => {
+  const newChat = (cwd: string): void => {
     setFailure(null);
     setPending(null);
-    const fresh = { id: crypto.randomUUID(), cwd: project };
+    setPage("chat");
+    setRemoved((prev) => prev.filter((item) => item !== cwd));
+    const fresh = { id: crypto.randomUUID(), cwd };
     activeRef.current = fresh;
     setActive(fresh);
   };
@@ -218,76 +247,182 @@ export function App() {
   const open = (session: SessionSummary): void => {
     setFailure(null);
     setPending(null);
+    setPage("chat");
     setActive({ id: session.id, cwd: session.cwd === "" ? DEFAULT_PROJECT : session.cwd });
   };
 
   const addProject = (cwd: string): void => {
     setProjects((prev) => (prev.includes(cwd) ? prev : [...prev, cwd]));
+    setRemoved((prev) => prev.filter((item) => item !== cwd));
     setProject(cwd);
   };
 
-  const listed = useMemo(() => {
-    const mine = sessions.filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === project);
-    if (active !== null && active.cwd === project && !mine.some((session) => session.id === active.id)) {
-      return [{ id: active.id, cwd: active.cwd, title: "", updated_at: new Date().toISOString() }, ...mine];
+  const pickProject = async (): Promise<void> => {
+    if (picking) return;
+    setPicking(true);
+    try {
+      const reply = await call<{ path: string | null }>("workspace.pick");
+      if (reply.path !== null) addProject(reply.path);
+    } catch {
+      setManualPath(true);
+    } finally {
+      setPicking(false);
     }
-    return mine;
-  }, [active, project, sessions]);
+  };
 
-  const allProjects = useMemo(() => {
-    const seen = new Set<string>([DEFAULT_PROJECT, project, ...projects]);
-    for (const session of sessions) seen.add(session.cwd === "" ? DEFAULT_PROJECT : session.cwd);
-    return [...seen].sort((left, right) => {
-      if (left === DEFAULT_PROJECT) return -1;
-      if (right === DEFAULT_PROJECT) return 1;
-      return left.localeCompare(right);
+  const allSessions = useMemo(() => {
+    if (active === null || sessions.some((session) => session.id === active.id)) return sessions;
+    return [{ id: active.id, cwd: active.cwd, title: "", updated_at: new Date().toISOString() }, ...sessions];
+  }, [active, sessions]);
+
+  const groups = useMemo(() => {
+    const cwds = new Set<string>([DEFAULT_PROJECT, project, ...projects]);
+    for (const session of allSessions) cwds.add(session.cwd === "" ? DEFAULT_PROJECT : session.cwd);
+    return [...cwds]
+      .filter((cwd) => !removed.includes(cwd))
+      .map((cwd) => ({
+        cwd,
+        sessions: allSessions
+          .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === cwd)
+          .filter((session) => !archived.includes(session.id))
+          .sort(
+            (left, right) =>
+              Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
+              right.updated_at.localeCompare(left.updated_at),
+          ),
+      }))
+      .sort((left, right) => {
+        if (left.cwd === DEFAULT_PROJECT) return -1;
+        if (right.cwd === DEFAULT_PROJECT) return 1;
+        const leftName = projectLabel(left.cwd, "", names[left.cwd] ?? "");
+        const rightName = projectLabel(right.cwd, "", names[right.cwd] ?? "");
+        return leftName.localeCompare(rightName);
+      });
+  }, [allSessions, archived, names, pinned, project, projects, removed]);
+
+  const pinnedRows = useMemo(
+    () => allSessions.filter((session) => pinned.includes(session.id) && !archived.includes(session.id)),
+    [allSessions, archived, pinned],
+  );
+
+  const archivedRows = useMemo(
+    () => allSessions.filter((session) => archived.includes(session.id)),
+    [allSessions, archived],
+  );
+
+  const searchable = useMemo(
+    () => allSessions.filter((session) => !archived.includes(session.id)),
+    [allSessions, archived],
+  );
+
+  const renameProject = (cwd: string, name: string): void => {
+    setNames((prev) => {
+      const next = { ...prev };
+      if (name === "") delete next[cwd];
+      else next[cwd] = name;
+      return next;
     });
-  }, [project, projects, sessions]);
+  };
+
+  const removeProject = (cwd: string): void => {
+    setProjects((prev) => prev.filter((item) => item !== cwd));
+    setRemoved((prev) => (prev.includes(cwd) ? prev : [...prev, cwd]));
+    if (project === cwd) setProject(DEFAULT_PROJECT);
+  };
+
+  const flip = (list: string[], id: string): string[] =>
+    list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+
+  const flipPin = (id: string): void => setPinned((prev) => flip(prev, id));
+  const flipArchive = (id: string): void => setArchived((prev) => flip(prev, id));
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPalette((was) => !was);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   if (page === "settings") {
     return (
-      <SettingsView
-        info={info}
-        permission={permission}
-        onPermission={setPermission}
-        onKeySaved={() => void loadInfo()}
-        onBack={() => setPage("chat")}
-      />
+      <SettingsView info={info} theme={theme} onTheme={setTheme} onBack={() => setPage("chat")} />
     );
   }
+
+  const title = allSessions.find((item) => item.id === active?.id)?.title || t("newChat");
 
   return (
     <div className="app">
       <Sidebar
-        projects={allProjects}
+        groups={groups}
+        pinned={pinnedRows}
+        archived={archivedRows}
+        names={names}
         project={project}
-        sessions={listed}
         activeId={active?.id ?? null}
         running={Object.keys(lives)}
         onNew={newChat}
         onProject={setProject}
         onAddProject={addProject}
+        onPickProject={() => void pickProject()}
+        picking={picking}
+        manual={manualPath}
+        onManual={setManualPath}
         onOpen={open}
+        onRename={renameProject}
+        onRemoveProject={removeProject}
+        onPin={flipPin}
+        onArchive={flipArchive}
         onSettings={() => setPage("settings")}
+        onPlugins={() => setPage("plugins")}
+        onSearch={() => setPalette(true)}
       />
-      <ChatView
-        info={info}
-        kernelError={kernelError}
-        session={active}
-        messages={messages}
-        pending={pending}
-        live={active === null ? null : (lives[active.id] ?? null)}
-        failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
-        hasKey={info?.has_key ?? null}
-        thinking={thinking}
-        permission={permission}
-        onRetry={() => void loadInfo()}
-        onKeySaved={() => void loadInfo()}
-        onThinking={setThinking}
-        onPermission={setPermission}
-        onSend={submit}
-        onCancel={() => void cancel()}
-      />
+      {page === "plugins" ? (
+        <PluginsView info={info} />
+      ) : (
+        <ChatView
+          info={info}
+          kernelError={kernelError}
+          session={active}
+          title={title}
+          messages={messages}
+          pending={pending}
+          live={active === null ? null : (lives[active.id] ?? null)}
+          failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
+          hasKey={info?.has_key ?? null}
+          thinking={thinking}
+          permission={permission}
+          onRetry={() => void loadInfo()}
+          onKeySaved={() => void loadInfo()}
+          onThinking={setThinking}
+          onPermission={setPermission}
+          onSend={submit}
+          onCancel={() => void cancel()}
+        />
+      )}
+      {palette ? (
+        <SearchPalette
+          sessions={searchable}
+          names={names}
+          onNew={() => {
+            setPalette(false);
+            newChat(project);
+          }}
+          onAddProject={() => {
+            setPalette(false);
+            void pickProject();
+          }}
+          onPick={(session) => {
+            setPalette(false);
+            open(session);
+          }}
+          onClose={() => setPalette(false)}
+        />
+      ) : null}
     </div>
   );
 }

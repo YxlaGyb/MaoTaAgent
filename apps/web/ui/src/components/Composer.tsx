@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MaoButton, TextArea } from "maotaui";
+import { MaoButton, MaoTextArea } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import type { AppInfo } from "../lib/rpc.ts";
@@ -64,7 +64,7 @@ export function Composer({
 
   return (
     <div className="composer">
-      <TextArea
+      <MaoTextArea
         className="composer-text"
         rows={2}
         placeholder={t("inputPlaceholder")}

@@ -70,30 +70,32 @@ export function MessageList({
         stick.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
       }}
     >
-      {messages.map((message, index) => (
-        <MessageItem key={index} message={message} />
-      ))}
-      {pending === null ? null : <MessageItem message={{ role: "user", content: pending }} />}
-      {live === null ? null : (
-        <div className="msg msg-assistant">
-          {live.reasoning === "" ? null : (
-            <details className="thinking-block" open={live.running}>
-              <summary>{t("thinkingText")}</summary>
-              <pre className="thinking-text">{live.reasoning}</pre>
-            </details>
-          )}
-          {live.tools.map((tool, index) => (
-            <ToolRow key={index} tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
-          ))}
-          <Markdown text={live.text} />
-          {live.running ? (
-            <div className="status">
-              {t("step", { n: live.step })}
-              {live.text === "" ? t("waiting") : ""}
-            </div>
-          ) : null}
-        </div>
-      )}
+      <div className="messages-column">
+        {messages.map((message, index) => (
+          <MessageItem key={index} message={message} />
+        ))}
+        {pending === null ? null : <MessageItem message={{ role: "user", content: pending }} />}
+        {live === null ? null : (
+          <div className="msg msg-assistant">
+            {live.reasoning === "" ? null : (
+              <details className="thinking-block" open={live.running}>
+                <summary>{t("thinkingText")}</summary>
+                <pre className="thinking-text">{live.reasoning}</pre>
+              </details>
+            )}
+            {live.tools.map((tool, index) => (
+              <ToolRow key={index} tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
+            ))}
+            <Markdown text={live.text} />
+            {live.running ? (
+              <div className="status">
+                {t("step", { n: live.step })}
+                {live.text === "" ? t("waiting") : ""}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

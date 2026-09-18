@@ -45,31 +45,24 @@ export function ThinkingPicker({
     >
       <div className="popover-head">
         <span>{t("thinking")}</span>
+      </div>
+      {levels.map((level) => (
         <button
+          key={level}
           type="button"
-          className="popover-reset"
-          title={t("reset")}
-          aria-label={t("reset")}
-          onClick={() => onChange(levels[0] ?? "off")}
+          className={`option${level === value ? " is-on" : ""}`}
+          aria-pressed={level === value}
+          onClick={() => {
+            onChange(level);
+            setOpen(false);
+          }}
         >
-          <Icon d={ICON.reset} className="icon icon-sm" />
+          <span className="option-text">
+            <span className="option-name">{name(level)}</span>
+          </span>
+          {level === value ? <Icon d={ICON.check} className="icon icon-sm option-check" /> : null}
         </button>
-      </div>
-      <div className="level-now">{name(value)}</div>
-      <div className="level-slider">
-        <span className="level-track" />
-        {levels.map((level) => (
-          <button
-            key={level}
-            type="button"
-            className={`level-dot${level === value ? " is-on" : ""}`}
-            title={name(level)}
-            aria-label={name(level)}
-            aria-pressed={level === value}
-            onClick={() => onChange(level)}
-          />
-        ))}
-      </div>
+      ))}
     </Popover>
   );
 }

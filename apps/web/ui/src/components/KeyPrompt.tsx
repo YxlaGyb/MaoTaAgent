@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { MaoButton, TextField } from "maotaui";
+import { MaoButton, MaoTextField } from "maotaui";
 
 import { describe } from "../lib/errors.ts";
 import { useT } from "../lib/i18n.ts";
@@ -35,7 +35,7 @@ export function KeyPrompt({ onSaved }: { onSaved: () => void }) {
         void save();
       }}
     >
-      <TextField
+      <MaoTextField
         type="password"
         value={value}
         placeholder="sk-…"

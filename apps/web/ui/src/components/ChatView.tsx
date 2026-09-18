@@ -3,14 +3,15 @@ import { MaoButton } from "maotaui";
 import type { AppInfo, SessionMessage } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
+import { Icon, ICON } from "./Icon.tsx";
 import { KeyPrompt } from "./KeyPrompt.tsx";
 import { MessageList, type LiveTurn } from "./MessageList.tsx";
-import { projectLabel } from "./Sidebar.tsx";
 
 export function ChatView({
   info,
   kernelError,
   session,
+  title,
   messages,
   pending,
   live,
@@ -28,6 +29,7 @@ export function ChatView({
   info: AppInfo | null;
   kernelError: string | null;
   session: { id: string; cwd: string } | null;
+  title: string;
   messages: SessionMessage[];
   pending: string | null;
   live: LiveTurn | null;
@@ -63,12 +65,13 @@ export function ChatView({
     <main className="chat">
       {session === null ? null : (
         <header className="chat-head">
-          <span className="chat-title">{projectLabel(session.cwd, t("defaultProject"))}</span>
+          <span className="chat-title">{title}</span>
         </header>
       )}
 
       {kernelError === null ? null : (
         <div className="banner banner-error">
+          <Icon d={ICON.alert} className="icon icon-sm" />
           <span>{kernelError}</span>
           <MaoButton variant="ghost" size="sm" onClick={onRetry}>
             {t("retry")}
@@ -90,7 +93,12 @@ export function ChatView({
       ) : (
         <>
           <MessageList messages={messages} pending={pending} live={live} />
-          {failure === null ? null : <div className="banner banner-error">{failure}</div>}
+          {failure === null ? null : (
+            <div className="banner banner-error">
+              <Icon d={ICON.alert} className="icon icon-sm" />
+              <span>{failure}</span>
+            </div>
+          )}
           {composer}
         </>
       )}

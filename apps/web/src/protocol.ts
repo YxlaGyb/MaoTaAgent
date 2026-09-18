@@ -12,6 +12,7 @@ export interface AppInfo {
   levels: string[];
   thinking: Record<string, { model?: string; tools?: boolean }> | null;
   has_key: boolean | null;
+  capabilities: Record<string, { plugin: string; version: string }>;
 }
 
 export interface SessionSummary {
