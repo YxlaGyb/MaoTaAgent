@@ -36,24 +36,24 @@ for (const [argv, want] of cases) {
 
 function run(args: string[]): { status: number | null; stdout: string; stderr: string } {
   const result = spawnSync(process.execPath, [main, ...args], { encoding: "utf8" });
-  if (result.error) throw new Error(`拉不起来 ${process.execPath}（${args.join(" ")}）: ${result.error.message}`);
+  if (result.error) throw new Error(`cannot spawn ${process.execPath} (${args.join(" ")}): ${result.error.message}`);
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
 const help = run(["--help"]);
 assert.equal(help.status, 0, help.stderr);
-assert.ok(help.stdout.includes("maota check"), "help 要列出 check 子命令");
-assert.ok(help.stdout.includes("退出码:"), "help 要列出退出码表");
+assert.ok(help.stdout.includes("maota check"), "the help text should list the check subcommand");
+assert.ok(help.stdout.includes("exit codes:"), "the help text should list the exit codes");
 
 const version = run(["--version"]);
 assert.equal(version.status, 0, version.stderr);
 assert.equal(version.stdout, `maota ${VERSION}\n`);
 
 const unknown = run(["--nope"]);
-assert.equal(unknown.status, 2, `未知选项的退出码是 2，实际 ${unknown.status}`);
+assert.equal(unknown.status, 2, `an unknown option should exit 2, got ${unknown.status}`);
 assert.ok(unknown.stderr.includes("unknown option: --nope"), unknown.stderr);
 
 const misplaced = run(["serve", "extra"]);
-assert.equal(misplaced.status, 2, `serve 带位置参数的退出码是 2，实际 ${misplaced.status}`);
+assert.equal(misplaced.status, 2, `serve with a positional argument should exit 2, got ${misplaced.status}`);
 
-console.log(`cli ok: ${cases.length} 条语法用例 / --help / --version / 用法错误退出码 2`);
+console.log(`cli ok: ${cases.length} grammar cases / --help / --version / usage errors exit 2`);

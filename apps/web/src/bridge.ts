@@ -92,7 +92,7 @@ export function createBridge(channel: Channel): Bridge {
         if (forward(turnId, data)) return;
       }
       if (!turn.cancelled) {
-        emit({ event: "turn.error", turn_id: turnId, code: -32603, message: "agent 没给出收尾事件, 这一轮断了" });
+        emit({ event: "turn.error", turn_id: turnId, code: -32603, message: "the agent never sent a closing event; this turn was cut off" });
       }
     } catch (error) {
       if (!turn.cancelled) {

@@ -7,34 +7,37 @@ import { resolveConfigPath, resolveKernelBin } from "../../../packages/boot/conf
 import { boot, type Chunk } from "../../../packages/boot/host/src/index.ts";
 
 import { parseArgs } from "./args.ts";
+import { restartOnSourceChange } from "./hmr.ts";
 
 const VERSION =
   (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string }).version ??
   "0.0.0";
 
-const USAGE = `maota：MaoTa 的启动器
+const USAGE = `maota: the MaoTa launcher
 
-用法:
-  maota               交互模式（TTY 下带提示符，否则逐行读 stdin）
-  maota <问句>        问一次，打印最终回答后退出
-  maota serve         启动 web 插件并常驻（Ctrl-C 退出）
-  maota check         只检查配置，不启动（退出码来自内核）
-  maota --help        这份用法
-  maota --version     打印版本
+usage:
+  maota               interactive: a prompt on a TTY, one turn per line otherwise
+  maota <question>    ask once, print the final answer, exit
+  maota serve         start the web plugin and stay resident (Ctrl-C to exit)
+  maota check         check the config only, start nothing (the exit code comes from the kernel)
+  maota --help        this text
+  maota --version     print the version
 
-选项:
-  --config <path>   配置文件（缺省 EGGSHELL_CONFIG，其次 eggshell.local.toml，其次 eggshell.toml）
-  --kernel <bin>    内核二进制（缺省 EGGSHELL_BIN，其次安装的 eggshell-kernel，其次隔壁仓库的 debug 产物）
-  --session <id>    会话 id（缺省 cli）
-  --json            只在 check 下有效：让内核输出 JSON 报告
-  -h, --help        这份用法
-  -v, --version     打印版本
+options:
+  --config <path>   config file (default: EGGSHELL_CONFIG, then $MAOTA_HOME/eggshell.local.toml,
+                    then $MAOTA_HOME/eggshell.toml, generated from the packaged default if missing)
+  --kernel <bin>    kernel binary (default: EGGSHELL_BIN, then the installed eggshell-kernel,
+                    then the neighbouring debug build)
+  --session <id>    session id (default: cli)
+  --json            check only: ask the kernel for a JSON report
+  -h, --help        this text
+  -v, --version     print the version
 
-退出码:
-  0     正常退出
-  1     运行期失败：内核起不来、流里报错、内核异常退出
-  2     用法或配置错误：未知选项、选项缺值、serve/check 带参数、配置文件不存在
-  其它  内核 shutdown 的返回码原样透传
+exit codes:
+  0     clean exit
+  1     runtime failure: the kernel did not boot, a stream reported an error, the kernel exited badly
+  2     usage or config error: unknown option, missing option value, extra argument to serve/check, config file not found
+  other whatever the kernel's shutdown returned, passed through
 `;
 
 const parsed = parseArgs(process.argv.slice(2));
@@ -77,6 +80,8 @@ const kernel = await boot(config, {
   console.error(error instanceof Error ? error.message : String(error));
   return process.exit(1);
 });
+
+restartOnSourceChange(kernel);
 
 let closing = false;
 process.on("SIGINT", () => {

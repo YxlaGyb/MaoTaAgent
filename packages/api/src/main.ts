@@ -155,11 +155,11 @@ export const definition: Definition = {
     }
 
     const parser = new SseParser();
-    const half = parser.push('data: {"choices":[{"delta":{"content":"你');
+    const half = parser.push('data: {"choices":[{"delta":{"content":"→');
     if (half.length !== 0) problems.push(`SSE parser flushed a half line: ${JSON.stringify(half)}`);
-    const frames = parser.push('好"}}]}\r\n\r\n: keep-alive\r\n\ndata: a\ndata: b\n\n');
+    const frames = parser.push('"}}]}\r\n\r\n: keep-alive\r\n\ndata: a\ndata: b\n\n');
     if (frames.length !== 2) problems.push(`SSE parser produced ${frames.length} frames, expected 2`);
-    if (frames[0] !== '{"choices":[{"delta":{"content":"你好"}}]}') {
+    if (frames[0] !== '{"choices":[{"delta":{"content":"→"}}]}') {
       problems.push(`SSE parser glued the line wrong: ${JSON.stringify(frames[0])}`);
     }
     if (frames[1] !== "a\nb") problems.push(`SSE parser joined multi-line data as ${JSON.stringify(frames[1])}`);
@@ -167,14 +167,14 @@ export const definition: Definition = {
     if (parser.end().length !== 0) problems.push("SSE parser invented a frame at the end of the stream");
 
     const acc = createAccumulator();
-    const first = applyDelta(acc, { content: "hi", reasoning_content: "想" });
-    if (first.text !== "hi" || first.reasoning !== "想") problems.push(`applyDelta emitted ${JSON.stringify(first)}`);
+    const first = applyDelta(acc, { content: "hi", reasoning_content: "plan" });
+    if (first.text !== "hi" || first.reasoning !== "plan") problems.push(`applyDelta emitted ${JSON.stringify(first)}`);
     applyDelta(acc, { tool_calls: [{ index: 0, id: "c1", type: "function", function: { name: "shell", arguments: '{"comm' } }] });
     applyDelta(acc, { tool_calls: [{ index: 0, function: { arguments: 'and":"x"}' } }] });
     applyDelta(acc, { tool_calls: [{ index: 1, id: "c2", function: { name: "other", arguments: "{}" } }] });
     const message = messageFromAccumulator(acc);
     if (message.content !== "hi") problems.push(`accumulator content is ${JSON.stringify(message.content)}`);
-    if (acc.reasoning !== "想") problems.push(`accumulator reasoning is ${JSON.stringify(acc.reasoning)}`);
+    if (acc.reasoning !== "plan") problems.push(`accumulator reasoning is ${JSON.stringify(acc.reasoning)}`);
     const calls = (message.tool_calls ?? []) as Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
     if (calls.length !== 2) problems.push(`accumulator kept ${calls.length} tool calls, expected 2`);
     if (calls[0]?.function?.arguments !== '{"command":"x"}') {

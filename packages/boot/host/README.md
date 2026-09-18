@@ -15,13 +15,17 @@ Boot one eggshell kernel as a child process and talk to it from Node: ask for th
 
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
+- [Further exploration](#further-exploration)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
 ## Use this package
+
+Use it from any Node front end that drives a kernel: boot once, then invoke, stream, subscribe and shut down through the returned host.
+
+### Booting a kernel
 
 `boot()` resolves once the kernel has answered `capabilities`, so a returned host is a live, wired process:
 
@@ -53,37 +57,54 @@ process.exit(await kernel.shutdown("ui_quit"));
 | `invoke(capability, method, params, { stream: true })` | A chunk stream as an `AsyncIterable`; breaking out of it cancels the call. |
 | `subscribe(patterns)` | An `AsyncIterable` of matching kernel events. |
 | `on(patterns, handler)` | The same events through a callback; returns an unsubscribe function. |
+| `restart(plugin, reason?)` | Stop one named plugin and start it again; `reason` is `source` or `manual` and only shows up in events. |
 | `shutdown(reason)` | Ask for shutdown, then resolve with the child's exit code. |
 | `exited` | The child's exit code as a promise, without asking for shutdown. |
+
+-----
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-<details>
-<summary>Implementation internals: click to expand</summary>
+This section explains how the host keeps one child process and one stdio pipe honest; the calls it exposes are covered in [Use this package](#use-this-package).
 
-Both directions use the kernel's framing: a `Content-Length` header, a blank line, then one JSON body. Replies settle the pending call by id; `$/stream/chunk`, `$/stream/error` and `$/event` are notifications. Chunks that arrive before the consumer starts iterating are parked per stream id and replayed when it does, and a stream that never gets a consumer is parked until the process ends. Queued bytes above 1 MiB pause the child's stdout; below 256 KiB it resumes. Leaving a stream early sends `$/cancel` for it. `shutdown` sends the request and waits for the exit; the reason is `ui_quit` or `kernel_exit`. When the child dies, the host keeps the last 32 stderr lines, finds the last one that looks like a kernel report, and expands its `errors[]` into the thrown message. A provider that dies mid-flight makes later calls to its capability fail with `-32011`; an unknown capability fails with `-32010`.
+### Source map
 
-| File | Contents |
+| File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `boot`, `Host`, `KernelError`, `Queue`, framing helpers, `Chunk` and `Event` types |
 
-</details>
+### Framing, backpressure and cancellation
+
+Both directions use the kernel's framing: a `Content-Length` header, a blank line, then one JSON body. Replies settle the pending call by id; `$/stream/chunk`, `$/stream/error` and `$/event` are notifications. Chunks that arrive before the consumer starts iterating are parked per stream id and replayed when it does, and a stream that never gets a consumer is parked until the process ends. Queued bytes above 1 MiB pause the child's stdout; below 256 KiB it resumes. Leaving a stream early sends `$/cancel` for it. When the child dies, the host keeps the last 32 stderr lines, finds the last one that looks like a kernel report, and expands its `errors[]` into the thrown message. A provider that dies mid-flight makes later calls to its capability fail with `-32011`; an unknown capability fails with `-32010`.
+
+### Restart and plugin identity
+
+`kernel.plugin.started` carries `trigger` (`boot`, `config`, `source`, `manual`) together with the plugin's `cwd`, `command` and `args` as the loader resolved them, which is what lets a front end map a changed file back to the plugin that owns it. `restart` reuses the reload path in stop-then-start order: the old instance gets `shutdown{reason: "reload"}` and must leave, force-killed after its `shutdown_grace_ms`, and only then does the same spawn, initialize, validate, swap, start sequence run for that one plugin. A plugin that cannot come up stays absent and keeps failing with `-32011` until another `restart` succeeds. Subscriptions ask for `replay`, so the plugins that were already running when the host subscribed announce themselves too.
+
+-----
+
+<a id="further-exploration"></a>
+## Further exploration
+
+- [boot group](../README.md): the launch glue this host belongs to.
+- [maota CLI](../../../apps/cli/README.md): the caller that decides which plugins a changed file restarts.
+- [Architecture](../../../docs/architecture.md#launch-path): where the host sits in the launch path.
+
+-----
 
 <a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
-- Subscription patterns match whole topic segments; `*` matches one segment and `**` never matches, so there is no recursive wildcard.
-- Events published before the kernel has acknowledged a new subscription are not replayed.
-- A handler passed to `on` that throws ends that subscription silently.
-- `shutdown` always resolves; a kernel that ignores the request leaves the caller waiting for the process to exit.
+These limits say when this host needs care. They are current constraints, not a task backlog.
+
+- **Patterns match whole topic segments**: `*` matches one segment and `**` never matches, so there is no recursive wildcard.
+- **Events published before a subscription are not replayed**: with one exception: `subscribe` carries `replay`, so a subscription created after boot is told about every plugin that is already running.
+- **A throwing handler ends its subscription silently**: `on` reports the failure nowhere else.
+- **`shutdown` always resolves**: a kernel that ignores the request leaves the caller waiting for the process to exit.
+- **`restart` replaces exactly the plugin you name**: deciding which plugins a changed file affects is the caller's job: the CLI builds that from `kernel.plugin.started` plus a static import scan of each entry, so the host itself never reads the file system.
 
 <a id="dev-note"></a>
 ## Dev Note
 
-<details>
-<summary>Working context for maintainers: click to expand</summary>
-
-The bridge smoke test is the behavioural contract for this package: boot, capabilities, invoke, stream, cancel-on-break, subscribe, on, and shutdown with a reason. It needs a real kernel binary and a fixture plugin, so it is not part of `pnpm check`.
-
-</details>
+Open: plugin ownership still comes from a static import scan the CLI runs over each entry, so a module reached only through a computed specifier or a path alias is invisible and editing it restarts nothing. The direction being weighed is to let a plugin report the files it actually loaded, which would delete the scan and that ceiling with it.

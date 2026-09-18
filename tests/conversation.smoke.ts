@@ -130,9 +130,9 @@ console.log("\nturn 2 (again)");
 const second = await turn({ session_id: "smoke", input: "again" });
 show("2", second);
 assert.equal(second.at(-1)?.text, "second turn");
-assert.equal(second.at(-1)?.steps, 1, "第二轮不该再要工具");
+assert.equal(second.at(-1)?.steps, 1, "the second turn should ask for no tool");
 
-assert.equal(await kernel.shutdown("kernel_exit"), 0, "干净关机的退出码是 0");
+assert.equal(await kernel.shutdown("kernel_exit"), 0, "a clean shutdown exits 0");
 console.log(`\n${logs.length} plugin log lines, the last few:`);
 for (const line of logs.slice(-6)) console.log(`  ${line}`);
 console.log("\nconversation ok: capabilities / tools.list / skill.list / tool.shell.run / agent.loop (two turns) / shutdown");

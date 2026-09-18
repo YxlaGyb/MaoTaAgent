@@ -49,7 +49,7 @@ const kernel = await boot(config, {
 });
 
 const table = await kernel.capabilities();
-assert.equal(table["demo.text"]?.plugin, "provider", "能力表里应该有 demo.text");
+assert.equal(table["demo.text"]?.plugin, "provider", "the capability table should list demo.text");
 assert.equal(table["demo.text"]?.version, "1.0.0");
 
 const echoed = (await kernel.invoke("demo.text", "echo", { hi: 1 })) as { got: { hi: number } };
@@ -71,11 +71,11 @@ for await (const chunk of await kernel.invoke("demo.text", "chat", {}, { stream:
   one.push(chunk);
   break;
 }
-assert.equal(one.length, 1, "break 之前只收到一块");
+assert.equal(one.length, 1, "only one chunk arrives before the break");
 for (let i = 0; i < 100 && !logs.some((line) => line.includes("fixture: cancelled request=")); i += 1) await sleep(20);
 assert.ok(
   logs.some((line) => line.includes("fixture: cancelled request=")),
-  "break 出流以后内核应该给插件发 $/cancel",
+  "leaving the stream should make the kernel send $/cancel to the plugin",
 );
 
 const events = kernel.subscribe(["kernel.plugin.*"])[Symbol.asyncIterator]();
@@ -85,18 +85,18 @@ await tick();
 await kernel.invoke("demo.text", "echo", {});
 
 const refused = (await kernel.invoke("demo.other", "echo").catch((error: unknown) => error)) as KernelError;
-assert.equal(refused.code, -32011, "提供方死了以后这个能力槽报 -32011");
+assert.equal(refused.code, -32011, "that capability slot reports -32011 once the provider died");
 const event = await nextMatching(events, "kernel.plugin.degraded");
 assert.equal((event.payload as { plugin: string }).plugin, "doomed");
-assert.ok(viaOn.includes("kernel.plugin.degraded"), "on 那条路也该收到同一个事件");
+assert.ok(viaOn.includes("kernel.plugin.degraded"), "the on() path should receive the same event");
 
 off();
 await events.return?.(undefined);
-assert.equal(await kernel.shutdown("kernel_exit"), 0, "干净关机的退出码是 0");
+assert.equal(await kernel.shutdown("kernel_exit"), 0, "a clean shutdown exits 0");
 await sleep(50);
 assert.ok(
   logs.some((line) => line.includes("fixture: shutdown reason=kernel_exit")),
-  "宿主挑的 reason 该传到插件",
+  "the reason the host picked should reach the plugin",
 );
 
 console.log("bridge ok: boot / capabilities / invoke / stream / cancel / subscribe / on / shutdown(reason)");

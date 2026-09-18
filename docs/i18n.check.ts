@@ -61,7 +61,7 @@ function recordPair(english: string): void {
     `${basename(chinese)}: ${blobHash(readFileSync(chinese))}`,
   ];
   writeFileSync(record, lines.join("\n") + "\n");
-  console.log(`i18n: 记录 ${at(record)}`);
+  console.log(`i18n: recorded ${at(record)}`);
 }
 
 const argv = process.argv.slice(2);
@@ -75,7 +75,7 @@ if (argv[0] === "--write") {
     const english = join(root, path.replace(/\.zh\.md$/, ".md"));
     for (const side of [english, english.replace(/\.md$/, ".zh.md")]) {
       if (!existsSync(side)) {
-        console.error(`${path}: 缺 ${at(side)}`);
+        console.error(`${path}: missing ${at(side)}`);
         process.exit(2);
       }
     }
@@ -94,7 +94,7 @@ for (const chinese of pairsUnder(root)) {
   const pair = at(english);
 
   if (!existsSync(english)) {
-    problems.push(`${pair}: 中文有对，英文 ${basename(english)} 不在`);
+    problems.push(`${pair}: the Chinese side exists but ${basename(english)} does not`);
     continue;
   }
   const englishText = readFileSync(english, "utf8");
@@ -104,19 +104,19 @@ for (const chinese of pairsUnder(root)) {
     continue;
   }
   if (englishText === "" || chineseText === "") {
-    problems.push(`${pair}: 一侧为空（${englishText === "" ? basename(english) : basename(chinese)}）`);
+    problems.push(`${pair}: one side is empty (${englishText === "" ? basename(english) : basename(chinese)})`);
     continue;
   }
   checked += 1;
 
   if (!switcherOf(englishText, `English | [中文](${basename(chinese)})`)) {
-    problems.push(`${pair}: H1 下面要写 \`English | [中文](${basename(chinese)})\``);
+    problems.push(`${pair}: the line under the H1 must be \`English | [中文](${basename(chinese)})\``);
   }
   if (!switcherOf(chineseText, `[English](${basename(english)}) | 中文`)) {
-    problems.push(`${at(chinese)}: H1 下面要写 \`[English](${basename(english)}) | 中文\``);
+    problems.push(`${at(chinese)}: the line under the H1 must be \`[English](${basename(english)}) | 中文\``);
   }
   if (!existsSync(record)) {
-    problems.push(`${pair}: 缺 ${basename(record)}（pnpm run i18n:write ${pair}）`);
+    problems.push(`${pair}: missing ${basename(record)} (pnpm run i18n:write ${pair})`);
     continue;
   }
   const want = recordedHashes(record);
@@ -125,15 +125,15 @@ for (const chinese of pairsUnder(root)) {
     [basename(chinese), blobHash(Buffer.from(chineseText, "utf8"))],
   ] as const) {
     if (want.get(side) !== hash) {
-      problems.push(`${pair}: ${side} 与记录不一致（pnpm run i18n:write ${pair}）`);
+      problems.push(`${pair}: ${side} does not match the record (pnpm run i18n:write ${pair})`);
     }
   }
 }
 
-for (const path of skipped) console.log(`i18n: 跳过空占位 ${path}`);
+for (const path of skipped) console.log(`i18n: skipped empty placeholder ${path}`);
 for (const problem of problems) console.error(`i18n: ${problem}`);
 if (problems.length > 0) {
-  console.error(`i18n: ${problems.length} 个问题`);
+  console.error(`i18n: ${problems.length} problems`);
   process.exit(1);
 }
-console.log(`i18n ok: ${checked} 对`);
+console.log(`i18n ok: ${checked} pairs`);

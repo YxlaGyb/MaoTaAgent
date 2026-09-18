@@ -3,7 +3,7 @@ description: "The boot package group: how one maota launch resolves its config a
 kind: "package-group"
 ---
 
-# boot/
+# boot/: the launch glue
 
 English | [中文](README.zh.md)
 
@@ -15,7 +15,6 @@ MaoTa runs the eggshell kernel as a child process and talks to it over stdio; th
 
 - [Packages](#packages)
 - [Related documentation](#related-documentation)
-- [Dev Note](#dev-note)
 
 -----
 
@@ -26,7 +25,7 @@ The CLI composes these two, and nothing else in the repository launches a kernel
 
 | Package | Role |
 |---|---|
-| [`config`](config/README.md) | Resolves the config file and the kernel binary for one launch. |
+| [`config`](config/README.md) | Resolves the config file and the kernel binary for one launch, and generates `$MAOTA_HOME/eggshell.toml` on a first run. |
 | [`host`](host/README.md) | Spawns the kernel, then invokes, streams, subscribes and shuts down over its stdio protocol. |
 
 <a id="related-documentation"></a>
@@ -34,8 +33,3 @@ The CLI composes these two, and nothing else in the repository launches a kernel
 
 - [maota CLI](../../apps/cli/README.md): the launcher that consumes both packages.
 - [Architecture](../../docs/architecture.md): the component map and the launch path.
-
-<a id="dev-note"></a>
-## Dev Note
-
-None.

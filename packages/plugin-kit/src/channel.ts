@@ -125,6 +125,14 @@ export class Channel {
     return this.attach(streamId);
   }
 
+  publish(topic: string, payload: unknown): Promise<void> {
+    const id = `p-${++this.next}`;
+    return new Promise<void>((resolve, reject) => {
+      this.pending.set(id, { resolve: () => resolve(), reject });
+      writeFrame({ jsonrpc: "2.0", id, method: "kernel.publish", params: { topic, payload } });
+    });
+  }
+
   notify(method: string, params: unknown): void {
     writeFrame({ jsonrpc: "2.0", method, params });
   }

@@ -12,6 +12,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `apps/web` | The web plugin: one HTTP server for the UI and the host RPC. | `apps/web/src/main.ts` |
 | `packages/boot/config` | Resolves the config file and the kernel binary for one launch. | [README](../packages/boot/config/README.md) |
 | `packages/boot/host` | Spawns the kernel and drives it over stdio. | [README](../packages/boot/host/README.md) |
+| `packages/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/hmr/src/main.ts` |
 | `packages/*` | The kernel plugins: api, shell, tools, skill, skill-filesystem, session, agent. | `packages/<name>/src/main.ts` |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 
@@ -23,10 +24,14 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 4. The front end invokes capabilities: the CLI drives `agent.loop`, while the web app drives `session` and `agent.loop` through its own bridge.
 5. Shutdown asks the kernel for `ui_quit` or `kernel_exit`; the kernel stops its plugins and exits with the code the host reports.
 
+A development run may also carry the `hmr` plugin, whose generated row ships disabled: it publishes `dev.source.changed` with the path that changed. From each `kernel.plugin.started` event the CLI reads the resolved entry and walks that entry's static import graph, keeping a file-to-plugin index; a changed path is then resolved to exactly the plugins that import it, and those are restarted with `reason: "source"`.
+
 ## Configuration layering
 
-- `eggshell.toml` holds the repository's plugin set: which plugins exist, how they start, and the system prompt.
-- `eggshell.local.toml` holds the machine's layer: gateway, model, keys. It is untracked and `extends` the tracked file.
+- Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`.
+- `$MAOTA_HOME/eggshell.toml` is generated on the first run from `packages/boot/config/eggshell.default.toml`, with the repository's absolute entry paths baked in. It holds the plugin set: which plugins exist, how they start, and the system prompt.
+- `$MAOTA_HOME/eggshell.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
+- A row with `disabled = true` is parsed and merged like any other, but the kernel never spawns it and its capability is not in the routing table. A later layer writing `false` enables it, and the kernel's reloader picks that up without a restart.
 - Later layers win: tables merge key by key, arrays are replaced wholesale.
 - Stray config keys are reported, not blocked, by `pnpm run check:config`.
 
@@ -35,6 +40,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 - Plugins never call each other directly; they go through capabilities the kernel routes.
 - The Node host never interprets plugin config values; it picks paths and speaks the protocol.
 - `apps/web` is a plugin like any other; the browser side holds no kernel privileges of its own.
+- The kernel never watches source files; it watches its own config and restarts one named plugin when a host asks it to.
 
 ## Related documentation
 

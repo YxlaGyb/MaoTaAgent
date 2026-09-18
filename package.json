@@ -12,6 +12,8 @@
     "cli:smoke": "node apps/cli/tests/cli.smoke.ts",
     "smoke": "node packages/boot/host/tests/bridge.smoke.ts",
     "conversation": "node tests/conversation.smoke.ts",
+    "config:smoke": "node packages/boot/config/tests/config.smoke.ts",
+    "hmr:smoke": "node tests/hmr.smoke.ts",
     "i18n:write": "node docs/i18n.check.ts --write",
     "web": "node apps/cli/src/main.ts serve",
     "web:build": "pnpm -C apps/web build",

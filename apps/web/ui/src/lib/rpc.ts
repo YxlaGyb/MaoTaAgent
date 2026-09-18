@@ -18,7 +18,7 @@ export async function call<T>(method: string, params: Record<string, unknown> = 
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ method, params }),
   });
-  if (!response.ok) throw new CallFailed(response.status, `宿主没应答（HTTP ${response.status}）`);
+  if (!response.ok) throw new CallFailed(response.status, `the host did not answer (HTTP ${response.status})`);
   const payload = (await response.json()) as { result?: T; error?: RpcFailure };
   if (payload.error) throw new CallFailed(payload.error.code, payload.error.message);
   return payload.result as T;

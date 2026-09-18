@@ -246,6 +246,10 @@ export class Host {
     return await this.exited;
   }
 
+  async restart(plugin: string, reason: "source" | "manual" = "manual"): Promise<void> {
+    await this.request("restart", { plugin, reason });
+  }
+
   private request(method: string, params: unknown): Promise<unknown> {
     if (this.dead) return Promise.reject(this.dead);
     const id = ++this.nextId;
@@ -370,7 +374,9 @@ export class Host {
         if (want.length === 0) {
           this.subscription = null;
         } else {
-          const reply = (await this.request("subscribe", { patterns: want })) as { subscription_id?: string };
+          const reply = (await this.request("subscribe", { patterns: want, replay: true })) as {
+            subscription_id?: string;
+          };
           this.subscription = { id: String(reply?.subscription_id ?? ""), patterns: want };
         }
         if (previous) void this.request("unsubscribe", { subscription_id: previous }).catch(() => {});

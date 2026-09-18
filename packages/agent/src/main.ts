@@ -274,8 +274,8 @@ export const definition: Definition = {
         chat: async (_asked, _available, _signal, emit) => {
           asked += 1;
           if (asked === 1) {
-            emit({ text: "半" });
-            emit({ reasoning: "想" });
+            emit({ text: "→" });
+            emit({ reasoning: "plan" });
             return {
               role: "assistant",
               content: null,
@@ -296,7 +296,7 @@ export const definition: Definition = {
     if (outcome.text !== "done") problems.push(`loop text ${JSON.stringify(outcome.text)}`);
     if (outcome.steps !== 2) problems.push(`loop took ${outcome.steps} steps, expected 2`);
     if (!messages.some((message) => message.role === "tool")) problems.push("loop never wrote a tool result back");
-    if (deltas.join("") !== "半done") problems.push(`deltas came out as ${JSON.stringify(deltas)}`);
+    if (deltas.join("") !== "→done") problems.push(`deltas came out as ${JSON.stringify(deltas)}`);
     return problems;
   },
 };

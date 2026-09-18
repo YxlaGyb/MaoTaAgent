@@ -102,13 +102,13 @@ function openBrowser(target: string, channel: Channel): void {
 
 function pickFolder(): Promise<string | null> {
   if (process.platform !== "win32") {
-    return Promise.reject(new Error("这台机器上只有 Windows 有现成的文件夹选择窗口, 直接填路径吧"));
+    return Promise.reject(new Error("only Windows has a native folder picker on this machine; type the path instead"));
   }
   const script = [
     "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
     "Add-Type -AssemblyName System.Windows.Forms",
     "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-    "$d.Description = '选择工作区文件夹'",
+    "$d.Description = 'Pick a workspace folder'",
     "$d.ShowNewFolderButton = $true",
     "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }",
   ].join("; ");
@@ -141,7 +141,7 @@ async function rpc(request: IncomingMessage, response: ServerResponse): Promise<
   try {
     payload = JSON.parse(await readBody(request)) as { method?: unknown; params?: unknown };
   } catch {
-    json(response, { error: { code: -32700, message: "请求不是合法 JSON" } });
+    json(response, { error: { code: -32700, message: "the request is not valid JSON" } });
     return;
   }
   try {
