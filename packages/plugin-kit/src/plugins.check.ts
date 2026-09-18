@@ -17,7 +17,7 @@ const mains = [join(root, "packages"), join(root, "apps")]
   )
   .sort((left, right) => left.name.localeCompare(right.name));
 
-const hostOnly = new Set(["boot"]);
+const hostOnly = new Set(["boot", "cli"]);
 
 let failed = 0;
 let checked = 0;

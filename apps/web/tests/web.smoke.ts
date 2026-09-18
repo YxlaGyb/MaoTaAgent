@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { kernel as installed } from "eggshell-kernel";
 
-import { boot } from "../../../eggshell/eggshell.ts";
+import { boot } from "../../../packages/boot/host/src/index.ts";
 
 const SHORT = "the short answer.";
 const LONG = "lorem-ipsum-".repeat(1400);

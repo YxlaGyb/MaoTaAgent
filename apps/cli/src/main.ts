@@ -1,35 +1,69 @@
+#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-import { kernel as installed } from "eggshell-kernel";
-import { boot, type Chunk } from "../../../eggshell/eggshell.ts";
 
-const root = join(import.meta.dirname, "..", "..", "..");
+import { resolveConfigPath, resolveKernelBin } from "../../../packages/boot/config/src/index.ts";
+import { boot, type Chunk } from "../../../packages/boot/host/src/index.ts";
 
-const argv = process.argv.slice(2);
-const flags = new Map<string, string>();
-for (let i = 0; i < argv.length; i += 1) {
-  if (!argv[i]?.startsWith("--")) continue;
-  flags.set(argv[i]!.slice(2), argv[i + 1] ?? "true");
-  i += 1;
+import { parseArgs } from "./args.ts";
+
+const VERSION =
+  (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string }).version ??
+  "0.0.0";
+
+const USAGE = `maota：MaoTa 的启动器
+
+用法:
+  maota               交互模式（TTY 下带提示符，否则逐行读 stdin）
+  maota <问句>        问一次，打印最终回答后退出
+  maota serve         启动 web 插件并常驻（Ctrl-C 退出）
+  maota check         只检查配置，不启动（退出码来自内核）
+  maota --help        这份用法
+  maota --version     打印版本
+
+选项:
+  --config <path>   配置文件（缺省 EGGSHELL_CONFIG，其次 eggshell.local.toml，其次 eggshell.toml）
+  --kernel <bin>    内核二进制（缺省 EGGSHELL_BIN，其次安装的 eggshell-kernel，其次隔壁仓库的 debug 产物）
+  --session <id>    会话 id（缺省 cli）
+  --json            只在 check 下有效：让内核输出 JSON 报告
+  -h, --help        这份用法
+  -v, --version     打印版本
+
+退出码:
+  0     正常退出
+  1     运行期失败：内核起不来、流里报错、内核异常退出
+  2     用法或配置错误：未知选项、选项缺值、serve/check 带参数、配置文件不存在
+  其它  内核 shutdown 的返回码原样透传
+`;
+
+const parsed = parseArgs(process.argv.slice(2));
+if (parsed.kind === "usage") {
+  console.error(parsed.message);
+  console.error("Run 'maota --help' for usage.");
+  process.exit(2);
 }
-const question = argv.filter((arg, index) => !arg.startsWith("--") && !argv[index - 1]?.startsWith("--")).join(" ");
+if (parsed.kind === "help") {
+  process.stdout.write(USAGE);
+  process.exit(0);
+}
+if (parsed.kind === "version") {
+  process.stdout.write(`maota ${VERSION}\n`);
+  process.exit(0);
+}
 
-const serve = flags.has("serve");
-const explicit = flags.get("config") ?? process.env.EGGSHELL_CONFIG;
-const local = join(root, "eggshell.local.toml");
-const config = explicit ?? (existsSync(local) ? local : join(root, "eggshell.toml"));
+const config = resolveConfigPath({ explicit: parsed.config });
 if (!existsSync(config)) {
   console.error(`config file not found: ${config}`);
   process.exit(2);
 }
-const bin =
-  flags.get("kernel") ?? process.env.EGGSHELL_BIN ?? installed ?? join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+const bin = resolveKernelBin({ explicit: parsed.kernel });
+const serve = parsed.kind === "serve";
+const session = parsed.session;
 
-if (flags.has("check")) {
-  const args = [config, "--check", ...(flags.has("json") ? ["--json"] : [])];
-  process.exit(spawnSync(bin, args, { stdio: "inherit" }).status ?? 1);
+if (parsed.kind === "check") {
+  const status = spawnSync(bin, [config, "--check", ...(parsed.json ? ["--json"] : [])], { stdio: "inherit" });
+  process.exit(status.status ?? 1);
 }
 
 const kernel = await boot(config, {
@@ -70,8 +104,6 @@ function render(chunk: Chunk): void {
   }
 }
 
-const session = flags.get("session") ?? "cli";
-
 async function ask(input: string): Promise<void> {
   const stream = await kernel.invoke("agent.loop", "run", { session_id: session, input }, { stream: true });
   for await (const chunk of stream) {
@@ -81,7 +113,7 @@ async function ask(input: string): Promise<void> {
 }
 
 try {
-  if (serve) {
+  if (parsed.kind === "serve") {
     const info = (await kernel.invoke("web", "info").catch(() => null)) as
       | { url?: string; listening?: boolean }
       | null;
@@ -91,8 +123,8 @@ try {
         : "MaoTa web: the web plugin is not listening; see the line above",
     );
     await new Promise(() => undefined);
-  } else if (question !== "") {
-    await ask(question);
+  } else if (parsed.kind === "once") {
+    await ask(parsed.question);
   } else {
     const tty = process.stdin.isTTY === true;
     const lines = createInterface({ input: process.stdin, output: process.stdout, terminal: tty });

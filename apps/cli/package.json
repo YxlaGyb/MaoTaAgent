@@ -1,0 +1,12 @@
+{
+  "name": "@virgena/maota",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "maota": "./src/main.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

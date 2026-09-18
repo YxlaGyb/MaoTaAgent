@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { kernel as installedKernel } from "eggshell-kernel";
 
-import { boot, type Chunk } from "./eggshell.ts";
+import { boot, type Chunk } from "../packages/boot/host/src/index.ts";
 
 const root = join(import.meta.dirname, "..");
 const kernelBin =

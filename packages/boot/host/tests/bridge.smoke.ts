@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fixture as fixtureBin, kernel as kernelBin } from "eggshell-kernel";
 
-import { boot, KernelError, type Chunk, type Event } from "./eggshell.ts";
+import { boot, KernelError, type Chunk, type Event } from "../src/index.ts";
 
 const [eggshellArg, fixtureArg] = process.argv.slice(2);
 const eggshell = eggshellArg ?? kernelBin;
 const fixture = fixtureArg ?? fixtureBin;
 if (!eggshell || !fixture) {
-  throw new Error("usage: node eggshell.smoke.ts [eggshell] [eggshell-fixture] (defaults to node_modules/eggshell-kernel/bin)");
+  throw new Error("usage: node packages/boot/host/tests/bridge.smoke.ts [eggshell] [eggshell-fixture] (defaults to node_modules/eggshell-kernel/bin)");
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));

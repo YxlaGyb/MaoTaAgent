@@ -22,10 +22,11 @@
   },
   "include": [
     "*.ts",
-    "packages/*/src/**/*.ts",
-    "apps/web/src/**/*.ts",
-    "eggshell/eggshell.ts",
-    "eggshell/eggshell.smoke.ts",
-    "eggshell/conversation.smoke.ts"
-, "apps/web/tests/web.smoke.ts", "packages/plugin-kit/src/plugins.check.ts"  ]
+    "packages/**/src/**/*.ts",
+    "packages/**/tests/*.ts",
+    "apps/*/src/**/*.ts",
+    "apps/*/tests/*.ts",
+    "docs/*.check.ts",
+    "tests/*.ts"
+  ]
 }

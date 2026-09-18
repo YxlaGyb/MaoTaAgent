@@ -1,0 +1,68 @@
+export const DEFAULT_SESSION = "cli";
+
+export interface Launch {
+  config?: string | undefined;
+  kernel?: string | undefined;
+  session: string;
+}
+
+export type Parsed =
+  | { kind: "help" }
+  | { kind: "version" }
+  | ({ kind: "serve" } & Launch)
+  | ({ kind: "check"; json: boolean } & Launch)
+  | ({ kind: "once"; question: string } & Launch)
+  | ({ kind: "repl" } & Launch)
+  | { kind: "usage"; message: string };
+
+
+export function parseArgs(argv: string[]): Parsed {
+  let config: string | undefined;
+  let kernel: string | undefined;
+  let session = DEFAULT_SESSION;
+  let json = false;
+  let help = false;
+  let version = false;
+  let subcommand: "serve" | "check" | null = null;
+  const words: string[] = [];
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i]!;
+    if (token === "--help" || token === "-h") {
+      help = true;
+      continue;
+    }
+    if (token === "--version" || token === "-v") {
+      version = true;
+      continue;
+    }
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--config" || token === "--kernel" || token === "--session") {
+      const value = argv[i + 1];
+      if (value === undefined) return { kind: "usage", message: `option ${token} needs a value` };
+      i += 1;
+      if (token === "--config") config = value;
+      else if (token === "--kernel") kernel = value;
+      else session = value;
+      continue;
+    }
+    if (token.startsWith("-") && token !== "-") return { kind: "usage", message: `unknown option: ${token}` };
+    if (subcommand !== null) return { kind: "usage", message: `${subcommand} takes no further arguments: ${token}` };
+    if (words.length === 0 && (token === "serve" || token === "check")) {
+      subcommand = token;
+      continue;
+    }
+    words.push(token);
+  }
+
+  if (help) return { kind: "help" };
+  if (version) return { kind: "version" };
+  const launch: Launch = { config, kernel, session };
+  if (subcommand === "serve") return { kind: "serve", ...launch };
+  if (subcommand === "check") return { kind: "check", json, ...launch };
+  const question = words.join(" ");
+  return question === "" ? { kind: "repl", ...launch } : { kind: "once", question, ...launch };
+}
