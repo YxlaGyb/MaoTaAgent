@@ -53,6 +53,7 @@ export interface HostEvent {
   text?: string;
   step?: number;
   tool?: string;
+  id?: string;
   args?: unknown;
   ok?: boolean;
   output?: unknown;

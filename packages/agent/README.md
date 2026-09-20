@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `agent` plugin is the kernel plugin a user actually talks to: it turns one input plus a stored session into a model and tool loop, and streams the result back. Its two halves are split here: the plugin side that reads config, builds the prompt and keeps the session, and the loop engine that calls the model and runs tools. Read this page to pick the right half, then open that directory.
+The `agent` plugin is the kernel plugin a user actually talks to: it turns one input plus a stored session into a model and tool loop, and streams the result back. Its parts are split here: the plugin side that reads config, builds the prompt and keeps the session; the loop engine that calls the model and runs tools; and the dispatcher those tools are listed and called through. Read this page to pick the right part, then open its directory.
 
 ## Table of Contents
 
@@ -25,8 +25,9 @@ The `agent` plugin is the kernel plugin a user actually talks to: it turns one i
 |---|---|
 | [`agent-core`](agent-core/README.md) | The plugin: the `agent.loop` capability, its config keys, the system prompt, tool wiring, session bookkeeping and the streaming `run` method. |
 | [`agent-loop`](agent-loop/README.md) | The loop engine: model call, tool round, exit reasons. It reads no config and touches no session. |
+| [`tools`](tools/README.md) | The dispatcher: the `tools` capability, the tool registry, the result budget and the spill. |
 
-The profile config spawns `@maota/agent-core`, built from `agent-core/src/index.ts`. `agent-loop` is imported by that entry and never spawned on its own.
+The profile config spawns `@maota/agent-core`, built from `agent-core/src/index.ts`, and `@maota/tools`, built from `tools/src/index.ts`. `agent-loop` is imported by the agent entry and never spawned on its own.
 
 <a id="related-documentation"></a>
 ## Related documentation

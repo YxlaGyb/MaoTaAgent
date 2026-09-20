@@ -34,8 +34,11 @@ writeFileSync(
   join(dir, "eggshell.toml"),
   [
     ...plugin("api", "api"),
-    ...plugin("shell", "shell"),
-    ...plugin("tools", "tools"),
+    ...plugin("pwsh-local", "shell/pwsh-local"),
+    ...plugin("tool-pwsh", "shell/tool-pwsh"),
+    ...plugin("tool-fs", "fs/tool-fs"),
+    ...plugin("tool-fs-search", "fs/tool-fs-search"),
+    ...plugin("tools", "agent/tools"),
     ...plugin("skill-filesystem", "skill-filesystem"),
     ...plugin("skill", "skill"),
     ...plugin("session", "session"),
@@ -53,7 +56,7 @@ writeFileSync(
     'backend = "scripted"',
     'model = "smoke"',
     "script = [",
-    '  { tool = "shell", args = { command = "echo hi" } },',
+    '  { tool = "pwsh", args = { command = "echo hi" } },',
     '  { tool = "skill", args = { name = "hello" } },',
     '  { text = "all done" },',
     '  { text = "second turn" },',
@@ -96,29 +99,36 @@ function show(label: string, events: any[]): void {
 const table = await kernel.capabilities();
 for (const [capability, route] of Object.entries(table)) console.log(`  ${capability} = ${route.plugin} (${route.version})`);
 assert.equal(table["agent.loop"]?.plugin, "agent");
-assert.equal(table["tool.shell"]?.plugin, "shell");
+assert.equal(table["shell"]?.plugin, "pwsh-local");
+assert.equal(table["tool.pwsh"]?.plugin, "tool-pwsh");
+assert.equal(table["tool.read"]?.plugin, "tool-fs");
+assert.equal(table["tool.glob"]?.plugin, "tool-fs-search");
 
 const tools = (await kernel.invoke("tools", "list", {})) as { tools: Array<{ name: string }> };
 assert.deepEqual(
   tools.tools.map((tool) => tool.name),
-  ["shell"],
+  ["edit", "glob", "pwsh", "read", "write"],
 );
 const skills = (await kernel.invoke("skill", "list", {})) as { skills: Array<{ name: string }> };
 assert.deepEqual(
   skills.skills.map((skill) => skill.name),
   ["hello"],
 );
-const ran = (await kernel.invoke("tool.shell", "run", { command: "echo hi" })) as { exit_code: number; stdout: string };
+const ran = (await kernel.invoke("tool.pwsh", "run", { command: "echo hi", workdir: dir })) as {
+  exit_code: number | null;
+  stdout: string;
+};
 assert.equal(ran.exit_code, 0);
 assert.ok(ran.stdout.includes("hi"), `shell printed ${JSON.stringify(ran.stdout)}`);
 
 console.log("\nturn 1 (say hi)");
-const first = await turn({ session_id: "smoke", input: "say hi" });
+const first = await turn({ session_id: "smoke", cwd: dir, input: "say hi" });
 show("1", first);
 assert.ok(first.some((event) => event.type === "step"), "loop should emit step events");
-const shelled = first.find((event) => event.type === "tool_result" && event.tool === "shell");
+const shelled = first.find((event) => event.type === "tool_result" && event.tool === "pwsh");
 assert.equal(shelled?.ok, true);
-assert.ok(String(shelled?.output?.result?.stdout).includes("hi"), `shell result: ${JSON.stringify(shelled?.output)}`);
+assert.equal(typeof shelled?.id, "string", "a tool result should carry the call id it answers");
+assert.ok(String(shelled?.output?.stdout).includes("hi"), `pwsh result: ${JSON.stringify(shelled?.output)}`);
 const read = first.find((event) => event.type === "tool_result" && event.tool === "skill");
 assert.ok(String(read?.output?.content).includes("Say hello"), `skill result: ${JSON.stringify(read?.output)}`);
 const done = first.at(-1);
@@ -127,7 +137,7 @@ assert.equal(done?.text, "all done");
 assert.equal(done?.steps, 3);
 
 console.log("\nturn 2 (again)");
-const second = await turn({ session_id: "smoke", input: "again" });
+const second = await turn({ session_id: "smoke", cwd: dir, input: "again" });
 show("2", second);
 assert.equal(second.at(-1)?.text, "second turn");
 assert.equal(second.at(-1)?.steps, 1, "the second turn should ask for no tool");
@@ -135,4 +145,4 @@ assert.equal(second.at(-1)?.steps, 1, "the second turn should ask for no tool");
 assert.equal(await kernel.shutdown("kernel_exit"), 0, "a clean shutdown exits 0");
 console.log(`\n${logs.length} plugin log lines, the last few:`);
 for (const line of logs.slice(-6)) console.log(`  ${line}`);
-console.log("\nconversation ok: capabilities / tools.list / skill.list / tool.shell.run / agent.loop (two turns) / shutdown");
+console.log("\nconversation ok: capabilities / tools.list / skill.list / tool.pwsh.run / agent.loop (two turns) / shutdown");

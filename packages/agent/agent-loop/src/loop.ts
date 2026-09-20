@@ -22,7 +22,7 @@ export async function runLoop(
       return finish(state, typeof message.content === "string" ? message.content : "", "completed");
     }
 
-    await executeCalls(calls, deps.callTool, ctx);
+    await executeCalls(calls, deps, ctx);
     if (signal.aborted) return finish(state, "", "aborted");
   }
   return finish(state, "", "max_steps");

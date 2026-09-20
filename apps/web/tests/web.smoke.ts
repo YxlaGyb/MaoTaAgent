@@ -19,8 +19,11 @@ const bin =
 
 const PLUGINS: Array<[string, string]> = [
   ["api", "packages/api/src/index.ts"],
-  ["shell", "packages/shell/src/index.ts"],
-  ["tools", "packages/tools/src/index.ts"],
+  ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
+  ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
+  ["tool-fs", "packages/fs/tool-fs/src/index.ts"],
+  ["tool-fs-search", "packages/fs/tool-fs-search/src/index.ts"],
+  ["tools", "packages/agent/tools/src/index.ts"],
   ["skill-filesystem", "packages/skill-filesystem/src/index.ts"],
   ["skill", "packages/skill/src/index.ts"],
   ["session", "packages/session/src/index.ts"],

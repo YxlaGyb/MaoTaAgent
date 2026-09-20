@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-一轮对话跑在其上的循环引擎：调用模型、执行它要求的工具、把结果喂回去，如此往复。它不读配置、不碰会话，也不认识网关，因为 [`../agent-core`](../agent-core/README.zh.md) 把这两样都做成了接缝。每次运行都以一个原因收尾：`completed`、`aborted` 或 `max_steps`。这个模块有五个文件、一个导出的入口 `runLoop`，而且只发它正在跑的那一轮的事件。
+一轮对话跑在其上的循环引擎：调用模型、执行它要求的工具、把结果喂回去，如此往复。它不读配置、不碰会话，也不认识网关，因为 [`../agent-core`](../agent-core/README.zh.md) 把这两样都做成了接缝。每次运行都以一个原因收尾：`completed`、`aborted` 或 `max_steps`。工具轮会把连续答“安全”的调用编成一个批次，批次上限 `max_parallel`，其余调用各自单独跑。这个模块有五个文件、一个导出的入口 `runLoop`，而且只发它正在跑的那一轮的事件。
 
 ## 目录
 
@@ -35,7 +35,8 @@ const outcome = await runLoop(deps, messages, signal, emit);
 |---|---|
 | `tools` | 提供给模型的工具规格。 |
 | `max_steps` | 一次运行最多发起几次模型调用。 |
-| `chat(ctx)` | 一次模型调用。用助手消息来 resolve。 |
+| `max_parallel` | 一个批次里最多同时跑几个调用。不写或写得不对都算 1，也就是一次一个。 |
+| `classify(call, ctx)` | 这次调用能否与别的并排跑。缺这条接缝、答的不是严格 `true`、或者抛错，都算不能。 |
 | `callTool(call, ctx)` | 一次工具调用。抛错就表示这个工具失败了。 |
 
 ### 单步上下文
@@ -66,8 +67,8 @@ const outcome = await runLoop(deps, messages, signal, emit);
 | `step` | `{ step }` | 一次模型调用即将开始。 |
 | `text` | `{ text }` | 流式回答文本。 |
 | `reasoning` | `{ text }` | 流式推理文本。 |
-| `tool_call` | `{ tool, args }` | 一个工具即将执行。 |
-| `tool_result` | `{ tool, ok, output }` | 一个工具执行完了。 |
+| `tool_call` | `{ id, tool, args }` | 一个工具即将执行。 |
+| `tool_result` | `{ id, tool, ok, output }` | 一个工具执行完了。`id` 是它回应的那次调用。 |
 
 `tick` 与 `done` 属于调用这个循环的插件，不属于循环本身。
 
@@ -81,7 +82,7 @@ const outcome = await runLoop(deps, messages, signal, emit);
 | 文件 | 职责 |
 |---|---|
 | [`src/loop.ts`](src/loop.ts) | `runLoop`：步进循环，也是唯一判定退出原因的地方 |
-| [`src/execute.ts`](src/execute.ts) | 工具执行接缝：一轮调用，按顺序 |
+| [`src/execute.ts`](src/execute.ts) | 工具执行接缝：分类、分批，以及按顺序走完一轮 |
 | [`src/events.ts`](src/events.ts) | `LoopExitReason`、`LoopEvent`、`LoopState`、`StepContext`、`LoopDeps` 与 `LoopOutcome` |
 | [`src/messages.ts`](src/messages.ts) | `Message`、`ToolSpec`、`ToolCall`、`toolCalls`、`parseArgs` 与 `asText` |
 | [`src/index.ts`](src/index.ts) | 再导出 |
@@ -92,9 +93,9 @@ const outcome = await runLoop(deps, messages, signal, emit);
 
 ### 工具轮
 
-`execute.ts` 是一轮调用的唯一执行处。它按顺序走过每个调用，执行前发 `tool_call`、执行后发 `tool_result`，并且每次调用恰好追加一条 `role: "tool"` 消息，顺序与调用顺序一致，用调用 id 填 `tool_call_id`。抛错的工具只会变成 `{ error }` 内容，本轮继续，所以一个坏工具不会结束整次运行。信号在轮中中止时，这一轮停下，剩余调用不再执行。
+`execute.ts` 是一轮调用的唯一执行处。它先对每个调用问一次 `classify`，然后给调用分组：连续答严格 `true` 的调用编成一个批次，上限 `max_parallel`；没有这样答的调用各自成一个批次。批次之间严格按顺序，只有批次内部的调用才可能重叠，这正是让一个不安全的调用无法与任何东西并排跑的原因。一个批次开始前，其中每个调用都发 `tool_call`；每个调用落定时发出带 `id` 的 `tool_result`，所以结果的到达顺序可能和调用发出的顺序不同。批次落定之后，按最初的调用顺序为每个调用补写一条 `role: "tool"` 消息，并把调用 id 填进 `tool_call_id`。抛错的工具只会变成 `{ error }` 内容，本轮继续，所以一个坏工具不会结束整次运行。信号中止时，剩下的批次不再开始，已经跑完的调用保留它们的消息。
 
-换一种策略，例如并发，或者模型还在流式输出时就开始执行，只需替换这个文件。`loop.ts` 不依赖该策略。
+换一种策略，例如模型还在流式输出时就开始执行，只需替换这个文件。`loop.ts` 不依赖该策略。
 
 ### 消息解析
 
@@ -102,7 +103,7 @@ const outcome = await runLoop(deps, messages, signal, emit);
 
 ### 配置检查
 
-`agent-core` 里的 `selfCheck` 用脚本化的接缝驱动这个模块。仓库在它旁边还留了一份测试 [`tests/loop.smoke.ts`](tests/loop.smoke.ts)，覆盖正常结束、一次两个调用的工具轮、抛错的工具、预算用尽、第一步之前就中止、工具轮中途中止，以及畸形的助手消息。它不需要内核，也不联网，`pnpm loop:smoke` 可以单独跑它。
+`agent-core` 里的 `selfCheck` 用脚本化的接缝驱动这个模块。仓库在它旁边还留了一份测试 [`tests/loop.smoke.ts`](tests/loop.smoke.ts)，覆盖正常结束、一次两个调用的工具轮、抛错的工具、预算用尽、第一步之前就中止、工具轮中途中止、畸形的助手消息、分批与批次上限、不安全调用把一轮切开、结果乱序到达，以及缺 `classify` 或 `classify` 抛错。它不需要内核，也不联网，`pnpm loop:smoke` 可以单独跑它。
 
 -----
 
@@ -118,7 +119,8 @@ const outcome = await runLoop(deps, messages, signal, emit);
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
 
-- **工具逐个执行**：没有并发，也没有任何在模型还在流式输出时就启动的执行。
+- **分批只看连续段**：一个不安全的调用会把这一轮切开，所以它两侧的安全调用永远不会同批。
+- **模型还在流式输出时什么都不启动**：一轮会等助手消息先结束。
 - **没有失败分类，也没有重试**：模型调用被拒是调用方的事，循环自己从不重来一次。
 - **没有上下文压缩**：消息数组一直长下去，直到调用方不再传回来。
 - **循环什么都不持久化**：保存一轮属于插件，每一个配置值也一样。

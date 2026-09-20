@@ -6,8 +6,8 @@ export type LoopEvent =
   | { type: "step"; step: number }
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
-  | { type: "tool_call"; tool: string; args: unknown }
-  | { type: "tool_result"; tool: string; ok: boolean; output: unknown }
+  | { type: "tool_call"; id: string; tool: string; args: unknown }
+  | { type: "tool_result"; id: string; tool: string; ok: boolean; output: unknown }
   | { type: "tick" }
   | { type: "done"; steps: number; text: string; reason: LoopExitReason };
 
@@ -35,8 +35,10 @@ export interface StepContext {
 export interface LoopDeps {
   tools: readonly ToolSpec[];
   max_steps: number;
+  max_parallel?: number;
   chat(ctx: StepContext): Promise<Message>;
   callTool(call: ToolCall, ctx: StepContext): Promise<unknown>;
+  classify?(call: ToolCall, ctx: StepContext): Promise<boolean>;
 }
 
 export interface LoopOutcome {

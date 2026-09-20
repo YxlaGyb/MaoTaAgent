@@ -10,11 +10,20 @@ function recorder(): { events: LoopEvent[]; emit: (event: LoopEvent) => void } {
 function trace(events: readonly LoopEvent[]): string[] {
   return events.flatMap((event) => {
     if (event.type === "step") return [`step:${event.step}`];
-    if (event.type === "tool_call") return [`call:${event.tool}`];
-    if (event.type === "tool_result") return [`result:${event.tool}:${event.ok}`];
+    if (event.type === "tool_call") return [`call:${event.tool}@${event.id}`];
+    if (event.type === "tool_result") return [`result:${event.tool}@${event.id}:${event.ok}`];
     return [];
   });
 }
+
+function calls(...names: Array<[string, string]>): Message {
+  return {
+    role: "assistant",
+    content: null,
+    tool_calls: names.map(([id, name]) => ({ id, function: { name, arguments: "{}" } })),
+  };
+}
+
 
 const silent = () => {};
 
@@ -62,16 +71,7 @@ const silent = () => {};
       max_steps: 4,
       chat: async () => {
         asked += 1;
-        if (asked === 1) {
-          return {
-            role: "assistant",
-            content: null,
-            tool_calls: [
-              { id: "a", function: { name: "first", arguments: '{"n":1}' } },
-              { id: "b", function: { name: "second", arguments: "" } },
-            ],
-          };
-        }
+        if (asked === 1) return calls(["a", "first"], ["b", "second"]);
         return { role: "assistant", content: "done" };
       },
       callTool: async (call) => {
@@ -86,7 +86,7 @@ const silent = () => {};
   assert.equal(outcome.reason, "completed");
   assert.equal(outcome.steps, 2);
   assert.deepEqual(ran, [
-    { id: "a", name: "first", args: { n: 1 } },
+    { id: "a", name: "first", args: {} },
     { id: "b", name: "second", args: {} },
   ]);
   assert.deepEqual(
@@ -98,10 +98,10 @@ const silent = () => {};
   );
   assert.deepEqual(trace(seen.events), [
     "step:1",
-    "call:first",
-    "result:first:true",
-    "call:second",
-    "result:second:true",
+    "call:first@a",
+    "result:first@a:true",
+    "call:second@b",
+    "result:second@b:true",
     "step:2",
   ]);
 }
@@ -115,16 +115,7 @@ const silent = () => {};
       max_steps: 4,
       chat: async () => {
         asked += 1;
-        if (asked === 1) {
-          return {
-            role: "assistant",
-            content: null,
-            tool_calls: [
-              { id: "a", function: { name: "boom", arguments: "{}" } },
-              { id: "b", function: { name: "fine", arguments: "{}" } },
-            ],
-          };
-        }
+        if (asked === 1) return calls(["a", "boom"], ["b", "fine"]);
         return { role: "assistant", content: "recovered" };
       },
       callTool: async (call) => {
@@ -153,11 +144,7 @@ const silent = () => {};
       max_steps: 3,
       chat: async () => {
         asked += 1;
-        return {
-          role: "assistant",
-          content: null,
-          tool_calls: [{ id: `c${asked}`, function: { name: "again", arguments: "{}" } }],
-        };
+        return calls([`c${asked}`, "again"]);
       },
       callTool: async () => "ok",
     },
@@ -169,14 +156,14 @@ const silent = () => {};
   assert.equal(asked, 3);
   assert.deepEqual(trace(seen.events), [
     "step:1",
-    "call:again",
-    "result:again:true",
+    "call:again@c1",
+    "result:again@c1:true",
     "step:2",
-    "call:again",
-    "result:again:true",
+    "call:again@c2",
+    "result:again@c2:true",
     "step:3",
-    "call:again",
-    "result:again:true",
+    "call:again@c3",
+    "result:again@c3:true",
   ]);
 }
 
@@ -213,14 +200,7 @@ const silent = () => {};
       max_steps: 3,
       chat: async () => {
         asked += 1;
-        return {
-          role: "assistant",
-          content: null,
-          tool_calls: [
-            { id: "a", function: { name: "first", arguments: "{}" } },
-            { id: "b", function: { name: "second", arguments: "{}" } },
-          ],
-        };
+        return calls(["a", "first"], ["b", "second"]);
       },
       callTool: async (call) => {
         ran.push(call.name);
@@ -236,6 +216,157 @@ const silent = () => {};
   assert.deepEqual(ran, ["first"]);
   assert.equal(asked, 1);
   assert.equal(messages.filter((message) => message.role === "tool").length, 1);
+}
+
+{
+  const seen = recorder();
+  const ran: string[] = [];
+  let live = 0;
+  let peak = 0;
+  let asked = 0;
+  const messages: Message[] = [{ role: "user", content: "go" }];
+  const outcome = await runLoop(
+    {
+      tools: [],
+      max_steps: 2,
+      max_parallel: 2,
+      classify: async (call) => call.name !== "write",
+      chat: async () => {
+        asked += 1;
+        if (asked === 1) {
+          return calls(["a", "read"], ["b", "read"], ["c", "write"], ["d", "read"], ["e", "read"]);
+        }
+        return { role: "assistant", content: "done" };
+      },
+      callTool: async (call) => {
+        ran.push(call.id);
+        live += 1;
+        peak = Math.max(peak, live);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        live -= 1;
+        return `${call.id}-out`;
+      },
+    },
+    messages,
+    new AbortController().signal,
+    seen.emit,
+  );
+  assert.equal(outcome.reason, "completed");
+  assert.deepEqual(ran, ["a", "b", "c", "d", "e"]);
+  assert.equal(peak, 2);
+  assert.deepEqual(trace(seen.events), [
+    "step:1",
+    "call:read@a",
+    "call:read@b",
+    "result:read@a:true",
+    "result:read@b:true",
+    "call:write@c",
+    "result:write@c:true",
+    "call:read@d",
+    "call:read@e",
+    "result:read@d:true",
+    "result:read@e:true",
+    "step:2",
+  ]);
+  assert.deepEqual(
+    messages.filter((message) => message.role === "tool").map((message) => `${message.tool_call_id}:${message.content}`),
+    ["a:a-out", "b:b-out", "c:c-out", "d:d-out", "e:e-out"],
+  );
+}
+
+{
+  const messages: Message[] = [{ role: "user", content: "go" }];
+  let asked = 0;
+  const outcome = await runLoop(
+    {
+      tools: [],
+      max_steps: 2,
+      max_parallel: 4,
+      classify: async (call) => call.name === "safe",
+      chat: async () => {
+        asked += 1;
+        if (asked === 1) return calls(["a", "safe"], ["b", "safe"], ["c", "risky"], ["d", "safe"]);
+        return { role: "assistant", content: "done" };
+      },
+      callTool: async (call) => `${call.id}-out`,
+    },
+    messages,
+    new AbortController().signal,
+    silent,
+  );
+  assert.equal(outcome.reason, "completed");
+  assert.deepEqual(
+    messages.filter((message) => message.role === "tool").map((message) => message.tool_call_id),
+    ["a", "b", "c", "d"],
+  );
+}
+
+{
+  const controller = new AbortController();
+  const messages: Message[] = [{ role: "user", content: "go" }];
+  const ran: string[] = [];
+  const outcome = await runLoop(
+    {
+      tools: [],
+      max_steps: 2,
+      max_parallel: 2,
+      classify: async () => true,
+      chat: async () =>
+        ran.length === 0 ? calls(["a", "one"], ["b", "two"], ["c", "three"]) : { role: "assistant", content: "done" },
+      callTool: async (call) => {
+        ran.push(call.id);
+        controller.abort();
+        return `${call.id}-out`;
+      },
+    },
+    messages,
+    controller.signal,
+    silent,
+  );
+  assert.deepEqual(outcome, { steps: 1, text: "", reason: "aborted" });
+  assert.deepEqual(ran, ["a", "b"]);
+  assert.deepEqual(
+    messages.filter((message) => message.role === "tool").map((message) => message.tool_call_id),
+    ["a", "b"],
+  );
+}
+
+for (const [label, classify] of [
+  ["no classifier", undefined],
+  ["a throwing classifier", async () => {
+    throw new Error("nope");
+  }],
+  ["a classifier that answers something else", async () => "yes"],
+] as Array<[string, undefined | (() => Promise<unknown>)]>) {
+  let live = 0;
+  let peak = 0;
+  const messages: Message[] = [{ role: "user", content: "go" }];
+  let asked = 0;
+  const outcome = await runLoop(
+    {
+      tools: [],
+      max_steps: 2,
+      max_parallel: 4,
+      ...(classify === undefined ? {} : { classify: classify as () => Promise<boolean> }),
+      chat: async () => {
+        asked += 1;
+        if (asked === 1) return calls(["a", "one"], ["b", "two"]);
+        return { role: "assistant", content: "done" };
+      },
+      callTool: async (call) => {
+        live += 1;
+        peak = Math.max(peak, live);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        live -= 1;
+        return `${call.id}-out`;
+      },
+    },
+    messages,
+    new AbortController().signal,
+    silent,
+  );
+  assert.equal(outcome.reason, "completed", label);
+  assert.equal(peak, 1, `${label} should have run one call at a time`);
 }
 
 for (const [label, reply] of [
@@ -265,4 +396,4 @@ assert.equal(asText("text"), "text");
 assert.equal(asText({ a: 1 }), '{"a":1}');
 assert.equal(asText(undefined), "null");
 
-console.log("agent loop ok: completed, max_steps, aborted, tool ordering, failure isolation, parsing");
+console.log("agent loop ok: completed, max_steps, aborted, batching, ordering, parsing");

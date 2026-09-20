@@ -6,6 +6,7 @@ import { Markdown, MessageItem, ToolRow } from "./MessageItem.tsx";
 
 export interface LiveTool {
   tool: string;
+  id?: string;
   args?: unknown;
   ok?: boolean;
   output?: unknown;
@@ -29,7 +30,7 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
     case "step":
       return { ...turn, step: event.step ?? turn.step };
     case "tool_call":
-      return { ...turn, tools: [...turn.tools, { tool: event.tool ?? "", args: event.args }] };
+      return { ...turn, tools: [...turn.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] };
     case "tool_result":
       return { ...turn, tools: fillResult(turn.tools, event) };
     default:
@@ -38,9 +39,12 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
 }
 
 function fillResult(tools: LiveTool[], event: HostEvent): LiveTool[] {
-  const found = tools.findIndex((tool) => tool.tool === (event.tool ?? "") && tool.ok === undefined);
-  const index = found < 0 ? tools.length - 1 : found;
-  return tools.map((tool, at) => (at === index ? { ...tool, ok: event.ok, output: event.output } : tool));
+  const id = event.id;
+  const at = id !== undefined && id !== ""
+    ? tools.findIndex((tool) => tool.id === id)
+    : tools.findIndex((tool) => tool.tool === (event.tool ?? "") && tool.ok === undefined);
+  const index = at < 0 ? tools.length - 1 : at;
+  return tools.map((tool, here) => (here === index ? { ...tool, ok: event.ok, output: event.output } : tool));
 }
 
 export function MessageList({

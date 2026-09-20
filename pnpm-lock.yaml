@@ -30,6 +30,9 @@ importers:
       '@maota/cli':
         specifier: workspace:^
         version: link:apps/cli
+      '@maota/fs':
+        specifier: workspace:^
+        version: link:packages/fs/fs
       '@maota/hmr':
         specifier: workspace:^
         version: link:packages/boot/hmr
@@ -39,21 +42,33 @@ importers:
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:packages/plugin-kit
+      '@maota/pwsh-local':
+        specifier: workspace:^
+        version: link:packages/shell/pwsh-local
       '@maota/session':
         specifier: workspace:^
         version: link:packages/session
       '@maota/shell':
         specifier: workspace:^
-        version: link:packages/shell
+        version: link:packages/shell/shell
       '@maota/skill':
         specifier: workspace:^
         version: link:packages/skill
       '@maota/skill-filesystem':
         specifier: workspace:^
         version: link:packages/skill-filesystem
+      '@maota/tool-fs':
+        specifier: workspace:^
+        version: link:packages/fs/tool-fs
+      '@maota/tool-fs-search':
+        specifier: workspace:^
+        version: link:packages/fs/tool-fs-search
+      '@maota/tool-pwsh':
+        specifier: workspace:^
+        version: link:packages/shell/tool-pwsh
       '@maota/tools':
         specifier: workspace:^
-        version: link:packages/tools
+        version: link:packages/agent/tools
       '@maota/web':
         specifier: workspace:^
         version: link:apps/web
@@ -130,6 +145,12 @@ importers:
 
   packages/agent/agent-loop: {}
 
+  packages/agent/tools:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
   packages/api:
     dependencies:
       '@maota/plugin-kit':
@@ -150,6 +171,30 @@ importers:
 
   packages/bundle/web: {}
 
+  packages/fs/fs:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/fs/tool-fs:
+    dependencies:
+      '@maota/fs':
+        specifier: workspace:^
+        version: link:../fs
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/fs/tool-fs-search:
+    dependencies:
+      '@maota/fs':
+        specifier: workspace:^
+        version: link:../fs
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
   packages/plugin-kit: {}
 
   packages/session:
@@ -158,11 +203,25 @@ importers:
         specifier: workspace:^
         version: link:../plugin-kit
 
-  packages/shell:
+  packages/shell/pwsh-local:
     dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^
-        version: link:../plugin-kit
+        version: link:../../plugin-kit
+      '@maota/shell':
+        specifier: workspace:^
+        version: link:../shell
+
+  packages/shell/shell: {}
+
+  packages/shell/tool-pwsh:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+      '@maota/shell':
+        specifier: workspace:^
+        version: link:../shell
 
   packages/skill:
     dependencies:
@@ -171,12 +230,6 @@ importers:
         version: link:../plugin-kit
 
   packages/skill-filesystem:
-    dependencies:
-      '@maota/plugin-kit':
-        specifier: workspace:^
-        version: link:../plugin-kit
-
-  packages/tools:
     dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^

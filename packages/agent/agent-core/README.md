@@ -46,6 +46,7 @@ A front end reaches this plugin through the `agent.loop` capability.
 | Key | Default | Meaning |
 |---|---|---|
 | `max_steps` | `8` | How many model calls one turn may make. |
+| `max_parallel_tools` | `4` | How many safe tool calls one batch may run at once. |
 | `system` | the shipped coding-assistant prompt | The base system prompt. |
 | `thinking` | `{}` | Per level, a `model` and a `tools` flag. Write a level as a bare model name, or as a table. |
 
@@ -62,7 +63,7 @@ An unknown level name is rejected with `-32602` when `run` is called, and an unk
 
 ### Tools
 
-When `skill` is available its skills are listed in the system prompt and one extra tool, `skill`, is offered. Every other tool comes from `tools`. A tool that declares a `cwd` parameter is given the session working directory, unless the model set one itself.
+When `skill` is available its skills are listed in the system prompt and one extra tool, `skill`, is offered. Every other tool comes from `tools`. A tool that declares a host argument is given that value before the call, `session_cwd` today, unless the model set the argument itself; the argument is stripped from the specs the model is shown, so the model cannot move a call out of the session directory. Safety is asked through `tools.classify`, and the `skill` tool answers safe on its own.
 
 -----
 
@@ -75,7 +76,7 @@ When `skill` is available its skills are listed in the system prompt and one ext
 |---|---|
 | [`src/index.ts`](src/index.ts) | The definition: config, `requires`, `run`, `info` and `selfCheck` |
 | [`src/prompt.ts`](src/prompt.ts) | `systemPrompt`: the base prompt, the working directory and the skill list |
-| [`src/tools.ts`](src/tools.ts) | The `skill` tool spec, `readToolList` and `injectCwd` |
+| [`src/tools.ts`](src/tools.ts) | The `skill` tool spec, `readToolList`, `stripHostArgs` and `injectHostArgs` |
 
 ### One turn
 
@@ -85,7 +86,7 @@ Cancelling the request aborts the model call and any tool in flight, and the ses
 
 ### Config checks
 
-`selfCheck` covers the pure parts of this directory: the thinking-level reader, the title cutter, `injectCwd`, `readToolList`, one scripted run that must end `completed`, and one that must end `max_steps`. A `--check` run fails when any of them drifts, so `pnpm check:plugins` catches it without a kernel and without a model.
+`selfCheck` covers the pure parts of this directory: the thinking-level reader, the title cutter, host-argument injection and stripping, `readToolList`, one scripted run that must end `completed`, and one that must end `max_steps`. A `--check` run fails when any of them drifts, so `pnpm check:plugins` catches it without a kernel and without a model.
 
 -----
 

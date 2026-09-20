@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ToolSpec } from "@maota/agent-loop";
 
 import { systemPrompt } from "../src/prompt.ts";
-import { SKILL_TOOL, injectCwd, readToolList } from "../src/tools.ts";
+import { SKILL_TOOL, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "../src/tools.ts";
 
 assert.equal(systemPrompt("  base  ", [], null), "base");
 assert.equal(systemPrompt("", [], ""), "");
@@ -27,9 +27,9 @@ assert.equal(
 assert.deepEqual(readToolList(undefined), []);
 assert.deepEqual(readToolList({ tools: "nope" }), []);
 assert.deepEqual(readToolList({}), []);
-assert.deepEqual(readToolList({ tools: [{ name: "shell" }, { name: "" }, "junk", { nope: 1 }] }), [{ name: "shell" }]);
-assert.deepEqual(readToolList({ tools: [{ name: "shell", description: "d", capability: "tool.shell" }] }), [
-  { name: "shell", description: "d", capability: "tool.shell" },
+assert.deepEqual(readToolList({ tools: [{ name: "pwsh" }, { name: "" }, "junk", { nope: 1 }] }), [{ name: "pwsh" }]);
+assert.deepEqual(readToolList({ tools: [{ name: "pwsh", description: "d", capability: "tool.pwsh" }] }), [
+  { name: "pwsh", description: "d", capability: "tool.pwsh" },
 ]);
 
 assert.equal(SKILL_TOOL.name, "skill");
@@ -39,17 +39,41 @@ assert.deepEqual(SKILL_TOOL.input_schema, {
   required: ["name"],
 });
 
-const shell: ToolSpec = {
-  name: "shell",
-  input_schema: { type: "object", properties: { command: { type: "string" }, cwd: { type: "string" } } },
+const host: HostValues = { session_cwd: "E:\\proj" };
+const pwsh: ToolSpec = {
+  name: "pwsh",
+  input_schema: { type: "object", properties: { command: { type: "string" } } },
+  host_args: [{ name: "workdir", source: "session_cwd" }],
 };
-assert.deepEqual(injectCwd(shell, { command: "ls" }, "E:\\proj"), { command: "ls", cwd: "E:\\proj" });
-assert.deepEqual(injectCwd(shell, { command: "ls", cwd: "D:\\x" }, "E:\\proj"), { command: "ls", cwd: "D:\\x" });
-assert.deepEqual(injectCwd(shell, { command: "ls" }, null), { command: "ls" });
-assert.deepEqual(injectCwd(undefined, { command: "ls" }, "E:\\proj"), { command: "ls" });
-const other: ToolSpec = { name: "other", input_schema: { type: "object", properties: { a: { type: "string" } } } };
-assert.deepEqual(injectCwd(other, { a: 1 }, "E:\\proj"), { a: 1 });
-assert.equal(injectCwd(shell, "ls", "E:\\proj"), "ls");
+assert.deepEqual(injectHostArgs(pwsh, { command: "ls" }, host), { command: "ls", workdir: "E:\\proj" });
+assert.deepEqual(injectHostArgs(pwsh, { command: "ls", workdir: "D:\\x" }, host), {
+  command: "ls",
+  workdir: "D:\\x",
+});
+assert.deepEqual(injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null }), { command: "ls" });
+assert.deepEqual(injectHostArgs(undefined, { command: "ls" }, host), { command: "ls" });
+const read: ToolSpec = {
+  name: "read",
+  input_schema: { type: "object", properties: { file_path: { type: "string" } } },
+};
+assert.deepEqual(injectHostArgs(read, { file_path: "a.ts" }, host), { file_path: "a.ts" });
+assert.equal(injectHostArgs(pwsh, "ls", host), "ls");
+
+const published = stripHostArgs({
+  name: "pwsh",
+  description: "run a command",
+  input_schema: { type: "object", properties: { command: { type: "string" } } },
+  capability: "tool.pwsh",
+  host_args: [{ name: "workdir", source: "session_cwd" }],
+});
+assert.deepEqual(published, {
+  name: "pwsh",
+  description: "run a command",
+  input_schema: { type: "object", properties: { command: { type: "string" } } },
+  capability: "tool.pwsh",
+});
+assert.equal("host_args" in published, false);
+assert.deepEqual(stripHostArgs({ name: "bare" }), { name: "bare" });
 
 const entry = join(import.meta.dirname, "..", "src", "index.ts");
 const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" });
@@ -68,4 +92,4 @@ assert.deepEqual(
   ["api", "tools", "session", "skill"],
 );
 
-console.log("agent ok: systemPrompt, tool specs, cwd injection, the entry --check report");
+console.log("agent ok: systemPrompt, tool specs, host args, the entry --check report");

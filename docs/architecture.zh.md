@@ -13,7 +13,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `packages/boot/app-boot` | 为一次启动定下配置文件与内核二进制。 | [README](../packages/boot/app-boot/README.zh.md) |
 | `packages/boot/host` | 拉起内核并在 stdio 上驱动它。 | [README](../packages/boot/host/README.zh.md) |
 | `packages/boot/hmr` | 开发期监视插件：为它盯着的路径发布 `dev.source.changed`。 | `packages/boot/hmr/src/index.ts` |
-| `packages/*` | 内核插件：api、shell、tools、skill、skill-filesystem、session、agent。 | `packages/<name>/src/index.ts`；agent 是 `packages/agent/agent-core/src/index.ts` |
+| `packages/*` | 内核插件：api、pwsh-local、tool-pwsh、tool-fs、tool-fs-search、tools、skill、skill-filesystem、session 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
 | `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
 
@@ -47,5 +47,9 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 ## 相关文档
 
 - [boot 包组](../packages/boot/README.zh.md)
+- [fs 包组](../packages/fs/README.zh.md)
+- [shell 包组](../packages/shell/README.zh.md)
+- [bundle 包组](../packages/bundle/README.zh.md)
+- [tools 分发器](../packages/agent/tools/README.zh.md)
 - [maota CLI](../apps/cli/README.zh.md)
 - [防御性模式](defensive-patterns.zh.md)

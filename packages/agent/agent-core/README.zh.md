@@ -46,6 +46,7 @@ kind: "package-reference"
 | 键 | 缺省 | 含义 |
 |---|---|---|
 | `max_steps` | `8` | 一轮最多发起几次模型调用。 |
+| `max_parallel_tools` | `4` | 一个批次里最多同时跑几个安全工具调用。 |
 | `system` | 随包提供的编码助手提示词 | 基础系统提示词。 |
 | `thinking` | `{}` | 每个档位的 `model` 与 `tools`。档位可以只写模型名，也可以写成表。 |
 
@@ -62,7 +63,7 @@ kind: "package-reference"
 
 ### 工具
 
-`skill` 在场时，它的技能会进系统提示词，并多提供一个 `skill` 工具。其余工具都来自 `tools`。声明了 `cwd` 参数的工具会拿到会话工作目录，除非模型自己给了值。
+`skill` 在场时，它的技能会进系统提示词，并多提供一个 `skill` 工具。其余工具都来自 `tools`。声明了宿主参数的工具会在调用之前拿到那个值（今天是 `session_cwd`），除非模型自己给了这个参数；交给模型看的 spec 里会把这个参数剥掉，所以模型没法把一次调用挪出会话目录。安全与否经 `tools.classify` 询问，`skill` 工具自己答安全。
 
 -----
 
@@ -75,7 +76,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 定义：配置、`requires`、`run`、`info` 与 `selfCheck` |
 | [`src/prompt.ts`](src/prompt.ts) | `systemPrompt`：基础提示词、工作目录与技能清单 |
-| [`src/tools.ts`](src/tools.ts) | `skill` 工具的规格、`readToolList` 与 `injectCwd` |
+| [`src/tools.ts`](src/tools.ts) | `skill` 工具的规格、`readToolList`、`stripHostArgs` 与 `injectHostArgs` |
 
 ### 一轮的过程
 
@@ -85,7 +86,7 @@ kind: "package-reference"
 
 ### 配置检查
 
-`selfCheck` 覆盖本目录的纯函数部分：档位读取、标题截断、`injectCwd`、`readToolList`，以及两次脚本化运行，一次必须以 `completed` 结束，一次必须以 `max_steps` 结束。任何一处走样都会让 `--check` 失败，所以 `pnpm check:plugins` 不用内核、不用模型就能抓到。
+`selfCheck` 覆盖本目录的纯函数部分：档位读取、标题截断、宿主参数的注入与剥离、`readToolList`，以及两次脚本化运行，一次必须以 `completed` 结束，一次必须以 `max_steps` 结束。任何一处走样都会让 `--check` 失败，所以 `pnpm check:plugins` 不用内核、不用模型就能抓到。
 
 -----
 

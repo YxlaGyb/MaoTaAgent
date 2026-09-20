@@ -9,6 +9,7 @@ interface LoopEvent {
   text?: string;
   step?: number;
   tool?: string;
+  id?: string;
   args?: unknown;
   ok?: boolean;
   output?: unknown;
@@ -55,7 +56,7 @@ export function createBridge(channel: Channel): Bridge {
         emit({ event: "step", turn_id: turnId, step: Number(event.step ?? 0) });
         return false;
       case "tool_call":
-        emit({ event: "tool_call", turn_id: turnId, tool: String(event.tool ?? ""), args: event.args });
+        emit({ event: "tool_call", turn_id: turnId, tool: String(event.tool ?? ""), id: String(event.id ?? ""), args: event.args });
         return false;
       case "tool_result":
         emit({

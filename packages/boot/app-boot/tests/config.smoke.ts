@@ -31,7 +31,19 @@ assert.throws(() => profileDir(home, "nope"), /unknown profile/, "an unknown pro
 const base = await rowsOfBundles(PROFILE_TEMPLATES["default"]!.bundles);
 assert.deepEqual(
   base.map((row) => row.id),
-  ["api", "shell", "tools", "skill", "skill-filesystem", "session", "agent-core", "hmr"],
+  [
+    "api",
+    "pwsh-local",
+    "tool-pwsh",
+    "tool-fs",
+    "tool-fs-search",
+    "tools",
+    "skill",
+    "skill-filesystem",
+    "session",
+    "agent-core",
+    "hmr",
+  ],
   "the default profile is the base bundle, in its order",
 );
 assert.equal(base.find((row) => row.id === "hmr")?.disabled, true, "the development watcher ships off");

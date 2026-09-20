@@ -5,10 +5,11 @@ import {
   type ChatDelta,
   type LoopEvent,
   type Message,
+  type ToolCall,
   type ToolSpec,
 } from "@maota/agent-loop";
 import { systemPrompt, type SkillSummary } from "./prompt.ts";
-import { SKILL_TOOL, injectCwd, readToolList } from "./tools.ts";
+import { SKILL_TOOL, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "./tools.ts";
 
 export const LEVELS = ["off", "low", "medium", "high"] as const;
 export type Level = (typeof LEVELS)[number];
@@ -20,10 +21,11 @@ export interface LevelSetting {
 
 const DEFAULTS = {
   max_steps: 8,
+  max_parallel_tools: 4,
   system:
-    "You are MaoTa's coding assistant, running on Windows. Use the shell tool to read code, " +
-    "list directories and run commands; do not guess, and do not reach for Unix commands " +
-    "such as tail or sed. Answer in the user's language, briefly.",
+    "You are MaoTa's coding assistant, running on Windows. Use read, glob and edit for files, " +
+    "and pwsh to run commands; do not guess, and do not reach for Unix commands such as tail " +
+    "or sed. Answer in the user's language, briefly.",
   thinking: {} as Partial<Record<Level, LevelSetting>>,
 };
 
@@ -70,6 +72,26 @@ export function titleOf(text: unknown): string {
   if (flat === "") return "";
   const all = [...segmenter.segment(flat)].map((piece) => piece.segment);
   return all.length > 30 ? `${all.slice(0, 30).join("")}…` : flat;
+}
+
+async function classifyTool(
+  ctx: Call,
+  spec: ToolSpec | undefined,
+  call: ToolCall,
+  host: HostValues,
+  signal: AbortSignal,
+): Promise<boolean> {
+  try {
+    const reply = (await ctx.channel.call(
+      "tools",
+      "classify",
+      { name: call.name, args: injectHostArgs(spec, call.args, host) },
+      { signal },
+    )) as { safe?: unknown } | null;
+    return reply?.safe === true;
+  } catch {
+    return false;
+  }
 }
 
 async function listTools(ctx: Call): Promise<ToolSpec[]> {
@@ -143,7 +165,7 @@ async function chatStream(
 
 export const definition: Definition = {
   provides: [{ capability: "agent.loop", version: "1.1.0" }],
-  configKeys: ["max_steps", "system", "thinking"],
+  configKeys: ["max_steps", "max_parallel_tools", "system", "thinking"],
   requires: [
     { capability: "api", version: "^1" },
     { capability: "tools", version: "^1" },
@@ -157,6 +179,10 @@ export const definition: Definition = {
         typeof wiring.config.max_steps === "number" && wiring.config.max_steps > 0
           ? wiring.config.max_steps
           : DEFAULTS.max_steps,
+      max_parallel_tools:
+        typeof wiring.config.max_parallel_tools === "number" && wiring.config.max_parallel_tools > 0
+          ? wiring.config.max_parallel_tools
+          : DEFAULTS.max_parallel_tools,
       system: typeof wiring.config.system === "string" ? wiring.config.system : DEFAULTS.system,
       thinking: readThinking(wiring.config.thinking),
     };
@@ -176,6 +202,9 @@ export const definition: Definition = {
       const [available, skills] = await Promise.all([listTools(ctx), listSkills(ctx)]);
       const tools = setting.tools ? available : [];
       if (setting.tools && skills.length > 0) tools.push(SKILL_TOOL);
+      const modelTools = tools.map(stripHostArgs);
+      const host: HostValues = { session_cwd: cwd };
+      const specOf = (name: string): ToolSpec | undefined => tools.find((tool) => tool.name === name);
 
       const history = await loadHistory(ctx, sessionId, cwd);
       if (input !== "") history.push({ role: "user", content: input });
@@ -194,8 +223,9 @@ export const definition: Definition = {
           {
             tools,
             max_steps: settings.max_steps,
+            max_parallel: settings.max_parallel_tools,
             chat: (step) =>
-              chatStream(ctx, step.state.messages, step.tools, setting.model, step.signal, step.delta),
+              chatStream(ctx, step.state.messages, modelTools, setting.model, step.signal, step.delta),
             callTool: (invoked, step) =>
               invoked.name === SKILL_TOOL.name
                 ? ctx.channel.call(
@@ -207,12 +237,13 @@ export const definition: Definition = {
                 : ctx.channel.call(
                     "tools",
                     "call",
-                    {
-                      name: invoked.name,
-                      args: injectCwd(tools.find((tool) => tool.name === invoked.name), invoked.args, cwd),
-                    },
+                    { name: invoked.name, args: injectHostArgs(specOf(invoked.name), invoked.args, host) },
                     { signal: step.signal },
                   ),
+            classify: (invoked, step) =>
+              invoked.name === SKILL_TOOL.name
+                ? Promise.resolve(true)
+                : classifyTool(ctx, specOf(invoked.name), invoked, host, step.signal),
           },
           messages,
           ctx.signal,
@@ -281,23 +312,32 @@ export const definition: Definition = {
     if ([...segmenter.segment(family)].length > 31) problems.push("titleOf split a grapheme cluster");
     if (!family.endsWith("…")) problems.push("titleOf did not cut the long family line");
 
-    const shell: ToolSpec = {
-      name: "shell",
-      input_schema: { type: "object", properties: { command: { type: "string" }, cwd: { type: "string" } } },
+    const host: HostValues = { session_cwd: "E:\\proj" };
+    const pwsh: ToolSpec = {
+      name: "pwsh",
+      input_schema: { type: "object", properties: { command: { type: "string" } } },
+      host_args: [{ name: "workdir", source: "session_cwd" }],
     };
-    if ((injectCwd(shell, { command: "ls" }, "E:\\proj") as { cwd?: string }).cwd !== "E:\\proj") {
-      problems.push("cwd was not injected");
+    if ((injectHostArgs(pwsh, { command: "ls" }, host) as { workdir?: string }).workdir !== "E:\\proj") {
+      problems.push("the session workdir was not injected");
     }
-    if ((injectCwd(shell, { command: "ls", cwd: "D:\\x" }, "E:\\proj") as { cwd?: string }).cwd !== "D:\\x") {
-      problems.push("cwd injection overwrote the model's own cwd");
+    if ((injectHostArgs(pwsh, { command: "ls", workdir: "D:\\x" }, host) as { workdir?: string }).workdir !== "D:\\x") {
+      problems.push("host injection overwrote the model's own workdir");
     }
-    const other: ToolSpec = { name: "other", input_schema: { type: "object", properties: { a: { type: "string" } } } };
-    if ((injectCwd(other, { a: 1 }, "E:\\proj") as { cwd?: unknown }).cwd !== undefined) {
-      problems.push("cwd was injected into a tool that has no such parameter");
+    const other: ToolSpec = {
+      name: "other",
+      input_schema: { type: "object", properties: { a: { type: "string" } } },
+    };
+    if ((injectHostArgs(other, { a: 1 }, host) as { workdir?: unknown }).workdir !== undefined) {
+      problems.push("host args were injected into a tool that declares none");
     }
-    if ((injectCwd(shell, { command: "ls" }, null) as { cwd?: unknown }).cwd !== undefined) {
-      problems.push("cwd was injected without a session workdir");
+    if ((injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null }) as { workdir?: unknown }).workdir !== undefined) {
+      problems.push("host args were injected without a session workdir");
     }
+    if ((stripHostArgs(pwsh) as { host_args?: unknown }).host_args !== undefined) {
+      problems.push("host_args leaked into the model visible spec");
+    }
+    if (stripHostArgs(pwsh).name !== "pwsh") problems.push("stripHostArgs dropped the tool name");
 
     const info = definition.methods.info?.({}, {} as Call) as { levels?: string[]; thinking?: unknown } | undefined;
     if (info?.levels?.join(",") !== LEVELS.join(",")) problems.push(`info returned ${JSON.stringify(info)}`);

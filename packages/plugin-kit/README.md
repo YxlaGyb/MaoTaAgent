@@ -1,0 +1,107 @@
+---
+description: "The plugin protocol every MaoTa package imports: stdio framing, channels, capability routing, tool declaration, and the config-key and schema checks."
+kind: "package-reference"
+---
+
+# plugin-kit
+
+English | [中文](README.zh.md)
+
+## Summary
+
+Every MaoTa package imports this one, and nothing here imports them back. It owns the stdio frame format, the channel that carries requests, replies, notices and cancel notices, the `runPlugin` entry that gives a package its `--check` mode, the controlled JSON Schema subset a tool declares its parameters in, and `defineTools`, which turns those declarations into the four methods one tool capability answers. It carries no tool, no model and no config of its own.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further exploration](#further-exploration)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
+### Writing a plugin
+
+| Export | Meaning |
+|---|---|
+| `runPlugin(definition)` | The entry every spawned package calls. Under `--check` it validates `provides`, semver, `requires`, `configKeys` and `selfCheck`, prints one JSON line and exits; otherwise it serves stdio. |
+| `Definition` | `provides`, `requires`, `configKeys`, `setup`, `start`, `methods`, `close` and `selfCheck`. |
+| `Call` | What a method receives: `channel`, `signal`, `config`, `capabilities`, `caller`, `capability`, `method` and `stream`. |
+| `CallError` | A failure with a JSON-RPC code and optional `data`. |
+| `Channel` | `call`, `notify` and `log` over the kernel connection. |
+| `ProviderStream` | Pushes chunks for an invoke that asked for `meta.stream`. |
+
+### Declaring a tool
+
+`defineTools(blueprints)` returns `{ provides, methods }`, and `methods` holds `describe`, `policy`, `run` and `classify`.
+
+| Blueprint field | Meaning |
+|---|---|
+| `capability` | `tool.<name>`, the capability the kernel routes to. |
+| `version` | A full semver. |
+| `description` | The text the model reads. |
+| `parameters` | Fields written by property, compiled into one `{ type: "object", properties, required }`. |
+| `concurrency` | `"always"`, `"never"`, or `{ safe(args) }`. |
+| `maxResultChars` | A positive integer, or `null` for never spill. Omitted means the dispatcher applies its own budget. |
+| `run(args, call)` | The work. It runs only after the arguments pass validation. |
+
+| Parameter field | Meaning |
+|---|---|
+| `type` | One of `object`, `array`, `string`, `number`, `integer`, `boolean` and `null`. |
+| `required` | Top level only. The model must send it. |
+| `description`, `enum`, `items`, `additionalProperties` | The usual hints, inside the subset below. |
+| `host` | `"session_cwd"`. The host fills it, and the model never sees it. |
+
+### The controlled schema subset
+
+`assertSupportedJsonSchema` accepts only the scalar `type` list above, `properties`, `required`, boolean `additionalProperties`, `items`, scalar `enum` and `const`, `oneOf`, plus `description`, `title` and `default`. Anything else is a `JsonSchemaError` that lists every offending path at once, so one declaration cannot fail twice.
+
+`validateParameters(schema, args)` returns a path-qualified list of everything wrong with a value, or an empty list. A tool method answers with `ToolArgsError` when it is non-empty, and the loop turns that into a readable `{ error }` result instead of ending the turn.
+
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+### Source map
+
+| File | Role |
+|---|---|
+| [`src/frame.ts`](src/frame.ts) | The stdio frame reader and writer. |
+| [`src/channel.ts`](src/channel.ts) | `Channel`, `CallError`, routing and cancel. |
+| [`src/plugin.ts`](src/plugin.ts) | `runPlugin`, `serve`, the initialize / start / invoke / shutdown handshake, `ProviderStream` and the unknown-config-key warning. |
+| [`src/json-schema.ts`](src/json-schema.ts) | The controlled subset: `assertSupportedJsonSchema` and `validateJsonSchemaValue`. |
+| [`src/tool.ts`](src/tool.ts) | `defineTools`, `ToolArgsError`, host arguments and the two compiled schemas. |
+| [`src/config-keys.check.ts`](src/config-keys.check.ts) | The unknown-key warning, checked by a script. |
+| [`src/tool-schema.check.ts`](src/tool-schema.check.ts) | The declaration and value checks, checked by a script. |
+
+### One declaration, two schemas
+
+A blueprint's `parameters` compiles into two objects. The published one becomes the model-visible `input_schema`; the validation one adds every host argument as required. `describe` returns the published schema plus `host_args`, so the host knows what to inject without the model ever seeing those names. A host argument that is `required`, that is not a string, or that appears below the top level is a declaration error rather than a runtime one.
+
+### Runs after validation, never before
+
+`run` validates first and only then calls the blueprint. `classify` validates the same way and answers `safe: false` for bad arguments or a throwing `safe`, so a call that is about to fail on its arguments still runs alone instead of beside a safe call.
+
+-----
+
+<a id="further-exploration"></a>
+## Further exploration
+
+- [tools](../agent/tools/README.md): the dispatcher that lists and calls these capabilities.
+- [tool-fs](../fs/tool-fs/README.md): a worked example of three tools in one plugin.
+- [packages group](../README.md): the plugin tree this package belongs to.
+
+-----
+
+<a id="known-limitations-and-deferred-work"></a>
+## Known Limitations and Deferred Work
+
+- **One host source**: `host` accepts only `session_cwd`.
+- **No tool output schema**: only the input side is described.
+- **The subset is closed**: `pattern`, `minimum`, `$ref` and the rest of JSON Schema are refused, so a tool that needs them needs a change here first.
+- **`oneOf` is shallow**: branches are checked for shape, not for exclusivity, at declaration time.
+- **No permission layer**: a capability name and a version range are all the routing check there is.

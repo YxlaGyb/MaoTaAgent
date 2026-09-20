@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The loop engine one turn runs on: call the model, run the tools it asked for, feed the results back, repeat. It reads no config, touches no session and knows nothing about the gateway, because [`../agent-core`](../agent-core/README.md) supplies both as seams. Every run ends with one reason: `completed`, `aborted` or `max_steps`. The module is five files with one exported entry, `runLoop`, and it emits only the events of the turn it is running.
+The loop engine one turn runs on: call the model, run the tools it asked for, feed the results back, repeat. It reads no config, touches no session and knows nothing about the gateway, because [`../agent-core`](../agent-core/README.md) supplies both as seams. Every run ends with one reason: `completed`, `aborted` or `max_steps`. A tool round groups consecutive calls that classified as safe into one batch of at most `max_parallel`, and runs every other call alone. The module is five files with one exported entry, `runLoop`, and it emits only the events of the turn it is running.
 
 ## Table of Contents
 
@@ -35,7 +35,8 @@ const outcome = await runLoop(deps, messages, signal, emit);
 |---|---|
 | `tools` | The tool specs offered to the model. |
 | `max_steps` | How many model calls one run may make. |
-| `chat(ctx)` | One model call. Resolve with the assistant message. |
+| `max_parallel` | How many calls one batch may run at once. Omitted or invalid means 1, which is one call at a time. |
+| `classify(call, ctx)` | Whether this call may run beside another. A missing seam, an answer that is not strictly `true`, or a throw all mean no. |
 | `callTool(call, ctx)` | One tool call. Throw to report a tool that failed. |
 
 ### The step context
@@ -66,8 +67,8 @@ Both seams receive a `StepContext`.
 | `step` | `{ step }` | A model call is starting. |
 | `text` | `{ text }` | Streamed answer text. |
 | `reasoning` | `{ text }` | Streamed reasoning text. |
-| `tool_call` | `{ tool, args }` | A tool is about to run. |
-| `tool_result` | `{ tool, ok, output }` | A tool finished. |
+| `tool_call` | `{ id, tool, args }` | A tool is about to run. |
+| `tool_result` | `{ id, tool, ok, output }` | A tool finished. The `id` is the call it answers. |
 
 `tick` and `done` belong to the plugin that calls the loop and not to the loop itself.
 
@@ -81,7 +82,7 @@ Both seams receive a `StepContext`.
 | File | Role |
 |---|---|
 | [`src/loop.ts`](src/loop.ts) | `runLoop`: the step loop, and the one place an exit reason is decided |
-| [`src/execute.ts`](src/execute.ts) | The tool execution seam: one round, in call order |
+| [`src/execute.ts`](src/execute.ts) | The tool execution seam: classification, batching and one round in call order |
 | [`src/events.ts`](src/events.ts) | `LoopExitReason`, `LoopEvent`, `LoopState`, `StepContext`, `LoopDeps` and `LoopOutcome` |
 | [`src/messages.ts`](src/messages.ts) | `Message`, `ToolSpec`, `ToolCall`, `toolCalls`, `parseArgs` and `asText` |
 | [`src/index.ts`](src/index.ts) | Re-exports |
@@ -92,9 +93,9 @@ The loop continues while the assistant message carries tool calls, and it never 
 
 ### Tool rounds
 
-`execute.ts` is the single place a round runs. It walks the calls in order, emits `tool_call` before each one and `tool_result` after, and appends exactly one `role: "tool"` message per call, in call order, carrying the call id as `tool_call_id`. A tool that throws becomes `{ error }` content and the round continues, so one bad tool never ends the run. When the signal aborts mid round, the round stops and the remaining calls do not run.
+`execute.ts` is the single place a round runs. It asks `classify` about every call first, then groups the calls: consecutive answers of a strict `true` form one batch, capped at `max_parallel`, while any call that did not answer that way becomes a batch of its own. Batches run in order and only the calls inside one batch may overlap, which is what keeps an unsafe call from running beside anything at all. Before a batch starts, every call in it emits `tool_call`; as each call settles it emits `tool_result` carrying its `id`, so results may arrive in another order than the calls were emitted in. Once the batch has settled, one `role: "tool"` message is appended per call, in the original call order, carrying the call id as `tool_call_id`. A tool that throws becomes `{ error }` content and the round continues, so one bad tool never ends the run. When the signal aborts, the remaining batches do not start and the calls that already finished keep their messages.
 
-A different policy, such as concurrency or execution that starts while the model is still streaming, enters by replacing this file. `loop.ts` does not depend on the policy.
+A different policy, such as execution that starts while the model is still streaming, enters by replacing this file. `loop.ts` does not depend on the policy.
 
 ### Message parsing
 
@@ -102,7 +103,7 @@ A different policy, such as concurrency or execution that starts while the model
 
 ### Config checks
 
-`selfCheck` in `agent-core` drives this module through scripted seams. The repository also keeps a test beside it, in [`tests/loop.smoke.ts`](tests/loop.smoke.ts), which covers completion, a two-call round, a tool that throws, an exhausted budget, an abort before the first step, an abort inside a tool round, and malformed assistant messages. It needs no kernel and no network, and `pnpm loop:smoke` runs it alone.
+`selfCheck` in `agent-core` drives this module through scripted seams. The repository also keeps a test beside it, in [`tests/loop.smoke.ts`](tests/loop.smoke.ts), which covers completion, a two-call round, a tool that throws, an exhausted budget, an abort before the first step, an abort inside a tool round, malformed assistant messages, batching and its cap, an unsafe call splitting a round, out-of-order results, and a missing or throwing `classify`. It needs no kernel and no network, and `pnpm loop:smoke` runs it alone.
 
 -----
 
@@ -118,7 +119,7 @@ A different policy, such as concurrency or execution that starts while the model
 <a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
-- **Tools run one at a time**: there is no concurrency, and nothing starts while the model is still streaming.
+- **Batching is consecutive only**: one unsafe call splits the round, so two safe calls either side of it never share a batch.`n- **Nothing starts while the model is still streaming**: a round waits for the assistant message to finish.
 - **No failure classification and no retry**: a rejected model call is the caller's problem, and the loop never tries again on its own.
 - **No context compaction**: the message array grows until the caller stops handing it back.
 - **The loop persists nothing**: saving a turn belongs to the plugin, and so does every config value.

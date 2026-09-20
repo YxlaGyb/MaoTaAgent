@@ -6,11 +6,17 @@ export interface Message {
   name?: string;
 }
 
+export interface ToolHostArg {
+  name: string;
+  source: string;
+}
+
 export interface ToolSpec {
   name: string;
   description?: string;
   input_schema?: unknown;
   capability?: string;
+  host_args?: ToolHostArg[];
 }
 
 export interface ToolCall {

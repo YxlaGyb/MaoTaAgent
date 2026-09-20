@@ -1,5 +1,5 @@
 {
-  "name": "@maota/shell",
+  "name": "@maota/tool-fs-search",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,6 +13,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@maota/fs": "workspace:^",
     "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"
