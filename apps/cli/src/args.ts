@@ -3,6 +3,7 @@ export const DEFAULT_SESSION = "cli";
 export interface Launch {
   config?: string | undefined;
   kernel?: string | undefined;
+  profile?: string | undefined;
   session: string;
 }
 
@@ -19,6 +20,7 @@ export type Parsed =
 export function parseArgs(argv: string[]): Parsed {
   let config: string | undefined;
   let kernel: string | undefined;
+  let profile: string | undefined;
   let session = DEFAULT_SESSION;
   let json = false;
   let help = false;
@@ -40,12 +42,13 @@ export function parseArgs(argv: string[]): Parsed {
       json = true;
       continue;
     }
-    if (token === "--config" || token === "--kernel" || token === "--session") {
+    if (token === "--config" || token === "--kernel" || token === "--profile" || token === "--session") {
       const value = argv[i + 1];
       if (value === undefined) return { kind: "usage", message: `option ${token} needs a value` };
       i += 1;
       if (token === "--config") config = value;
       else if (token === "--kernel") kernel = value;
+      else if (token === "--profile") profile = value;
       else session = value;
       continue;
     }
@@ -60,7 +63,7 @@ export function parseArgs(argv: string[]): Parsed {
 
   if (help) return { kind: "help" };
   if (version) return { kind: "version" };
-  const launch: Launch = { config, kernel, session };
+  const launch: Launch = { config, kernel, profile, session };
   if (subcommand === "serve") return { kind: "serve", ...launch };
   if (subcommand === "check") return { kind: "check", json, ...launch };
   const question = words.join(" ");

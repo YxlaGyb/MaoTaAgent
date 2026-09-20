@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { kernel as installedKernel } from "eggshell-kernel";
 
-import { boot, type Chunk } from "../packages/boot/host/src/index.ts";
+import { boot, type Chunk } from "@maota/host";
 
 const root = join(import.meta.dirname, "..");
 const kernelBin =
@@ -14,11 +14,11 @@ const kernelBin =
   installedKernel ??
   join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
 
-function plugin(id: string, name: string): string[] {
+function plugin(id: string, pkg: string): string[] {
   return [
     `[plugins.${id}]`,
     `command = '${process.execPath}'`,
-    `args = ['${join(root, "packages", name, "src", "main.ts")}']`,
+    `args = ['${join(root, "packages", pkg, "src", "index.ts")}']`,
     "",
   ];
 }
@@ -39,7 +39,7 @@ writeFileSync(
     ...plugin("skill-filesystem", "skill-filesystem"),
     ...plugin("skill", "skill"),
     ...plugin("session", "session"),
-    ...plugin("agent", "agent"),
+    ...plugin("agent", "agent/agent-core"),
     "",
   ].join("\n"),
 );

@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { kernel as installed } from "eggshell-kernel";
 
-import { boot } from "../../../packages/boot/host/src/index.ts";
+import { boot } from "@maota/host";
 
 const SHORT = "the short answer.";
 const LONG = "lorem-ipsum-".repeat(1400);
@@ -18,14 +18,14 @@ const bin =
   join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
 
 const PLUGINS: Array<[string, string]> = [
-  ["api", "packages/api/src/main.ts"],
-  ["shell", "packages/shell/src/main.ts"],
-  ["tools", "packages/tools/src/main.ts"],
-  ["skill-filesystem", "packages/skill-filesystem/src/main.ts"],
-  ["skill", "packages/skill/src/main.ts"],
-  ["session", "packages/session/src/main.ts"],
-  ["agent", "packages/agent/src/main.ts"],
-  ["web", "apps/web/src/main.ts"],
+  ["api", "packages/api/src/index.ts"],
+  ["shell", "packages/shell/src/index.ts"],
+  ["tools", "packages/tools/src/index.ts"],
+  ["skill-filesystem", "packages/skill-filesystem/src/index.ts"],
+  ["skill", "packages/skill/src/index.ts"],
+  ["session", "packages/session/src/index.ts"],
+  ["agent-core", "packages/agent/agent-core/src/index.ts"],
+  ["web", "apps/web/src/index.ts"],
 ];
 
 const home = mkdtempSync(join(tmpdir(), "maota-web-"));
@@ -49,11 +49,12 @@ writeFileSync(
     "script = [",
     `  { text = '${SHORT}' },`,
     `  { text = '${LONG}' },`,
+    "  { },",
     "  { text = 'first workdir turn' },",
     "  { text = 'unused next step' },",
     "]",
     "",
-    "[plugins.agent.config.thinking]",
+    "[plugins.agent-core.config.thinking]",
     'off = "smoke-chat"',
     'medium = { model = "smoke-reasoner", tools = false }',
     "",

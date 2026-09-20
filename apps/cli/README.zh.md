@@ -1,8 +1,8 @@
-# `@virgena/maota`
+# `@maota/cli`
 
 [English](README.md) | 中文
 
-`maota` 是 MaoTa 唯一的 Node 启动器：它定下这次运行读哪个配置文件、跑哪个内核二进制，把 eggshell 内核当子进程拉起来，并在内核的 stdio 协议上驱动它。[`src/args.ts`](src/args.ts) 负责命令语法，[`src/main.ts`](src/main.ts) 负责入口模式与终端渲染。未知选项、选项缺值、`serve` 或 `check` 多带参数、配置文件不存在，都以非零码退出。
+`maota` 是 MaoTa 唯一的 Node 启动器：它定下这次运行读哪个配置文件、跑哪个内核二进制，把 eggshell 内核当子进程拉起来，并在内核的 stdio 协议上驱动它。[`src/args.ts`](src/args.ts) 负责命令语法，[`src/index.ts`](src/index.ts) 负责入口模式与终端渲染。未知选项、选项缺值、`serve` 或 `check` 多带参数、配置文件不存在，都以非零码退出。
 
 ## 目录
 
@@ -29,13 +29,14 @@
 | `maota --version` | 打印 `maota <版本>` 并退出 0。 |
 
 由第一个位置参数决定：`serve` 与 `check` 是子命令，后面不能再带参数；其它任何位置参数都算一次性问句，后面的参数用空格拼起来。
+`maota check` 打印的就是内核打印的内容。内核因为某个必需能力没有提供者而扣住的插件、以及用 `disabled = true` 关掉的行，都只算警告：check 仍然退出 0，报告用 `disabled` 与 `blocked` 两个字段列出它们（内核在 `docs/PROTOCOL.md` 第 14.1 节记录这两个字段）。
 
 <a id="options"></a>
 ## 选项
 
 | 选项 | 含义 |
 |---|---|
-| `--config <path>` | 要启动的配置文件。 |
+| `--profile <name>` | 启动哪个 profile：`serve` 子命令用 `serve`，其余用 `default`。 |
 | `--kernel <bin>` | 要拉起来的内核二进制。 |
 | `--session <id>` | 会话 id，缺省 `cli`。 |
 | `--json` | 只在 `check` 下有效：让内核输出 JSON 报告。 |
@@ -57,9 +58,10 @@
 <a id="configuration-resolution"></a>
 ## 配置解析
 
-两个输入都在重启任何东西之前由 [`@virgena/maota-boot-config`](../../packages/boot/config/README.zh.md) 定下：
+两个输入都在重启任何东西之前由 [`@maota/app-boot`](../../packages/boot/app-boot/README.zh.md) 定下：
 
-- 配置文件：`--config`，其次 `EGGSHELL_CONFIG`，其次存在的 `$MAOTA_HOME/eggshell.local.toml`，最后 `$MAOTA_HOME/eggshell.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会用包内的 `eggshell.default.toml` 生成后者，把仓库的绝对路径写进去，并往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。
+- 配置文件：`--config`，其次 `EGGSHELL_CONFIG`，其次存在的 `$MAOTA_HOME/profiles/<profile>/eggshell.local.toml`，否则是同目录里生成的那份 `eggshell.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会写下 profile 清单，按该 profile 列出的组合包生成配置，并为每一行在 profile 自己的 `node_modules` 里建一条指向该包的链接，同时往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。
+- Profile：`--profile`，其次 `serve` 子命令用 `serve`，其余命令用 `default`。profile 是 `$MAOTA_HOME/profiles` 下的一个目录；它的 `package.json` 记着启动时读回的组合包列表，所以光在 home 目录里就能改插件集。
 - 内核二进制：`--kernel`，其次 `EGGSHELL_BIN`，其次安装好的 `eggshell-kernel` 二进制，最后隔壁 `eggshellmod` 的 debug 产物。
 
 内核 stderr 上的日志行也走 stderr：`serve` 丢掉 `info` 行、留下的前缀是 `MaoTa`，其它模式前缀是 `[kernel]`。
@@ -72,13 +74,13 @@
 ```toml
 [plugins.hmr]
 disabled = false
-command = "node"
-args = ["<repo>/packages/hmr/src/main.ts"]
+name = "@maota/hmr"
 [plugins.hmr.config]
 roots = ["<repo>/apps", "<repo>/packages"]
 ```
 
 那个插件监视 `roots`，把变动的路径以 `dev.source.changed` 发出去。CLI 对每条 `kernel.plugin.started` 事件读出该插件解析后的 `cwd` 与入口参数，走过这个入口的静态 import 图（[`src/graph.ts`](src/graph.ts)），记下哪个插件 import 了哪个文件。之后每条 `dev.source.changed` 路径都会解析到恰好 import 它的那些插件，这些插件以 `reason: "source"` 重启（[`src/hmr.ts`](src/hmr.ts)）。像 `packages/plugin-kit/src/index.ts` 这样的共享文件会重启每个 import 它的插件；没人 import 的路径什么也不重启。不写这一行就什么都不监视，所以生产运行里没有 watcher，CLI 自己也不额外监视。
+当内核因为某个插件必需的依赖缺席而把它扣住时，会发布 `kernel.plugin.blocked`，带上插件和它在等的那些能力，CLI 会打一行 stderr：`MaoTa: <plugin> waits for <capability>`。插件在其提供者消失时也会被重载器停进同一个等待态，把提供者带回来的那次重载会重新启动它。
 
 <a id="development"></a>
 ## 开发
@@ -104,7 +106,7 @@ roots = ["<repo>/apps", "<repo>/packages"]
 
 这些限制说明这个启动器在什么时候需要小心。它们是当前约束，不是任务积压。
 
-- **选项从不透传给插件**：每个插件的设置都住在 `$MAOTA_HOME/eggshell.toml` 或它旁边的 `eggshell.local.toml`。
+- **选项从不透传给插件**：每个插件的设置都住在该 profile 的 `eggshell.toml` 或它旁边的 `eggshell.local.toml`。
 - **`serve` 没有自己的选项**：web 端口只能来自 `[plugins.web.config]`。
 - **web 插件始终没监听的那次 `serve` 会一直等下去**：没有启动期限。
 - **会话只能靠 `--session` 指认**：没有管理会话的子命令。

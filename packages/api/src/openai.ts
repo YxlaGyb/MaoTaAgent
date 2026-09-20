@@ -1,4 +1,4 @@
-import { CallError } from "../../plugin-kit/src/index.ts";
+import { CallError } from "@maota/plugin-kit";
 import type { ChatReply, ChatRequest } from "./messages.ts";
 import { SseParser, applyDelta, createAccumulator, messageFromAccumulator, type Delta, type StreamMessage } from "./sse.ts";
 

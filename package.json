@@ -1,32 +1,57 @@
 {
-  "name": "MaoTaAgent",
+  "name": "@maota/root",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "packages/*/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
   "scripts": {
-    "postinstall": "node node_modules/eggshell-kernel/install.js && pnpm -C apps/web install",
-    "check": "tsc --noEmit && node docs/i18n.check.ts && node packages/plugin-kit/src/config-keys.check.ts && node packages/plugin-kit/src/plugins.check.ts && pnpm -C apps/web check",
-    "check:types": "tsc --noEmit",
-    "check:plugins": "node packages/plugin-kit/src/plugins.check.ts",
-    "check:config": "node apps/cli/src/main.ts check",
-    "boot": "node apps/cli/src/main.ts",
+    "postinstall": "node node_modules/eggshell-kernel/install.js",
+    "build": "tsdown",
+    "check": "pnpm build && tsc --noEmit && node docs/i18n.check.ts && node packages/plugin-kit/src/config-keys.check.ts && node packages/boot/app-boot/src/plugins.check.ts && node packages/agent/agent-core/tests/agent.smoke.ts && node packages/agent/agent-loop/tests/loop.smoke.ts && pnpm -C apps/web check",
+    "check:types": "pnpm build && tsc --noEmit",
+    "check:plugins": "node packages/boot/app-boot/src/plugins.check.ts",
+    "check:config": "node apps/cli/lib/index.js check",
+    "boot": "node apps/cli/lib/index.js",
     "cli:smoke": "node apps/cli/tests/cli.smoke.ts",
     "smoke": "node packages/boot/host/tests/bridge.smoke.ts",
     "conversation": "node tests/conversation.smoke.ts",
-    "config:smoke": "node packages/boot/config/tests/config.smoke.ts",
+    "agent:smoke": "node packages/agent/agent-core/tests/agent.smoke.ts",
+    "loop:smoke": "node packages/agent/agent-loop/tests/loop.smoke.ts",
+    "config:smoke": "node packages/boot/app-boot/tests/config.smoke.ts",
     "hmr:smoke": "node tests/hmr.smoke.ts",
     "i18n:write": "node docs/i18n.check.ts --write",
-    "web": "node apps/cli/src/main.ts serve",
+    "web": "node apps/cli/src/index.ts serve",
     "web:build": "pnpm -C apps/web build",
     "web:smoke": "node apps/web/tests/web.smoke.ts"
   },
-  "engines": {
-    "node": ">=22"
-  },
-  "devDependencies": {
-    "@types/node": "^22.20.2",
-    "eggshell-kernel": "link:..\\eggshellmod\\npm"
-  },
   "dependencies": {
     "typescript": "^7.0.2"
+  },
+  "devDependencies": {
+    "@maota/agent-core": "workspace:^",
+    "@maota/agent-loop": "workspace:^",
+    "@maota/api": "workspace:^",
+    "@maota/app-boot": "workspace:^",
+    "@maota/base": "workspace:^",
+    "@maota/cli": "workspace:^",
+    "@maota/hmr": "workspace:^",
+    "@maota/host": "workspace:^",
+    "@maota/plugin-kit": "workspace:^",
+    "@maota/session": "workspace:^",
+    "@maota/shell": "workspace:^",
+    "@maota/skill": "workspace:^",
+    "@maota/skill-filesystem": "workspace:^",
+    "@maota/tools": "workspace:^",
+    "@maota/web": "workspace:^",
+    "@maota/web-bundle": "workspace:^",
+    "@types/node": "^22.20.2",
+    "eggshell-kernel": "link:..\\eggshellmod\\npm",
+    "tsdown": "^0.23.0"
   }
 }

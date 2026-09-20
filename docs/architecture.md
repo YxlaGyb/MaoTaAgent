@@ -9,11 +9,12 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | Component | What it is | Contract |
 |---|---|---|
 | `apps/cli` | The `maota` launcher: interactive, one-shot, `serve` and `check`. | [README](../apps/cli/README.md) |
-| `apps/web` | The web plugin: one HTTP server for the UI and the host RPC. | `apps/web/src/main.ts` |
-| `packages/boot/config` | Resolves the config file and the kernel binary for one launch. | [README](../packages/boot/config/README.md) |
+| `apps/web` | The web plugin: one HTTP server for the UI and the host RPC. It ships in the `serve` profile only. | `apps/web/src/index.ts` |
+| `packages/boot/app-boot` | Resolves the config file and the kernel binary for one launch. | [README](../packages/boot/app-boot/README.md) |
 | `packages/boot/host` | Spawns the kernel and drives it over stdio. | [README](../packages/boot/host/README.md) |
-| `packages/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/hmr/src/main.ts` |
-| `packages/*` | The kernel plugins: api, shell, tools, skill, skill-filesystem, session, agent. | `packages/<name>/src/main.ts` |
+| `packages/boot/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/boot/hmr/src/index.ts` |
+| `packages/*` | The kernel plugins: api, shell, tools, skill, skill-filesystem, session, agent. | `packages/<name>/src/index.ts`, and `packages/agent/agent-core/src/index.ts` for the agent |
+| `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 
 ## Launch path
@@ -28,9 +29,10 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 
 ## Configuration layering
 
-- Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`.
-- `$MAOTA_HOME/eggshell.toml` is generated on the first run from `packages/boot/config/eggshell.default.toml`, with the repository's absolute entry paths baked in. It holds the plugin set: which plugins exist, how they start, and the system prompt.
-- `$MAOTA_HOME/eggshell.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
+- Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`. Each profile owns a `node_modules` with one link per row, pointing at the package in this repository.
+- The launcher picks one profile: serve boots serve (base plus web), every other command boots default (base alone).
+- $MAOTA_HOME/profiles/<name>/eggshell.toml is generated from the bundles that profile lists. Every row names its package, and the kernel resolves that name out of the profile's own `node_modules`, so boot rewrites the file only when the rows change. It holds the plugin set: which plugins exist and how they start, since every plugin keeps its own defaults.
+- `$MAOTA_HOME/profiles/<name>/eggshell.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
 - A row with `disabled = true` is parsed and merged like any other, but the kernel never spawns it and its capability is not in the routing table. A later layer writing `false` enables it, and the kernel's reloader picks that up without a restart.
 - Later layers win: tables merge key by key, arrays are replaced wholesale.
 - Stray config keys are reported, not blocked, by `pnpm run check:config`.

@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { CallError } from "../../plugin-kit/src/index.ts";
+import { CallError } from "@maota/plugin-kit";
 
 export const SCHEMA_VERSION = 1;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;

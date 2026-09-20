@@ -1,4 +1,4 @@
-import type { Route } from "../../plugin-kit/src/index.ts";
+import type { Route } from "@maota/plugin-kit";
 
 export const TOOL_PREFIX = "tool.";
 

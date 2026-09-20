@@ -81,8 +81,8 @@ process.exit(await kernel.shutdown("ui_quit"));
 ### 重启与插件身份
 
 `kernel.plugin.started` 带上 `trigger`（`boot`、`config`、`source`、`manual`）与该插件的 `cwd`、`command`、`args`（loader 解析之后的值），宿主正是靠这些把改动过的文件映射回拥有它的插件。`restart` 复用重载那条管线，顺序是先停后起：旧实例收到 `shutdown{reason: "reload"}` 并必须离开（超过它的 `shutdown_grace_ms` 就强杀），之后才对这一个插件跑同一套 spawn、initialize、校验、换表、start。起不来的插件保持缺席，能力调用持续回 `-32011`，直到下一次 `restart` 成功。订阅会带上 `replay`，因此宿主订阅时已经在跑的插件也会自报一次。
+某个插件必需的能力没人提供，不算启动失败：内核照样把它拉起来、跑完 initialize，然后把它扣在等待态。它的 `provides` 不进路由表，所以调它本该提供的能力会以 `-32010` 失败，`kernel.plugin.blocked` 则带上这个插件和它在等的那些能力 id。`replay` 也会补发这些等待中的插件。一次重载让某个正在跑的插件失去提供者时，它进入的是同一个等待态：它带着 `trigger: config` 被停掉，把提供者带回来的那次重载再把它启动起来。配置里用 `disabled = true` 关掉的行是这件事的另一半：它不启动、也不进表，上层配置把它覆盖成 `false` 就会把它带起来。内核 `--check` 的报告用 `disabled`（插件 id 列表）与 `blocked`（插件 id 到缺失的能力 id）记录这两种情况，并只算警告，所以只有这些问题的配置仍然退出 0。
 
------
 
 <a id="further-exploration"></a>
 ## 进一步探索
@@ -99,7 +99,7 @@ process.exit(await kernel.shutdown("ui_quit"));
 这些限制说明这个宿主在什么时候需要小心。它们是当前约束，不是任务积压。
 
 - **模式按 topic 的整段匹配**：`*` 只匹配一段，`**` 永不匹配，所以没有递归通配。
-- **订阅之前发布的事件不会补发**：只有一个例外：`subscribe` 带着 `replay`，所以启动之后才建的订阅仍会被告知每一个已经在跑的插件。
+- **订阅之前发布的事件不会补发**：只有一个例外：`subscribe` 带着 `replay`，所以启动之后才建的订阅仍会被告知每一个已经在跑的插件，以及每一个正在等待的插件。
 - **handler 抛错会静默结束那个订阅**：`on` 不在别处报告这次失败。
 - **`shutdown` 总会 resolve**：内核若不理这个请求，调用方就一直等进程退出。
 - **`restart` 只替换你点名的那个插件**：改动过的文件影响哪些插件由调用方决定：CLI 靠 `kernel.plugin.started` 加对每个入口的静态 import 扫描来算，宿主自己从不读文件系统。

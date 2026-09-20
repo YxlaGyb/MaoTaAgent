@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 
-import type { Event, Host } from "../../../packages/boot/host/src/index.ts";
+import type { Event, Host } from "@maota/host";
 import { moduleGraph } from "./graph.ts";
 
 const RESTART_DEBOUNCE_MS = 150;
@@ -50,6 +50,15 @@ export function restartOnSourceChange(kernel: Host): void {
     }
   }
 
+  kernel.on(["kernel.plugin.blocked"], (event) => {
+    const payload = (event.payload ?? {}) as { plugin?: unknown; missing?: unknown };
+    const plugin = typeof payload.plugin === "string" ? payload.plugin : "";
+    const missing = Array.isArray(payload.missing)
+      ? payload.missing.filter((id): id is string => typeof id === "string")
+      : [];
+    if (plugin === "" || missing.length === 0) return;
+    console.error(`MaoTa: ${plugin} waits for ${missing.join(", ")}`);
+  });
   kernel.on(["kernel.plugin.started"], remember);
   kernel.on(["kernel.plugin.stopped"], (event) => {
     const plugin = ((event.payload ?? {}) as { plugin?: unknown }).plugin;

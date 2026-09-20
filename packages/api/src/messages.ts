@@ -1,4 +1,4 @@
-import { CallError } from "../../plugin-kit/src/index.ts";
+import { CallError } from "@maota/plugin-kit";
 
 export interface Message {
   role: string;

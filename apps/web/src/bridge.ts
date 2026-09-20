@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { CallError, type Channel, type InboundStream } from "../../../packages/plugin-kit/src/index.ts";
+import { CallError, type Channel, type InboundStream } from "@maota/plugin-kit";
 
 import type { BridgeFacts, HostEvent, SessionFile } from "./protocol.ts";
 

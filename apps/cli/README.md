@@ -1,8 +1,8 @@
-# `@virgena/maota`
+# `@maota/cli`
 
 English | [中文](README.zh.md)
 
-`maota` is MaoTa's only Node launcher: it picks which config file and which kernel binary this run uses, boots the eggshell kernel as a child process, and drives it over the kernel's stdio protocol. [`src/args.ts`](src/args.ts) owns the command grammar and [`src/main.ts`](src/main.ts) owns the entry modes and the terminal rendering. Unknown options, an option without a value, extra arguments to `serve` or `check`, and a missing config file all exit nonzero.
+`maota` is MaoTa's only Node launcher: it picks which config file and which kernel binary this run uses, boots the eggshell kernel as a child process, and drives it over the kernel's stdio protocol. [`src/args.ts`](src/args.ts) owns the command grammar and [`src/index.ts`](src/index.ts) owns the entry modes and the terminal rendering. Unknown options, an option without a value, extra arguments to `serve` or `check`, and a missing config file all exit nonzero.
 
 ## Table of Contents
 
@@ -29,13 +29,14 @@ English | [中文](README.zh.md)
 | `maota --version` | Print `maota <version>` and exit 0. |
 
 The first positional argument decides: `serve` and `check` are subcommands and take no further arguments, while any other positional argument starts a one-shot question whose remaining arguments are joined with spaces.
+`maota check` prints whatever the kernel prints. A plugin the kernel holds back because a capability it requires has no provider, and a plugin row switched off with `disabled = true`, are both warnings: the check still exits 0, and the report names them in `disabled` and `blocked` (the kernel documents both fields in `docs/PROTOCOL.md` section 14.1).
 
 <a id="options"></a>
 ## Options
 
 | Option | Meaning |
 |---|---|
-| `--config <path>` | Config file to boot. |
+| `--profile <name>` | Which profile to boot: `serve` for the `serve` command, `default` otherwise. |
 | `--kernel <bin>` | Kernel binary to spawn. |
 | `--session <id>` | Session id, default `cli`. |
 | `--json` | `check` only: ask the kernel for a JSON report. |
@@ -57,9 +58,10 @@ The first positional argument decides: `serve` and `check` are subcommands and t
 <a id="configuration-resolution"></a>
 ## Configuration resolution
 
-Both inputs are picked by [`@virgena/maota-boot-config`](../../packages/boot/config/README.md) before anything is spawned:
+Both inputs are picked by [`@maota/app-boot`](../../packages/boot/app-boot/README.md) before anything is spawned:
 
-- Config file: `--config`, then `EGGSHELL_CONFIG`, then `$MAOTA_HOME/eggshell.local.toml` when it exists, then `$MAOTA_HOME/eggshell.toml`; `MAOTA_HOME` defaults to `~/.maota`. On a first run the latter is generated from the package's `eggshell.default.toml`, with the repository's absolute paths baked in, and `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned.
+- Config file: `--config`, then `EGGSHELL_CONFIG`, then `$MAOTA_HOME/profiles/<profile>/eggshell.local.toml` when it exists, then the generated `eggshell.toml` beside it; `MAOTA_HOME` defaults to `~/.maota`. A first run writes the profile manifest, generates that config from the bundles the profile lists, and links each row's package into the profile's own `node_modules`; `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned.
+- Profile: `--profile`, else `serve` for the `serve` command and `default` for every other one. A profile is a directory under `$MAOTA_HOME/profiles`; its `package.json` records the bundle list boot reads back, so the plugin set can be changed from the home directory alone.
 - Kernel binary: `--kernel`, then `EGGSHELL_BIN`, then the installed `eggshell-kernel` binary, then the neighbouring `eggshellmod` debug build.
 
 Log lines on the kernel's stderr go to stderr: `serve` drops `info` lines and prefixes what it keeps with `MaoTa`, every other mode prefixes with `[kernel]`.
@@ -72,13 +74,13 @@ The generated config ships an `hmr` plugin row that is disabled. Enable it in th
 ```toml
 [plugins.hmr]
 disabled = false
-command = "node"
-args = ["<repo>/packages/hmr/src/main.ts"]
+name = "@maota/hmr"
 [plugins.hmr.config]
 roots = ["<repo>/apps", "<repo>/packages"]
 ```
 
 That plugin watches `roots` and publishes `dev.source.changed` with the path that changed. For every `kernel.plugin.started` event the CLI reads the plugin's resolved `cwd` and entry argument, walks that entry's static import graph ([`src/graph.ts`](src/graph.ts)), and remembers which plugin imports which file. Each `dev.source.changed` path is then resolved to exactly the plugins that import it, and those are restarted with `reason: "source"` ([`src/hmr.ts`](src/hmr.ts)). A shared file such as `packages/plugin-kit/src/index.ts` restarts every plugin that imports it; a path nobody imports restarts nothing. Without the row nothing is watched at all, so a production run carries no watcher and the CLI adds no watching of its own.
+When the kernel holds a plugin back because something it requires is missing, it publishes `kernel.plugin.blocked` with the plugin and the capabilities it waits for, and the CLI prints one stderr line: `MaoTa: <plugin> waits for <capability>`. That is the same waiting state the reloader leaves a running plugin in when its provider goes away, and the reload that brings the provider back starts it again.
 
 <a id="development"></a>
 ## Development
@@ -104,7 +106,7 @@ The first Ctrl-C asks the kernel to shut down with `ui_quit` and exits with the 
 
 These limits say when this launcher needs care. They are current constraints, not a task backlog.
 
-- **Options never reach plugins**: every plugin setting lives in `$MAOTA_HOME/eggshell.toml` or the `eggshell.local.toml` beside it.
+- **Options never reach plugins**: every plugin setting lives in the profile's `eggshell.toml` or the `eggshell.local.toml` beside it.
 - **`serve` has no options of its own**: the web port comes from `[plugins.web.config]` only.
 - **A `serve` whose web plugin never listens waits forever**: there is no startup deadline.
 - **Sessions are addressed by `--session` only**: there is no subcommand for managing them.

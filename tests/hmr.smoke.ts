@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { kernel as kernelBin } from "eggshell-kernel";
 
 import { restartOnSourceChange } from "../apps/cli/src/hmr.ts";
-import { boot, type Event } from "../packages/boot/host/src/index.ts";
+import { boot, type Event } from "@maota/host";
 
 const [eggshellArg] = process.argv.slice(2);
 const eggshell = eggshellArg ?? kernelBin;
@@ -23,11 +24,11 @@ async function until(check: () => boolean, what: string): Promise<void> {
   throw new Error(`timed out waiting for ${what}`);
 }
 
-function pluginSource(dir: string, capability: string, imports: string[]): string {
-  const kit = join(root, "packages", "plugin-kit", "src", "index.ts");
-  const rel = relative(dir, kit).replaceAll("\\", "/");
+function pluginSource(capability: string, imports: string[]): string {
+  const kit = pathToFileURL(join(root, "packages", "plugin-kit", "src", "index.ts")).href;
+  const rel = kit;
   return [
-    `import { runPlugin, type Definition } from "${rel.startsWith(".") ? rel : `./${rel}`}";`,
+    `import { runPlugin, type Definition } from "${rel}";`,
     ...imports.map((specifier) => `import "${specifier}";`),
     "",
     "export const definition: Definition = {",
@@ -54,8 +55,8 @@ const ignored = join(dir, "node_modules", "ignored.js");
 
 writeFileSync(kit, "export const kit = 1;\n");
 writeFileSync(local, 'import "../shared/kit.ts";\nexport const local = 1;\n');
-writeFileSync(one, pluginSource(join(dir, "one"), "smoke.one", ["./local.ts", "../shared/kit.ts"]));
-writeFileSync(two, pluginSource(join(dir, "two"), "smoke.two", ["../shared/kit.ts"]));
+writeFileSync(one, pluginSource("smoke.one", ["./local.ts", "../shared/kit.ts"]));
+writeFileSync(two, pluginSource("smoke.two", ["../shared/kit.ts"]));
 writeFileSync(ignored, "export const ignored = 1;\n");
 
 const config = join(dir, "eggshell.toml");
@@ -72,7 +73,7 @@ writeFileSync(
     "",
     "[plugins.hmr]",
     'command = "node"',
-    `args = ["${slashes(join(root, "packages", "hmr", "src", "main.ts"))}"]`,
+    `args = ["${slashes(join(root, "packages", "boot", "hmr", "src", "index.ts"))}"]`,
     "[plugins.hmr.config]",
     `roots = ["${slashes(dir)}"]`,
     "",

@@ -1,4 +1,4 @@
-import { CallError } from "../../plugin-kit/src/index.ts";
+import { CallError } from "@maota/plugin-kit";
 import type { ChatReply } from "./messages.ts";
 
 export interface ScriptStep {

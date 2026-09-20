@@ -1,53 +1,54 @@
 ---
-description: "The plugin group: every kernel plugin MaoTa ships, the capability each provides, and the entry point the kernel spawns."
+description: "The packages under packages/: what each one provides, and what it hands to the rest."
 kind: "package-group"
 ---
 
-# packages/: the plugin tree
+# packages/
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-Every directory here is either a plugin the kernel spawns as its own process or a library the plugin tree shares. A plugin speaks the eggshell protocol on stdio and is never imported by another process; the kernel routes a capability to whatever plugin declares it in its `initialize` reply. Read this page to find which plugin owns a capability, then open that plugin's directory. Each package README owns its own contract; this page only maps what is here.
+Every directory under `packages/` is a package, and each one carries one duty: a package the kernel spawns as its own process, a package the others import, a package that decides what one launch does, or a package that lists the rows a profile mounts. To find who owns a capability, look the package up here and open its directory. Package-level conventions live in that package's own README; this page says only what is here.
 
 ## Table of Contents
 
-- [Plugins](#plugins)
-- [Libraries](#libraries)
+- [Packages](#packages)
 - [Related documentation](#related-documentation)
 
 -----
 
-<a id="plugins"></a>
-## Plugins
+<a id="packages"></a>
+## Packages
 
-The generated `$MAOTA_HOME/eggshell.toml` has one row per plugin: the kernel runs `command` + `args` and learns the capability from the process itself.
+Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row per spawned package: the row states the package to run and nothing else, the kernel resolves that name out of the profile's own `node_modules`, and the capability comes from the process itself.
 
-| Plugin | Capability | Entry |
-|---|---|---|
-| [`agent`](agent/) | `agent.loop` | `src/main.ts` |
-| [`api`](api/) | `api` | `src/main.ts` |
-| [`hmr`](hmr/) | `dev.hmr` | `src/main.ts` |
-| [`session`](session/) | `session` | `src/main.ts` |
-| [`shell`](shell/) | `tool.shell` | `src/main.ts` |
-| [`skill`](skill/) | `skill` | `src/main.ts` |
-| [`skill-filesystem`](skill-filesystem/) | `skill.filesystem` | `src/main.ts` |
-| [`tools`](tools/) | `tools` | `src/main.ts` |
+| Package | Directory | Capability | Role |
+|---|---|---|---|
+| `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | The package a front end talks to: the system prompt, session bookkeeping, tool wiring and the streaming `run`. |
+| `@maota/api` | [`api`](api/) | `api` | The model gateway: an openai backend and a scripted one for tests. |
+| `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | The development watcher: it publishes `dev.source.changed` for the paths it watches, and its generated row ships disabled. |
+| `@maota/session` | [`session`](session/) | `session` | Stored conversations, their titles and their working directories. |
+| `@maota/shell` | [`shell`](shell/) | `tool.shell` | The one tool that runs a command. |
+| `@maota/skill` | [`skill`](skill/) | `skill` | The skill list a turn offers the model. |
+| `@maota/skill-filesystem` | [`skill-filesystem`](skill-filesystem/) | `skill.filesystem` | Skills read from the filesystem. |
+| `@maota/tools` | [`tools`](tools/) | `tools` | The tool registry every tool is listed and dispatched through. |
+| `@maota/agent-loop` | [`agent/agent-loop`](agent/agent-loop/) |  | The loop engine `agent-core` runs in its own process: the model call, the tool round, the exit reason. |
+| `@maota/app-boot` | [`boot/app-boot`](boot/app-boot/) |  | Decides which config file and which kernel binary one launch uses, and generates a profile's config and links. |
+| `@maota/base` | [`bundle/base`](bundle/base/) |  | The row list the `default` profile mounts. |
+| `@maota/host` | [`boot/host`](boot/host/) |  | Spawns the kernel and drives it over stdio: invoke, streams, events, shutdown. |
+| `@maota/plugin-kit` | [`plugin-kit`](plugin-kit/) |  | The protocol the packages above import: framing, channels, `runPlugin` and the config-key check. |
+| `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
-`hmr` is development-only and ships as a `disabled` row. [`apps/web`](../apps/web) is an app rather than a package and provides `web`. `pnpm check:plugins` runs every entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
+<a id="bundles"></a>
+A profile's rows come from those two lists: `base` mounts the eight packages above it in the table order with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
-<a id="libraries"></a>
-## Libraries
-
-| Directory | Role |
-|---|---|
-| [`plugin-kit`](plugin-kit/) | The Node side of the plugin protocol: framing, channel, `runPlugin`, config-key checks. Every plugin above imports it. |
-| [`boot`](boot/) | Host-side launch glue: which config file and kernel binary a run uses, and the Node host that drives the kernel. |
+`pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
 
 <a id="related-documentation"></a>
 ## Related documentation
 
 - [Architecture](../docs/architecture.md): the component map and the launch path.
-- [maota CLI](../apps/cli/README.md): the front end that boots these plugins.
-- [dev.hmr](hmr/README.md): the watcher whose events drive hot reload.
+- [maota CLI](../apps/cli/README.md): the front end that launches these packages.
+- [agent](../agent/README.md): how the agent package and its loop divide the work.
+- [dev.hmr](boot/hmr/README.md): the watcher behind event-driven hot reload.

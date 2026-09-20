@@ -9,11 +9,12 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | 组件 | 它是什么 | 契约在哪 |
 |---|---|---|
 | `apps/cli` | `maota` 启动器：交互、一次性、`serve` 与 `check`。 | [README](../apps/cli/README.zh.md) |
-| `apps/web` | web 插件：一个 HTTP 服务同时提供界面与宿主接口。 | `apps/web/src/main.ts` |
-| `packages/boot/config` | 为一次启动定下配置文件与内核二进制。 | [README](../packages/boot/config/README.zh.md) |
+| `apps/web` | web 插件：一个 HTTP 服务同时提供界面与宿主接口。只有 `serve` profile 会拉起它。 | `apps/web/src/index.ts` |
+| `packages/boot/app-boot` | 为一次启动定下配置文件与内核二进制。 | [README](../packages/boot/app-boot/README.zh.md) |
 | `packages/boot/host` | 拉起内核并在 stdio 上驱动它。 | [README](../packages/boot/host/README.zh.md) |
-| `packages/hmr` | 开发期监视插件：为它盯着的路径发布 `dev.source.changed`。 | `packages/hmr/src/main.ts` |
-| `packages/*` | 内核插件：api、shell、tools、skill、skill-filesystem、session、agent。 | `packages/<name>/src/main.ts` |
+| `packages/boot/hmr` | 开发期监视插件：为它盯着的路径发布 `dev.source.changed`。 | `packages/boot/hmr/src/index.ts` |
+| `packages/*` | 内核插件：api、shell、tools、skill、skill-filesystem、session、agent。 | `packages/<name>/src/index.ts`；agent 是 `packages/agent/agent-core/src/index.ts` |
+| `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
 | `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
 
 ## 启动链路
@@ -28,9 +29,10 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 
 ## 配置分层
 
-- 仓库根什么都不放：启动器读 `$MAOTA_HOME`，缺省 `~/.maota`。
-- `$MAOTA_HOME/eggshell.toml` 首次运行时由 `packages/boot/config/eggshell.default.toml` 生成，里面写死仓库的绝对入口路径。它是插件集：有哪些插件、怎么起、系统提示词是什么。
-- `$MAOTA_HOME/eggshell.local.toml` 是机器自己的那层：网关、模型、钥匙。它 `extends` 生成的那份，并且赢过它。
+- 仓库根什么都不放：启动器读 `$MAOTA_HOME`，缺省 `~/.maota`。每个 profile 自带一个 `node_modules`，里面为每一行放一条指向仓库内那个包的链接。
+- 启动器一次只选一个 profile：serve 用 serve（base 加 web），其余命令用 default（只 base）。
+- $MAOTA_HOME/profiles/<name>/eggshell.toml 由该 profile 列出的组合包生成。每一行只写包名，内核从该 profile 自己的 `node_modules` 里解析它，所以只有行变了才会重写这个文件。它是插件集：有哪些插件、怎么起；各插件的默认值由插件自己持有。
+- `$MAOTA_HOME/profiles/<name>/eggshell.local.toml` 是机器自己的那层：网关、模型、钥匙。它 `extends` 生成的那份，并且赢过它。
 - `disabled = true` 的行照样解析、照样参与合并，但内核从不拉起它，能力表里也没有它。后面的层写 `false` 就启用，内核的 reloader 自己会发现，不用重启。
 - 后加载的层赢：表逐键合并，数组整体替换。
 - 拼错的 config 键会被 `pnpm run check:config` 点名，只报不拦。

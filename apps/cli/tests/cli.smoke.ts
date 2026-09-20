@@ -5,20 +5,21 @@ import { join } from "node:path";
 
 import { parseArgs } from "../src/args.ts";
 
-const main = join(import.meta.dirname, "..", "src", "main.ts");
+const main = join(import.meta.dirname, "..", "src", "index.ts");
 const VERSION = (
   JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8")) as { version: string }
 ).version;
 
 const cases: Array<[string[], unknown]> = [
-  [[], { kind: "repl", config: undefined, kernel: undefined, session: "cli" }],
-  [["what is 2+2"], { kind: "once", question: "what is 2+2", config: undefined, kernel: undefined, session: "cli" }],
-  [["fix", "the", "bug"], { kind: "once", question: "fix the bug", config: undefined, kernel: undefined, session: "cli" }],
-  [["serve"], { kind: "serve", config: undefined, kernel: undefined, session: "cli" }],
-  [["--session", "web", "serve"], { kind: "serve", config: undefined, kernel: undefined, session: "web" }],
-  [["check"], { kind: "check", json: false, config: undefined, kernel: undefined, session: "cli" }],
-  [["check", "--json"], { kind: "check", json: true, config: undefined, kernel: undefined, session: "cli" }],
-  [["--config", "a.toml", "--kernel", "k.exe", "check"], { kind: "check", json: false, config: "a.toml", kernel: "k.exe", session: "cli" }],
+  [[], { kind: "repl", config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["what is 2+2"], { kind: "once", question: "what is 2+2", config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["fix", "the", "bug"], { kind: "once", question: "fix the bug", config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["serve"], { kind: "serve", config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["--session", "web", "serve"], { kind: "serve", config: undefined, kernel: undefined, profile: undefined, session: "web" }],
+  [["check"], { kind: "check", json: false, config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["check", "--json"], { kind: "check", json: true, config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["--config", "a.toml", "--kernel", "k.exe", "check"], { kind: "check", json: false, config: "a.toml", kernel: "k.exe", profile: undefined, session: "cli" }],
+  [["--profile", "serve", "serve"], { kind: "serve", config: undefined, kernel: undefined, profile: "serve", session: "cli" }],
   [["--help"], { kind: "help" }],
   [["-h"], { kind: "help" }],
   [["--version"], { kind: "version" }],
