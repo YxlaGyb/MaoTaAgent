@@ -14,7 +14,8 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/boot/host` | Spawns the kernel and drives it over stdio. | [README](../packages/boot/host/README.md) |
 | `packages/boot/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/boot/hmr/src/index.ts` |
 | `packages/interaction/permission` | The approval gate: the mode a session runs under, the questions waiting for an answer, and the audit file that pairs each ask with its decision. | [README](../packages/interaction/permission/README.md) |
-| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tools, skill, skill-filesystem, session and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
+| `packages/hooks` | The hook points: the dialect package that owns the four events, and the engine that discovers hook plugins and merges what they answer. | [the hook points](hooks.md) |
+| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tools, skill, skill-filesystem, session, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 
@@ -53,6 +54,7 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - [shell package group](../packages/shell/README.md)
 - [interaction package group](../packages/interaction/README.md)
 - [the permission gate](permission.md)
+- [the hook points](hooks.md)
 - [bundle package group](../packages/bundle/README.md)
 - [the tools dispatcher](../packages/agent/tools/README.md)
 - [maota CLI](../apps/cli/README.md)

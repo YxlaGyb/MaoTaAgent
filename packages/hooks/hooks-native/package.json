@@ -1,6 +1,6 @@
 {
-  "name": "@maota/app-boot",
-  "version": "0.1.1",
+  "name": "@maota/hooks-native",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -11,6 +11,10 @@
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@maota/hook-protocol": "workspace:^",
+    "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"
 }

@@ -114,7 +114,12 @@ assert.deepEqual(
   skills.skills.map((skill) => skill.name),
   ["hello"],
 );
-const ran = (await kernel.invoke("tool.pwsh", "run", { command: "echo hi", workdir: dir })) as {
+const ran = (await kernel.invoke("tool.pwsh", "run", {
+  command: "echo hi",
+  workdir: dir,
+  session_id: "direct",
+  call_id: "direct_1",
+})) as {
   exit_code: number | null;
   stdout: string;
 };

@@ -36,6 +36,12 @@ importers:
       '@maota/hmr':
         specifier: workspace:^
         version: link:packages/boot/hmr
+      '@maota/hook-protocol':
+        specifier: workspace:^
+        version: link:packages/hooks/hook-protocol
+      '@maota/hooks-native':
+        specifier: workspace:^
+        version: link:packages/hooks/hooks-native
       '@maota/host':
         specifier: workspace:^
         version: link:packages/boot/host
@@ -142,6 +148,9 @@ importers:
       '@maota/agent-loop':
         specifier: workspace:^
         version: link:../agent-loop
+      '@maota/hook-protocol':
+        specifier: workspace:^
+        version: link:../../hooks/hook-protocol
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit
@@ -194,6 +203,17 @@ importers:
       '@maota/fs':
         specifier: workspace:^
         version: link:../fs
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/hooks/hook-protocol: {}
+
+  packages/hooks/hooks-native:
+    dependencies:
+      '@maota/hook-protocol':
+        specifier: workspace:^
+        version: link:../hook-protocol
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit

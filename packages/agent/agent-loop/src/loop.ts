@@ -1,6 +1,10 @@
 import { executeCalls } from "./execute.ts";
-import type { LoopDeps, LoopEvent, LoopOutcome, LoopState, StepContext } from "./events.ts";
-import { toolCalls, type Message } from "./messages.ts";
+import type { LoopDeps, LoopEvent, LoopOutcome, LoopState, StepContext, StopDecision } from "./events.ts";
+import { sourcedMessages, toolCalls, type Message } from "./messages.ts";
+
+/// The label a steered continuation carries, so a session reader can tell it
+/// from what the person typed.
+const STEER_SOURCE = "hook:stop";
 
 export async function runLoop(
   deps: LoopDeps,
@@ -8,7 +12,14 @@ export async function runLoop(
   signal: AbortSignal,
   emit: (event: LoopEvent) => void,
 ): Promise<LoopOutcome> {
-  const state: LoopState = { messages, step: 0, maxSteps: deps.max_steps, lastReason: null };
+  const state: LoopState = {
+    messages,
+    step: 0,
+    maxSteps: deps.max_steps,
+    lastReason: null,
+    stopSteered: false,
+    haltRequested: false,
+  };
   while (state.step < state.maxSteps) {
     if (signal.aborted) return finish(state, "", "aborted");
     state.step += 1;
@@ -17,15 +28,37 @@ export async function runLoop(
 
     const message = await deps.chat(ctx);
     state.messages.push(message);
+    // A turn cancelled while the model was answering ends here, the same way a
+    // cancelled tool round does, and never reaches the stop seam.
+    if (signal.aborted) return finish(state, "", "aborted");
     const calls = toolCalls(message);
     if (calls.length === 0) {
-      return finish(state, typeof message.content === "string" ? message.content : "", "completed");
+      const text = typeof message.content === "string" ? message.content : "";
+      const stop = await stopDecision(deps, state, ctx);
+      for (const note of sourcedMessages(stop?.context ?? [])) state.messages.push(note);
+      const steer = stop?.steer;
+      if (typeof steer === "string" && steer.trim() !== "" && !state.stopSteered) {
+        state.stopSteered = true;
+        state.messages.push({ role: "user", name: STEER_SOURCE, content: steer });
+        continue;
+      }
+      return finish(state, text, "completed");
     }
 
     await executeCalls(calls, deps, ctx);
+    if (state.haltRequested) return finish(state, "", "stopped");
     if (signal.aborted) return finish(state, "", "aborted");
   }
   return finish(state, "", "max_steps");
+}
+
+async function stopDecision(deps: LoopDeps, state: LoopState, ctx: StepContext): Promise<StopDecision | undefined> {
+  if (deps.atStop === undefined) return undefined;
+  try {
+    return (await deps.atStop(state, ctx)) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function stepContext(

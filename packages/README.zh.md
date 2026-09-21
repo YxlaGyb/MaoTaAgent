@@ -28,6 +28,7 @@ kind: "package-group"
 | `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | 前端真正对话的那个包：系统提示词、会话记账、工具装配与流式 `run`。 |
 | `@maota/api` | [`api`](api/) | `api` | 模型网关：openai 后端，以及测试用的 scripted 后端。 |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | 开发期 watcher：为它盯着的路径发布 `dev.source.changed`，生成的那一行是 `disabled`。 |
+| `@maota/hooks-native` | [`hooks/hooks-native`](hooks/hooks-native/) | `hooks` | hook 引擎：发现那些 `hook.*` 能力、只问某个 hook 点归属的那些，再把它们的答案合并成一份。 |
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | 工具在破坏性命令前问的那道闸门：会话的档位、还在等回答的问题，以及成对留痕的审计文件。 |
 | `@maota/pwsh-local` | [`shell/pwsh-local`](shell/pwsh-local/) | `shell` | 用本机 PowerShell 跑命令的 provider。 |
 | `@maota/session` | [`session`](session/) | `session` | 存下来的会话、标题与工作目录。 |
@@ -41,13 +42,14 @@ kind: "package-group"
 | `@maota/app-boot` | [`boot/app-boot`](boot/app-boot/) |  | 定下一次启动读哪个配置文件、跑哪个内核二进制，并生成某个 profile 的配置与链接。 |
 | `@maota/base` | [`bundle/base`](bundle/base/) |  | `default` profile 挂载的那份行清单。 |
 | `@maota/fs` | [`fs/fs`](fs/fs/) |  | 文件工具共用的工作区库：路径包含判定与原子写。 |
+| `@maota/hook-protocol` | [`hooks/hook-protocol`](hooks/hook-protocol/) |  | hook 方言：四个事件、各自带的 payload、hook 用什么作答，以及多份答案怎么合成一份。 |
 | `@maota/host` | [`boot/host`](boot/host/) |  | 拉起内核并在它的 stdio 上驱动：invoke、流、事件、停机。 |
 | `@maota/plugin-kit` | [`plugin-kit`](plugin-kit/) |  | 上面这些包 import 的协议：分帧、channel、`runPlugin`、工具声明，以及配置键与 schema 检查。 |
 | `@maota/shell` | [`shell/shell`](shell/shell/) |  | 命令接缝：请求与结果的形状，以及 `parseExitStatus`。 |
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | `serve` profile 在 `default` 那份之上追加的那一行。 |
 
 <a id="bundles"></a>
-一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的十二行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
+一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的十三行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
 `pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`requires`、`configKeys` 与 `selfCheck`。
 

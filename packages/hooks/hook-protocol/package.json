@@ -1,6 +1,6 @@
 {
-  "name": "@maota/app-boot",
-  "version": "0.1.1",
+  "name": "@maota/hook-protocol",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

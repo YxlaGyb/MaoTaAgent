@@ -16,6 +16,7 @@ export const rows: PluginRow[] = [
   { id: "skill", name: "@maota/skill" },
   { id: "skill-filesystem", name: "@maota/skill-filesystem" },
   { id: "session", name: "@maota/session" },
+  { id: "hooks", name: "@maota/hooks-native" },
   { id: "agent-core", name: "@maota/agent-core" },
   { id: "hmr", name: "@maota/hmr", disabled: true },
 ];

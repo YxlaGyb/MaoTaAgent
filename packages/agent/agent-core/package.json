@@ -1,6 +1,6 @@
 {
   "name": "@maota/agent-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@maota/agent-loop": "workspace:^",
+    "@maota/hook-protocol": "workspace:^",
     "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"

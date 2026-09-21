@@ -6,6 +6,13 @@ export interface Message {
   name?: string;
 }
 
+/// Text a seam injects, tagged with where it came from so the message it
+/// becomes can say so.
+export interface SourcedText {
+  source: string;
+  text: string;
+}
+
 export interface ToolHostArg {
   name: string;
   source: string;
@@ -46,4 +53,13 @@ export function parseArgs(raw: unknown): unknown {
 
 export function asText(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value ?? null);
+}
+
+/// Injected text becomes a user message whose `name` is the source the seam
+/// gave, so a reader of the stored session can tell it from what a person
+/// typed.
+export function sourcedMessages(notes: readonly SourcedText[]): Message[] {
+  return notes
+    .filter((note) => note.text.trim() !== "")
+    .map((note) => ({ role: "user", name: note.source, content: note.text }));
 }

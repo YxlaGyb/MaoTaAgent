@@ -114,10 +114,10 @@ const report = JSON.parse(line) as {
 };
 assert.equal(run.status, 0, `the agent entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the agent selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "agent.loop", version: "1.1.0" }]);
+assert.deepEqual(report.provides, [{ capability: "agent.loop", version: "1.2.0" }]);
 assert.deepEqual(
   (report.requires ?? []).map((item) => item.capability),
-  ["api", "tools", "session", "skill", "permission"],
+  ["api", "tools", "session", "skill", "permission", "hooks"],
 );
 
 console.log("agent ok: systemPrompt, tool specs, host args, the entry --check report");

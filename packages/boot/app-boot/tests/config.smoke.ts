@@ -34,6 +34,7 @@ assert.deepEqual(
   [
     "api",
     "pwsh-local",
+    "permission",
     "tool-pwsh",
     "tool-fs",
     "tool-fs-search",
@@ -41,6 +42,7 @@ assert.deepEqual(
     "skill",
     "skill-filesystem",
     "session",
+    "hooks",
     "agent-core",
     "hmr",
   ],

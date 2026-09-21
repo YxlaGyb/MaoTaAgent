@@ -28,6 +28,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | The package a front end talks to: the system prompt, session bookkeeping, tool wiring and the streaming `run`. |
 | `@maota/api` | [`api`](api/) | `api` | The model gateway: an openai backend and a scripted one for tests. |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | The development watcher: it publishes `dev.source.changed` for the paths it watches, and its generated row ships disabled. |
+| `@maota/hooks-native` | [`hooks/hooks-native`](hooks/hooks-native/) | `hooks` | The hook engine: it discovers the `hook.*` capabilities, asks the ones a hook point belongs to, and merges their answers into one. |
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | The gate a tool asks before a destructive command: the session's mode, the questions waiting for an answer, and the paired audit file. |
 | `@maota/pwsh-local` | [`shell/pwsh-local`](shell/pwsh-local/) | `shell` | The provider that runs a command with the local PowerShell. |
 | `@maota/session` | [`session`](session/) | `session` | Stored conversations, their titles and their working directories. |
@@ -41,13 +42,14 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/app-boot` | [`boot/app-boot`](boot/app-boot/) |  | Decides which config file and which kernel binary one launch uses, and generates a profile's config and links. |
 | `@maota/base` | [`bundle/base`](bundle/base/) |  | The row list the `default` profile mounts. |
 | `@maota/fs` | [`fs/fs`](fs/fs/) |  | The workspace library the file tools share: path containment and atomic writes. |
+| `@maota/hook-protocol` | [`hooks/hook-protocol`](hooks/hook-protocol/) |  | The hook dialect: the four events, the payload each carries, what a hook answers with, and how several answers fold into one. |
 | `@maota/host` | [`boot/host`](boot/host/) |  | Spawns the kernel and drives it over stdio: invoke, streams, events, shutdown. |
 | `@maota/plugin-kit` | [`plugin-kit`](plugin-kit/) |  | The protocol the packages above import: framing, channels, `runPlugin`, tool declaration and the config-key and schema checks. |
 | `@maota/shell` | [`shell/shell`](shell/shell/) |  | The command seam: the request and result shapes and `parseExitStatus`. |
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
 <a id="bundles"></a>
-A profile's rows come from those two lists: `base` mounts the twelve rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
+A profile's rows come from those two lists: `base` mounts the thirteen rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
 `pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
 

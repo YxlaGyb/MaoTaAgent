@@ -1,4 +1,4 @@
-export { batchesOf, executeCalls, type CallTool } from "./execute.ts";
+export { batchesOf, executeCalls, type CallTool, type Disposition } from "./execute.ts";
 export type {
   ChatDelta,
   LoopDeps,
@@ -6,7 +6,21 @@ export type {
   LoopExitReason,
   LoopOutcome,
   LoopState,
+  PostToolDecision,
+  PreToolDecision,
   StepContext,
+  StopDecision,
+  ToolRunOutcome,
 } from "./events.ts";
 export { runLoop } from "./loop.ts";
-export { asText, parseArgs, toolCalls, type Message, type ToolCall, type ToolHostArg, type ToolSpec } from "./messages.ts";
+export {
+  asText,
+  parseArgs,
+  sourcedMessages,
+  toolCalls,
+  type Message,
+  type SourcedText,
+  type ToolCall,
+  type ToolHostArg,
+  type ToolSpec,
+} from "./messages.ts";
