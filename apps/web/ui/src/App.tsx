@@ -12,6 +12,7 @@ import {
   call,
   subscribe,
   type AppInfo,
+  type Approval,
   type HostEvent,
   type SessionFile,
   type SessionMessage,
@@ -55,7 +56,8 @@ export function App() {
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
   const [thinking, setThinking] = useState<string>(() => load<string>("maota.thinking", "off"));
-  const [permission, setPermission] = useState<string>(() => load<string>("maota.permission", "ask"));
+  const [permission, setPermission] = useState<string>("ask");
+  const [approvals, setApprovals] = useState<Approval[]>([]);
   const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
 
@@ -75,7 +77,6 @@ export function App() {
   useEffect(() => remember("maota.archived", archived), [archived]);
   useEffect(() => remember("maota.project", project), [project]);
   useEffect(() => remember("maota.thinking", thinking), [thinking]);
-  useEffect(() => remember("maota.permission", permission), [permission]);
   useEffect(() => remember("maota.theme", theme), [theme]);
   useEffect(() => {
     const system = window.matchMedia("(prefers-color-scheme: light)");
@@ -120,8 +121,46 @@ export function App() {
     }
   }, []);
 
+  /// The approval mode lives with the session in the permission plugin, so the
+  /// page asks for it instead of keeping a copy of its own.
+  const loadPermission = useCallback(async (sessionId: string, cwd: string): Promise<void> => {
+    try {
+      const reply = await call<{ mode?: string }>("permission.get", { session_id: sessionId, cwd });
+      if (typeof reply.mode === "string") setPermission(reply.mode);
+    } catch {
+    }
+  }, []);
+
+  const rebuildApprovals = useCallback(async (sessionId: string): Promise<void> => {
+    try {
+      const reply = await call<{ requests?: Approval[] }>("permission.pending", { session_id: sessionId });
+      setApprovals(reply.requests ?? []);
+    } catch {
+      setApprovals([]);
+    }
+  }, []);
+
   const handleEvent = useCallback(
     (event: HostEvent) => {
+      if (event.event === "permission.request") {
+        const id = event.request_id ?? "";
+        if (id === "") return;
+        const asked: Approval = {
+          id,
+          session_id: event.session_id ?? "",
+          tool: event.tool ?? "",
+          ...(event.call_id === undefined ? {} : { call_id: event.call_id }),
+          ...(event.reason === undefined ? {} : { reason: event.reason }),
+        };
+        setApprovals((prev) => (prev.some((item) => item.id === id) ? prev : [...prev, asked]));
+        return;
+      }
+      if (event.event === "permission.settled") {
+        const id = event.request_id ?? "";
+        setApprovals((prev) => prev.filter((item) => item.id !== id));
+        return;
+      }
+
       const turnId = event.turn_id ?? "";
       if (turnId === "") return;
 
@@ -173,19 +212,25 @@ export function App() {
     () =>
       subscribe(handleEvent, () => {
         const current = activeRef.current;
-        if (current !== null) void openSession(current.id, current.cwd);
+        if (current !== null) {
+          void openSession(current.id, current.cwd);
+          void rebuildApprovals(current.id);
+        }
         void refreshSessions();
       }),
-    [handleEvent, openSession, refreshSessions],
+    [handleEvent, openSession, rebuildApprovals, refreshSessions],
   );
 
   useEffect(() => {
     if (active === null) {
       setMessages([]);
+      setApprovals([]);
       return;
     }
     void openSession(active.id, active.cwd);
-  }, [active, openSession]);
+    void loadPermission(active.id, active.cwd);
+    void rebuildApprovals(active.id);
+  }, [active, loadPermission, openSession, rebuildApprovals]);
 
   const send = useCallback(
     async (text: string, at: { id: string; cwd: string }): Promise<void> => {
@@ -233,6 +278,40 @@ export function App() {
       setFailure({ session: current.id, text: describe(error) });
     }
   };
+
+  const answer = useCallback(
+    async (id: string, decision: "allow" | "deny"): Promise<void> => {
+      const current = activeRef.current;
+      try {
+        await call("permission.answer", { id, decision });
+        setApprovals((prev) => prev.filter((item) => item.id !== id));
+      } catch (error) {
+        setFailure({ session: current?.id ?? "", text: describe(error) });
+        if (current !== null) void rebuildApprovals(current.id);
+      }
+    },
+    [rebuildApprovals],
+  );
+
+  const changePermission = useCallback(
+    async (mode: string): Promise<void> => {
+      const current = activeRef.current;
+      if (current === null) return;
+      try {
+        const reply = await call<{ mode?: string }>("permission.set", {
+          session_id: current.id,
+          cwd: current.cwd,
+          mode,
+        });
+        if (typeof reply.mode === "string") setPermission(reply.mode);
+        return;
+      } catch (error) {
+        setFailure({ session: current.id, text: describe(error) });
+      }
+      void loadPermission(current.id, current.cwd);
+    },
+    [loadPermission],
+  );
 
   const newChat = (cwd: string): void => {
     setFailure(null);
@@ -396,10 +475,12 @@ export function App() {
           hasKey={info?.has_key ?? null}
           thinking={thinking}
           permission={permission}
+          approvals={approvals}
           onRetry={() => void loadInfo()}
           onKeySaved={() => void loadInfo()}
           onThinking={setThinking}
-          onPermission={setPermission}
+          onPermission={(mode) => void changePermission(mode)}
+          onAnswer={(id, decision) => void answer(id, decision)}
           onSend={submit}
           onCancel={() => void cancel()}
         />

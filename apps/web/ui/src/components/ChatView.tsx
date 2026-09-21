@@ -1,6 +1,6 @@
 import { MaoButton } from "maotaui";
 
-import type { AppInfo, SessionMessage } from "../lib/rpc.ts";
+import type { AppInfo, Approval, SessionMessage } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
 import { Icon, ICON } from "./Icon.tsx";
@@ -19,10 +19,12 @@ export function ChatView({
   hasKey,
   thinking,
   permission,
+  approvals,
   onRetry,
   onKeySaved,
   onThinking,
   onPermission,
+  onAnswer,
   onSend,
   onCancel,
 }: {
@@ -37,21 +39,25 @@ export function ChatView({
   hasKey: boolean | null;
   thinking: string;
   permission: string;
+  approvals: Approval[];
   onRetry: () => void;
   onKeySaved: () => void;
   onThinking: (level: string) => void;
   onPermission: (mode: string) => void;
+  onAnswer: (id: string, decision: "allow" | "deny") => void;
   onSend: (text: string) => void;
   onCancel: () => void;
 }) {
   const t = useT();
   const idle = messages.length === 0 && pending === null && live === null;
+  const permissionDisabled = session === null || live?.running === true;
 
   const composer = (
     <Composer
       info={info}
       thinking={thinking}
       permission={permission}
+      permissionDisabled={permissionDisabled}
       running={live?.running === true}
       blocked={kernelError !== null}
       onThinking={onThinking}
@@ -92,7 +98,13 @@ export function ChatView({
         </div>
       ) : (
         <>
-          <MessageList messages={messages} pending={pending} live={live} />
+          <MessageList
+            messages={messages}
+            pending={pending}
+            live={live}
+            approvals={approvals}
+            onAnswer={onAnswer}
+          />
           {failure === null ? null : (
             <div className="banner banner-error">
               <Icon d={ICON.alert} className="icon icon-sm" />

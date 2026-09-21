@@ -1,5 +1,5 @@
 ---
-description: "pwsh 工具：提供给模型的那一条命令、它的命令与超时参数、被注入的工作目录，以及它从 shell 能力渲染出的结果。"
+description: "pwsh 工具：提供给模型的那一条命令、它的命令与超时参数、被注入的会话身份、它在破坏性命令前发起的那次审批，以及它从 shell 能力渲染出的结果。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-一个能力，`tool.pwsh`，以 `pwsh` 之名提供给模型。它接一条命令行与一个可选超时，调用 `shell` 能力，并把 provider 答的东西渲染成状态、退出码与两路输出。它自己不启动任何进程，也不知道 PowerShell 的存在：可执行文件、环境与沙箱都在能力背后。会话工作目录以宿主参数 `workdir` 送到，每次调用都单独跑。
+一个能力，`tool.pwsh`，以 `pwsh` 之名提供给模型。它接一条命令行与一个可选超时，调用 `shell` 能力，并把 provider 答的东西渲染成状态、退出码与两路输出。它自己不启动任何进程，也不知道 PowerShell 的存在：可执行文件、环境与沙箱都在能力背后。会话工作目录以宿主参数 `workdir` 送到，每次调用都单独跑；而被权限闸门判定为破坏性的命令，会先问过用户才跑。
 
 ## 目录
 
@@ -30,6 +30,8 @@ kind: "package-reference"
 | `command` | string | 是 | 要跑的命令行。 |
 | `timeout_ms` | integer | 否 | 超过这么多毫秒就把命令杀掉。缺省用 provider 自己的 `timeout_ms`。 |
 | `workdir` | string | 宿主 | 会话工作目录。由宿主注入，从不公开。 |
+| `session_id` | string | 宿主 | 这次调用属于哪个会话，闸门据此按会话存策略。由宿主注入，从不公开。 |
+| `call_id` | string | 宿主 | 这次工具调用的 id，用于把审批对上这次调用。由宿主注入，从不公开。 |
 
 ### 结果
 
@@ -45,12 +47,21 @@ kind: "package-reference"
 
 并发是 `never`：命令没有被声明为可以和别的调用并排跑，所以它永远单独跑。
 
+### 审批闸门
+
+调用 `shell.run` 之前，本工具先读这个会话的权限策略。`full` 档下命令直接跑，什么都不问。其余情况下，一条含有本工具视为破坏性的三种形状之一（`rm `、`> /etc/`、`chmod 777`）的命令会先交给 `permission/request`，并且只有 `allowed-once` 这个回答才让它跑起来。
+
+其它任何回答都会变成这个工具自己的结果：`{ command, status: "approval denied", ok: false, reason }`，其中 reason 说明收到的是哪个回答。于是拒绝是一条模型能读到的普通工具结果，而不是一个错误。
+
+这里的等待刻意比普通能力调用宽：`approval_timeout_ms`（缺省 300000）作为那次调用自己的 `timeout_ms` 传下去，因为内核的缺省会在三十秒后把一个问题掐掉。读不出策略时按"会问"的那一档处理，所以没有闸门的部署会拒绝一条破坏性命令，而不是放行它。
+
 ### 依赖与配置
 
 | 项 | 含义 |
 |---|---|
 | requires `shell ^1` | 本工具所调用的 provider 能力。`run` 转发给 `shell.run` 并渲染它的答案。 |
-| `configKeys` | 无。超时、输出上限与兜底目录都归 provider。 |
+| requires `permission ^1`（可选） | 闸门。没有它本工具照样加载，并把读不出的策略当成"会问"的那一档。 |
+| `configKeys` | `approval_timeout_ms`：一次审批最多等多久，缺省 300000。命令超时、输出上限与兜底目录都归 provider。 |
 
 -----
 
@@ -61,16 +72,17 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 声明、对 `shell.run` 的转发，以及 `selfCheck`。 |
+| [`src/index.ts`](src/index.ts) | 声明、读策略、对 `shell.run` 的转发，以及 `selfCheck`。 |
+| [`src/approval.ts`](src/approval.ts) | 三种形状、理由、对闸门的调用，以及被拒绝时的结果。 |
 | [`src/result.ts`](src/result.ts) | `renderPwshResult`。 |
 
 ### 这个工具是渲染器，不是执行器
 
 `run` 由参数拼出请求，在模型没给 `timeout_ms` 时干脆不带这个字段，好让 provider 的缺省生效，并把这次调用自己的取消信号传下去。接着它把答案交给 `renderPwshResult`：后者经 `parseExitStatus` 补上 `status` 与 `ok`，其余字段原样透传。这个包里没有任何一处写出可执行文件的名字。
 
-### 为什么 `workdir` 是宿主参数
+### 为什么这些身份走宿主参数
 
-模型拿不到工作目录参数，所以它没法把命令挪出会话目录。声明把 `workdir` 写作 `host: "session_cwd"`，这既让它不进公开 schema，又让它在运行期成为必填；`agent-core` 在调用之前从会话里把它填上。一个没带上它的调用，就是一个点名 `arguments.workdir` 的 `-32602`。
+模型拿不到工作目录参数，所以它没法把命令挪出会话目录；它同样拿不到会话 id 和调用 id，所以它没法自称是别的会话，也没法冒充某个它没被问过的问题的回答者。这三个都声明了 `host` 来源，这既让它们不进公开 schema，又让它们在运行期成为必填；`agent-core` 在转发之前从会话和调用里把它们填上。一个少带参数的调用，就是一个点名那个参数缺失的 `-32602`。
 
 -----
 
@@ -88,6 +100,6 @@ kind: "package-reference"
 ## 已知限制与延期工作
 
 - **没有沙箱参数**：既没有升级途径，也没有申请理由的参数，所以需要更多余地的命令无处可问。
-- **没有权限询问**：命令要么跑，要么不跑，中间没有别的选项。
+- **只认三种形状**：不含 `rm `、`> /etc/` 与 `chmod 777` 的破坏性命令不会被问一句，因为这里没有任何东西对命令做分类。
 - **环境方面什么都没提供**：模型没法为它启动的进程设一个变量。
 - **`timeout_ms` 由模型自己选**：一次调用可以要求比 provider 缺省更久的等待，只有 provider 自己的上限能约束它。

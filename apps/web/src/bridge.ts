@@ -27,16 +27,56 @@ export interface Bridge {
   facts(): Promise<BridgeFacts>;
   handle(method: string, params: Record<string, unknown>): Promise<unknown>;
   onEvent(listener: (event: HostEvent) => void): () => void;
+  open(): Promise<void>;
   close(): void;
 }
 
 export function createBridge(channel: Channel): Bridge {
   const turns = new Map<string, Turn>();
   const listeners = new Set<(event: HostEvent) => void>();
+  let subscription: string | null = null;
 
   const emit = (event: HostEvent): void => {
     for (const listener of listeners) listener(event);
   };
+
+  /// The two permission topics become the two events the page understands. A
+  /// page that missed one rebuilds from `permission.pending`, so a lost event
+  /// only costs a repaint.
+  function forwardPermission(topic: string, payload: unknown): HostEvent | null {
+    const event = (payload ?? {}) as {
+      id?: unknown;
+      session_id?: unknown;
+      tool?: unknown;
+      call_id?: unknown;
+      reason?: unknown;
+      outcome?: unknown;
+    };
+    const request_id = String(event.id ?? "");
+    if (request_id === "") return null;
+    if (topic === "permission.requested") {
+      return {
+        event: "permission.request",
+        request_id,
+        session_id: String(event.session_id ?? ""),
+        tool: String(event.tool ?? ""),
+        ...(event.call_id === undefined ? {} : { call_id: String(event.call_id) }),
+        ...(event.reason === undefined ? {} : { reason: String(event.reason) }),
+      };
+    }
+    if (topic === "permission.settled") {
+      return { event: "permission.settled", request_id, outcome: String(event.outcome ?? "") };
+    }
+    return null;
+  }
+
+  function cwdOf(params: Record<string, unknown>): string {
+    return typeof params.cwd === "string" ? params.cwd : "";
+  }
+
+  function sessionOf(params: Record<string, unknown>): string {
+    return typeof params.session_id === "string" ? params.session_id : "";
+  }
 
   function busy(sessionId: string): Turn | null {
     for (const turn of turns.values()) if (turn.session_id === sessionId) return turn;
@@ -184,12 +224,50 @@ export function createBridge(channel: Channel): Bridge {
           return await channel.call("api", "key_set", {
             api_key: typeof params.api_key === "string" ? params.api_key : "",
           });
+        case "permission.get":
+          return await channel.call("permission", "policy", { session_id: sessionOf(params), cwd: cwdOf(params) });
+        case "permission.set":
+          return await channel.call("permission", "set_policy", {
+            session_id: sessionOf(params),
+            cwd: cwdOf(params),
+            mode: params.mode,
+          });
+        case "permission.answer":
+          return await channel.call("permission", "answer", { id: params.id, decision: params.decision });
+        case "permission.pending": {
+          const session_id = sessionOf(params);
+          const reply = await channel.call(
+            "permission",
+            "pending",
+            session_id === "" ? {} : { session_id },
+          );
+          return reply;
+        }
         case "chat.send":
           return await send(params);
         case "chat.cancel":
           return cancel(params);
         default:
           throw new CallError(-32601, `unknown method: ${method}`);
+      }
+    },
+
+    async open(): Promise<void> {
+      try {
+        subscription = await channel.subscribe(
+          ["permission.requested", "permission.settled"],
+          (topic, _seq, payload) => {
+            const event = forwardPermission(topic, payload);
+            if (event !== null) emit(event);
+          },
+        );
+      } catch (error) {
+        channel.log("warn", `web: could not subscribe to the permission topics: ${messageOf(error)}`);
+      }
+      try {
+        await channel.call("permission", "register_answerer", {});
+      } catch (error) {
+        channel.log("warn", `web: no permission capability to answer for: ${messageOf(error)}`);
       }
     },
 
@@ -201,6 +279,8 @@ export function createBridge(channel: Channel): Bridge {
     },
 
     close(): void {
+      if (subscription !== null) void channel.unsubscribe(subscription).catch(() => undefined);
+      void channel.call("permission", "unregister_answerer", {}).catch(() => undefined);
       for (const [turnId, turn] of turns) {
         turn.cancelled = true;
         turn.abort.abort();
@@ -209,6 +289,10 @@ export function createBridge(channel: Channel): Bridge {
       }
     },
   };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export type { SessionFile };

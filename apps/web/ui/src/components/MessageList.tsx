@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 
 import { useT } from "../lib/i18n.ts";
-import type { HostEvent, SessionMessage } from "../lib/rpc.ts";
+import type { Approval, HostEvent, SessionMessage } from "../lib/rpc.ts";
+import { ApprovalCard } from "./ApprovalCard.tsx";
 import { Markdown, MessageItem, ToolRow } from "./MessageItem.tsx";
 
 export interface LiveTool {
@@ -51,19 +52,31 @@ export function MessageList({
   messages,
   pending,
   live,
+  approvals,
+  onAnswer,
 }: {
   messages: SessionMessage[];
   pending: string | null;
   live: LiveTurn | null;
+  approvals: Approval[];
+  onAnswer: (id: string, decision: "allow" | "deny") => void;
 }) {
   const t = useT();
   const box = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
 
+  const byCall = new Map<string, Approval[]>();
+  for (const approval of approvals) {
+    if (approval.call_id === undefined) continue;
+    byCall.set(approval.call_id, [...(byCall.get(approval.call_id) ?? []), approval]);
+  }
+  const placed = new Set([...byCall.values()].flat().map((approval) => approval.id));
+  const loose = approvals.filter((approval) => !placed.has(approval.id));
+
   useEffect(() => {
     const element = box.current;
     if (element && stick.current) element.scrollTop = element.scrollHeight;
-  }, [messages, pending, live]);
+  }, [messages, pending, live, approvals]);
 
   return (
     <div
@@ -88,7 +101,12 @@ export function MessageList({
               </details>
             )}
             {live.tools.map((tool, index) => (
-              <ToolRow key={index} tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
+              <Fragment key={index}>
+                <ToolRow tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
+                {(tool.id === undefined ? [] : (byCall.get(tool.id) ?? [])).map((approval) => (
+                  <ApprovalCard key={approval.id} approval={approval} onAnswer={onAnswer} />
+                ))}
+              </Fragment>
             ))}
             <Markdown text={live.text} />
             {live.running ? (
@@ -97,6 +115,13 @@ export function MessageList({
                 {live.text === "" ? t("waiting") : ""}
               </div>
             ) : null}
+          </div>
+        )}
+        {loose.length === 0 ? null : (
+          <div className="msg msg-assistant">
+            {loose.map((approval) => (
+              <ApprovalCard key={approval.id} approval={approval} onAnswer={onAnswer} />
+            ))}
           </div>
         )}
       </div>

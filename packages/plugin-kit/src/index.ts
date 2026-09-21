@@ -1,6 +1,6 @@
 export { frameReader, writeFrame } from "./frame.ts";
-export { CallError, Channel } from "./channel.ts";
-export type { CallOptions, ChannelHooks, InboundStream, Route } from "./channel.ts";
+export { CallError, Channel, matchesTopic } from "./channel.ts";
+export type { CallOptions, ChannelHooks, EventHandler, InboundStream, Route } from "./channel.ts";
 export { assertSupportedJsonSchema, JsonSchemaError, validateJsonSchemaValue } from "./json-schema.ts";
 export type { JsonSchemaNode, JsonSchemaScalar, JsonSchemaType } from "./json-schema.ts";
 export { ProviderStream, runPlugin, serve } from "./plugin.ts";

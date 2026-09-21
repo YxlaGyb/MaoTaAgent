@@ -14,10 +14,12 @@ export function PermissionPicker({
   value,
   onChange,
   disabled,
+  note,
 }: {
   value: string;
   onChange: (mode: string) => void;
   disabled?: boolean;
+  note?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -41,6 +43,7 @@ export function PermissionPicker({
       <div className="popover-head">
         <span>{t("permissionAsk")}</span>
       </div>
+      {note === undefined ? null : <div className="popover-note">{note}</div>}
       {PERMISSION_OPTIONS.map((option) => (
         <button
           key={option.value}

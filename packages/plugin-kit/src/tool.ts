@@ -11,7 +11,7 @@ import type { Call, Method, Provide } from "./plugin.ts";
 
 export type ParameterType = JsonSchemaType;
 
-export type HostSource = "session_cwd";
+export type HostSource = "session_cwd" | "session_id" | "call_id";
 
 export interface ParameterField {
   type: ParameterType;
@@ -63,7 +63,7 @@ const CAPABILITY = /^tool\.[a-z][a-z0-9_]*$/;
 
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+].+)?$/;
 
-const HOST_SOURCES = new Set<string>(["session_cwd"]);
+const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id"]);
 
 export class ToolArgsError extends CallError {
   readonly violations: string[];

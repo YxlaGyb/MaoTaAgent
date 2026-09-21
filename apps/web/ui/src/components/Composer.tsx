@@ -36,6 +36,7 @@ export function Composer({
   info,
   thinking,
   permission,
+  permissionDisabled,
   running,
   blocked,
   onThinking,
@@ -46,6 +47,7 @@ export function Composer({
   info: AppInfo | null;
   thinking: string;
   permission: string;
+  permissionDisabled: boolean;
   running: boolean;
   blocked: boolean;
   onThinking: (level: string) => void;
@@ -79,7 +81,12 @@ export function Composer({
         }}
       />
       <div className="composer-row">
-        <PermissionPicker value={permission} disabled={blocked} onChange={onPermission} />
+        <PermissionPicker
+          value={permission}
+          disabled={blocked || permissionDisabled}
+          note={info?.capabilities?.permission === undefined ? t("permissionOff") : undefined}
+          onChange={onPermission}
+        />
         <ThinkingPicker info={info} value={thinking} disabled={blocked} onChange={onThinking} />
         {running ? (
           <MaoButton className="composer-send" aria-label={t("stop")} onClick={onCancel}>

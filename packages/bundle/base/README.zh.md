@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的十一个插件、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的十二个插件、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
 kind: "package-reference"
 ---
 
@@ -38,6 +38,7 @@ import { rows } from "@maota/base";
 |---|---|---|
 | `api` | `@maota/api` | `api` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
+| `permission` | `@maota/permission` | `permission` |
 | `tool-pwsh` | `@maota/tool-pwsh` | `tool.pwsh` |
 | `tool-fs` | `@maota/tool-fs` | `tool.read`、`tool.write`、`tool.edit` |
 | `tool-fs-search` | `@maota/tool-fs-search` | `tool.glob` |
@@ -50,7 +51,7 @@ import { rows } from "@maota/base";
 
 ### 顺序
 
-三个 `tool.*` 插件与 `shell` provider 排在 `tools` 之前，`tools` 又排在 `agent-core` 之前。分发器在 `start` 时只读一次能力表，并把读到的东西缓存下来，所以一个尚未启动的 provider 要到下一次 `list` 才可见。让 provider 排在分发器上面，正是“启动一次就够”的原因。
+三个 `tool.*` 插件与它们的 `shell`、`permission` provider 排在 `tools` 之前，`tools` 又排在 `agent-core` 之前。分发器在 `start` 时只读一次能力表，并把读到的东西缓存下来，所以一个尚未启动的 provider 要到下一次 `list` 才可见。让 provider 排在分发器上面，正是“启动一次就够”的原因。
 
 -----
 

@@ -63,7 +63,9 @@ An unknown level name is rejected with `-32602` when `run` is called, and an unk
 
 ### Tools
 
-When `skill` is available its skills are listed in the system prompt and one extra tool, `skill`, is offered. Every other tool comes from `tools`. A tool that declares a host argument is given that value before the call, `session_cwd` today, unless the model set the argument itself; the argument is stripped from the specs the model is shown, so the model cannot move a call out of the session directory. Safety is asked through `tools.classify`, and the `skill` tool answers safe on its own.
+When `skill` is available its skills are listed in the system prompt and one extra tool, `skill`, is offered. Every other tool comes from `tools`. A tool that declares a host argument is given that value before the call, unless the model set the argument itself. Three sources exist, `session_cwd`, `session_id` and `call_id`, so a tool knows which session it is serving and which call it is running, and the model cannot claim either; every host argument is stripped from the specs the model is shown. Safety is asked through `tools.classify`, and the `skill` tool answers safe on its own.
+
+When a `permission` capability answers, the policy for this session is read once per turn and stated in the system prompt, so the model knows what a refusal means instead of retrying a command nobody will approve. Without that capability the prompt says nothing about approval, and the tools that would ask read the same absence as the mode that asks.
 
 -----
 

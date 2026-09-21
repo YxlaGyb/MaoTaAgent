@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package holds one row. It exists so that the `serve` profile can mount the web front end without the `default` profile knowing it exists: `base` names the ten plugins every launch needs, and this bundle adds the eleventh only where a browser is going to connect. The package name is `@maota/web-bundle` while the directory is `bundle/web`, because `web-bundle` says what it is and `web` says which profile it belongs to.
+This package holds one row. It exists so that the `serve` profile can mount the web front end without the `default` profile knowing it exists: `base` names the eleven plugins every launch needs, and this bundle adds the twelfth only where a browser is going to connect. The package name is `@maota/web-bundle` while the directory is `bundle/web`, because `web-bundle` says what it is and `web` says which profile it belongs to.
 
 ## Table of Contents
 

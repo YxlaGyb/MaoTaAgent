@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个包只装一行。它存在的理由，是让 `serve` profile 能挂载 web 前端，而 `default` profile 不必知道它存在：`base` 点名每次启动都要的十个插件，这个 bundle 只在浏览器要连上来的地方补上第十一个。包名是 `@maota/web-bundle`，而目录是 `bundle/web`，因为 `web-bundle` 说明它是什么，`web` 说明它属于哪个 profile。
+这个包只装一行。它存在的理由，是让 `serve` profile 能挂载 web 前端，而 `default` profile 不必知道它存在：`base` 点名每次启动都要的十一个插件，这个 bundle 只在浏览器要连上来的地方补上第十二个。包名是 `@maota/web-bundle`，而目录是 `bundle/web`，因为 `web-bundle` 说明它是什么，`web` 说明它属于哪个 profile。
 
 ## 目录
 

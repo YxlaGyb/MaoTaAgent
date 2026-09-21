@@ -31,7 +31,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | `Definition` | `provides`, `requires`, `configKeys`, `setup`, `start`, `methods`, `close` and `selfCheck`. |
 | `Call` | What a method receives: `channel`, `signal`, `config`, `capabilities`, `caller`, `capability`, `method` and `stream`. |
 | `CallError` | A failure with a JSON-RPC code and optional `data`. |
-| `Channel` | `call`, `notify` and `log` over the kernel connection. |
+| `Channel` | `call`, `stream`, `publish`, `subscribe`, `unsubscribe`, `notify` and `log` over the kernel connection. |
 | `ProviderStream` | Pushes chunks for an invoke that asked for `meta.stream`. |
 
 ### Declaring a tool

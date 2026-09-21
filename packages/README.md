@@ -28,13 +28,14 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | The package a front end talks to: the system prompt, session bookkeeping, tool wiring and the streaming `run`. |
 | `@maota/api` | [`api`](api/) | `api` | The model gateway: an openai backend and a scripted one for tests. |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | The development watcher: it publishes `dev.source.changed` for the paths it watches, and its generated row ships disabled. |
+| `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | The gate a tool asks before a destructive command: the session's mode, the questions waiting for an answer, and the paired audit file. |
 | `@maota/pwsh-local` | [`shell/pwsh-local`](shell/pwsh-local/) | `shell` | The provider that runs a command with the local PowerShell. |
 | `@maota/session` | [`session`](session/) | `session` | Stored conversations, their titles and their working directories. |
 | `@maota/skill` | [`skill`](skill/) | `skill` | The skill list a turn offers the model. |
 | `@maota/skill-filesystem` | [`skill-filesystem`](skill-filesystem/) | `skill.filesystem` | Skills read from the filesystem. |
 | `@maota/tool-fs` | [`fs/tool-fs`](fs/tool-fs/) | `tool.read`, `tool.write`, `tool.edit` | The tools the model reads, writes and edits files through. |
 | `@maota/tool-fs-search` | [`fs/tool-fs-search`](fs/tool-fs-search/) | `tool.glob` | The tool that finds files by path pattern. |
-| `@maota/tool-pwsh` | [`shell/tool-pwsh`](shell/tool-pwsh/) | `tool.pwsh` | The tool the model runs commands through. |
+| `@maota/tool-pwsh` | [`shell/tool-pwsh`](shell/tool-pwsh/) | `tool.pwsh` | The tool the model runs commands through, and the one that asks the gate first. |
 | `@maota/tools` | [`agent/tools`](agent/tools/) | `tools` | The tool registry every tool is listed and dispatched through. |
 | `@maota/agent-loop` | [`agent/agent-loop`](agent/agent-loop/) |  | The loop engine `agent-core` runs in its own process: the model call, the tool round, the exit reason. |
 | `@maota/app-boot` | [`boot/app-boot`](boot/app-boot/) |  | Decides which config file and which kernel binary one launch uses, and generates a profile's config and links. |
@@ -46,7 +47,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
 <a id="bundles"></a>
-A profile's rows come from those two lists: `base` mounts the eleven rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
+A profile's rows come from those two lists: `base` mounts the twelve rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
 `pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
 
@@ -56,4 +57,5 @@ A profile's rows come from those two lists: `base` mounts the eleven rows it nam
 - [Architecture](../docs/architecture.md): the component map and the launch path.
 - [maota CLI](../apps/cli/README.md): the front end that launches these packages.
 - [agent](../agent/README.md): how the agent package and its loop divide the work.
+- [interaction](interaction/README.md): the gate a tool asks before it acts.
 - [dev.hmr](boot/hmr/README.md): the watcher behind event-driven hot reload.

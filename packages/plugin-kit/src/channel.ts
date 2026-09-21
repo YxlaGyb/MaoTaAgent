@@ -22,6 +22,15 @@ export interface InboundStream extends AsyncIterable<unknown> {
   cancel(): void;
 }
 
+/** One topic pattern and the function a subscriber wants called for it. */
+export type EventHandler = (topic: string, seq: number, payload: unknown) => void;
+
+interface Subscription {
+  kernelId: string;
+  patterns: readonly string[];
+  handler: EventHandler;
+}
+
 type Waiter = {
   resolve(result: IteratorResult<unknown>): void;
   reject(error: Error): void;
@@ -101,6 +110,7 @@ export class Channel {
   private readonly pending = new Map<string, PendingCall>();
   private readonly streams = new Map<string, Queue>();
   private readonly parked = new Map<string, Array<{ method: string; params: any }>>();
+  private readonly subscriptions = new Map<string, Subscription>();
   private next = 0;
 
   constructor(hooks: ChannelHooks) {
@@ -126,11 +136,33 @@ export class Channel {
   }
 
   publish(topic: string, payload: unknown): Promise<void> {
-    const id = `p-${++this.next}`;
-    return new Promise<void>((resolve, reject) => {
-      this.pending.set(id, { resolve: () => resolve(), reject });
-      writeFrame({ jsonrpc: "2.0", id, method: "kernel.publish", params: { topic, payload } });
-    });
+    return this.direct("kernel.publish", { topic, payload }).then(() => undefined);
+  }
+
+  /// Events are a broadcast, so the handler is registered before the kernel is
+  /// asked to join: nothing can be delivered in the gap, and a refused
+  /// subscription leaves no handler behind.
+  async subscribe(patterns: readonly string[], handler: EventHandler): Promise<string> {
+    if (patterns.length === 0) throw new CallError(-32602, "subscribe needs at least one pattern");
+    const id = `s-${++this.next}`;
+    this.subscriptions.set(id, { kernelId: "", patterns, handler });
+    try {
+      const reply = (await this.direct("kernel.subscribe", { patterns })) as { subscription_id?: unknown };
+      const found = this.subscriptions.get(id);
+      if (found !== undefined) found.kernelId = String(reply?.subscription_id ?? "");
+      return id;
+    } catch (error) {
+      this.subscriptions.delete(id);
+      throw error;
+    }
+  }
+
+  async unsubscribe(subscriptionId: string): Promise<void> {
+    const found = this.subscriptions.get(subscriptionId);
+    if (found === undefined) return;
+    this.subscriptions.delete(subscriptionId);
+    if (found.kernelId === "") return;
+    await this.direct("kernel.unsubscribe", { subscription_id: found.kernelId });
   }
 
   notify(method: string, params: unknown): void {
@@ -139,6 +171,14 @@ export class Channel {
 
   log(level: string, message: string, fields: Record<string, unknown> = {}): void {
     this.notify("kernel.log", { level, message, fields });
+  }
+
+  private direct(method: string, params: unknown): Promise<unknown> {
+    const id = `k-${++this.next}`;
+    return new Promise<unknown>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      writeFrame({ jsonrpc: "2.0", id, method, params });
+    });
   }
 
   private invoke(
@@ -255,6 +295,7 @@ export class Channel {
         return;
       }
       case "$/event":
+        this.dispatchEvent(String(params?.topic ?? ""), Number(params?.seq ?? 0), params?.payload);
         this.hooks.event(String(params?.topic ?? ""), Number(params?.seq ?? 0), params?.payload);
         return;
       default:
@@ -288,4 +329,21 @@ export class Channel {
       this.parked.delete(oldest);
     }
   }
+
+  private dispatchEvent(topic: string, seq: number, payload: unknown): void {
+    for (const subscription of [...this.subscriptions.values()]) {
+      if (subscription.patterns.some((pattern) => matchesTopic(pattern, topic))) {
+        subscription.handler(topic, seq, payload);
+      }
+    }
+  }
+}
+
+/// `PROTOCOL.md` §8.2: patterns compare segment by segment, `*` matches exactly
+/// one segment, and a reserved `**` matches nothing.
+export function matchesTopic(pattern: string, topic: string): boolean {
+  const left = pattern.split(".");
+  const right = topic.split(".");
+  if (left.length !== right.length) return false;
+  return left.every((segment, index) => segment === "*" || segment === right[index]);
 }

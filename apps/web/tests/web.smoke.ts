@@ -20,6 +20,7 @@ const bin =
 const PLUGINS: Array<[string, string]> = [
   ["api", "packages/api/src/index.ts"],
   ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
+  ["permission", "packages/interaction/permission/src/index.ts"],
   ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
   ["tool-fs", "packages/fs/tool-fs/src/index.ts"],
   ["tool-fs-search", "packages/fs/tool-fs-search/src/index.ts"],
@@ -54,7 +55,12 @@ writeFileSync(
     `  { text = '${LONG}' },`,
     "  { },",
     "  { text = 'first workdir turn' },",
-    "  { text = 'unused next step' },",
+    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
+    "  { text = 'ran it' },",
+    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
+    "  { text = 'refused' },",
+    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
+    "  { text = 'ran it anyway' },",
     "]",
     "",
     "[plugins.agent-core.config.thinking]",
@@ -75,6 +81,13 @@ interface Frame {
   text?: string;
   code?: number;
   message?: string;
+  request_id?: string;
+  tool?: string;
+  call_id?: string;
+  reason?: string;
+  outcome?: string;
+  ok?: boolean;
+  output?: any;
 }
 
 const logs: string[] = [];
@@ -150,7 +163,12 @@ function waitFor(match: (event: Frame) => boolean, timeout = 30_000): Promise<Fr
     };
     const timer = setTimeout(() => {
       watchers.splice(watchers.indexOf(watch), 1);
-      reject(new Error(`no matching event after ${timeout}ms; plugin log: ${logs.slice(-5).join(" | ")}`));
+      reject(
+        new Error(
+          `no matching event after ${timeout}ms; seen: ${JSON.stringify(events.slice(-8))}; ` +
+            `plugin log: ${logs.slice(-5).join(" | ")}`,
+        ),
+      );
     }, timeout);
     watchers.push(watch);
   });
@@ -284,6 +302,111 @@ await check("rejects bad input", async () => {
   const bogus = await turn("smoke-one", "x", "", "no-such-level");
   const bogusError = await waitFor((event) => event.event === "turn.error" && event.turn_id === bogus);
   assert.equal(bogusError.code, -32602, `an unknown level should report -32602 in the stream, got ${bogusError.code}`);
+});
+
+function resultOf(turnId: string): Frame | undefined {
+  return events.find((event) => event.event === "tool_result" && event.turn_id === turnId);
+}
+
+/// A command needs a session directory to run in, so the approval turns reuse
+/// the home the smoke already created.
+const project = home;
+const auditDir = join(home, "permissions", home.replace(/[^A-Za-z0-9]/g, "-"));
+
+await check("approval: a risky command waits, and allowing it runs it", async () => {
+  const id = await turn("smoke-approval", "clean the build directory", project);
+  const asked = await waitFor(
+    (event) => event.event === "permission.request" && event.session_id === "smoke-approval",
+  );
+  assert.equal(asked.tool, "pwsh", "the card should name the tool that asked");
+  assert.equal(asked.call_id, "call_4", "the card should point at the tool call it belongs to");
+  assert.ok(typeof asked.reason === "string" && asked.reason !== "", "the card should carry a reason");
+  const parked = await call("permission.pending", { session_id: "smoke-approval" });
+  assert.equal(parked.requests.length, 1, "the parked question should be listed");
+  assert.equal(parked.requests[0].id, asked.request_id, "the listed question should be the one that was asked");
+  assert.equal(parked.requests[0].call_id, "call_4", "the rebuild should keep the tool call id");
+  assert.equal(
+    (await call("permission.get", { session_id: "smoke-approval", cwd: project })).mode,
+    "ask",
+    "a session with no stored mode falls back to ask",
+  );
+  assert.equal((await call("permission.answer", { id: asked.request_id, decision: "allow" })).settled, true);
+  const settled = await waitFor(
+    (event) => event.event === "permission.settled" && event.request_id === asked.request_id,
+  );
+  assert.equal(settled.outcome, "allowed-once", "an allow should settle as a one-time grant");
+  await waitFor((event) => event.event === "turn.done" && event.turn_id === id);
+  const result = resultOf(id);
+  assert.equal(result?.ok, true, `the allowed command should have run, got ${JSON.stringify(result)}`);
+  assert.ok(JSON.stringify(result?.output).includes("rm file"), "the command's own output should come back");
+
+  const audit = join(auditDir, "smoke-approval.json");
+  assert.ok(existsSync(audit), `the audit should be written to ${audit}`);
+  const records = (JSON.parse(readFileSync(audit, "utf8")) as { records: Array<{ kind: string; decided_by?: string }> })
+    .records;
+  assert.deepEqual(
+    records.map((record) => record.kind),
+    ["asked", "decided"],
+    `the audit should pair the question with its answer, got ${JSON.stringify(records)}`,
+  );
+  assert.equal(records[1]?.decided_by, "web", "the answer should name the plugin that gave it");
+});
+
+await check("approval: denying writes the reason back as the tool result", async () => {
+  const id = await turn("smoke-deny", "clean the build directory", project);
+  const asked = await waitFor((event) => event.event === "permission.request" && event.session_id === "smoke-deny");
+  assert.equal((await call("permission.answer", { id: asked.request_id, decision: "deny" })).settled, true);
+  await waitFor((event) => event.event === "turn.done" && event.turn_id === id);
+  const result = resultOf(id);
+  assert.equal(result?.ok, true, "a refusal is a tool result, not a broken call");
+  assert.equal(
+    result?.output?.status,
+    "approval denied",
+    `the refusal should say so, got ${JSON.stringify(result?.output)}`,
+  );
+  assert.ok(String(result?.output?.reason).includes("rejected"), "the refusal should carry the reason");
+  assert.equal(result?.output?.stdout, undefined, "a denied command must not have run");
+  assert.equal(
+    (await call("permission.pending", { session_id: "smoke-deny" })).requests.length,
+    0,
+    "a settled question should leave the list",
+  );
+  await assert.rejects(
+    call("permission.answer", { id: asked.request_id, decision: "allow" }),
+    (error: { code?: number }) => error.code === -32602,
+    "a late answer should be refused",
+  );
+});
+
+await check("approval: full mode runs without asking, per session", async () => {
+  assert.equal(
+    (await call("permission.set", { session_id: "smoke-full", cwd: project, mode: "full" })).mode,
+    "full",
+  );
+  assert.equal(
+    (await call("permission.get", { session_id: "smoke-full", cwd: project })).mode,
+    "full",
+    "the chosen mode should stick to its session",
+  );
+  const before = events.filter((event) => event.event === "permission.request").length;
+  const id = await turn("smoke-full", "clean the build directory", project);
+  await waitFor((event) => event.event === "turn.done" && event.turn_id === id);
+  assert.equal(
+    events.filter((event) => event.event === "permission.request").length,
+    before,
+    "full mode should not ask",
+  );
+  assert.equal(resultOf(id)?.ok, true, "full mode should run the command");
+  assert.equal(
+    (await call("permission.get", { session_id: "smoke-approval", cwd: project })).mode,
+    "ask",
+    "another session should keep its own mode",
+  );
+  await assert.rejects(
+    call("permission.set", { session_id: "smoke-full", cwd: project, mode: "yolo" }),
+    (error: { code?: number }) => error.code === -32602,
+    "a mode outside the three should be refused",
+  );
 });
 
 finished = true;

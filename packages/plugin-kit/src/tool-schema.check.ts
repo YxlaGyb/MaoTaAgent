@@ -116,6 +116,31 @@ const reader: ToolBlueprint = {
 };
 
 const hosted = defineTools([reader]);
+const hostedAll: ToolBlueprint = {
+  ...reader,
+  parameters: {
+    file_path: { type: "string", required: true },
+    cwd: { type: "string", host: "session_cwd", description: "The session working directory." },
+    session_id: { type: "string", host: "session_id", description: "The session id." },
+    call_id: { type: "string", host: "call_id", description: "The tool call id." },
+  },
+};
+const everyHost = defineTools([hostedAll]);
+assert.deepEqual(everyHost.methods.describe({}, call("tool.read")), {
+  name: "read",
+  description: "Read one file.",
+  input_schema: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] },
+  host_args: [
+    { name: "cwd", source: "session_cwd" },
+    { name: "session_id", source: "session_id" },
+    { name: "call_id", source: "call_id" },
+  ],
+});
+assert.deepEqual(await everyHost.methods.run({ file_path: "a", cwd: "E:\\x", session_id: "s1", call_id: "c1" }, call("tool.read")), {
+  read: "a",
+  from: "E:\\x",
+});
+
 assert.deepEqual(hosted.methods.describe({}, call("tool.read")), {
   name: "read",
   description: "Read one file.",

@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the eleven plugins the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the twelve plugins the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
 kind: "package-reference"
 ---
 
@@ -38,6 +38,7 @@ import { rows } from "@maota/base";
 |---|---|---|
 | `api` | `@maota/api` | `api` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
+| `permission` | `@maota/permission` | `permission` |
 | `tool-pwsh` | `@maota/tool-pwsh` | `tool.pwsh` |
 | `tool-fs` | `@maota/tool-fs` | `tool.read`, `tool.write`, `tool.edit` |
 | `tool-fs-search` | `@maota/tool-fs-search` | `tool.glob` |
@@ -50,7 +51,7 @@ import { rows } from "@maota/base";
 
 ### Order
 
-The three `tool.*` plugins and the `shell` provider come before `tools`, and `tools` comes before `agent-core`. The dispatcher reads the capability table once at `start` and caches what it finds, so a provider that has not started yet would be invisible until the next `list`. Keeping the providers above the dispatcher is what makes one startup enough.
+The three `tool.*` plugins and their `shell` and `permission` providers come before `tools`, and `tools` comes before `agent-core`. The dispatcher reads the capability table once at `start` and caches what it finds, so a provider that has not started yet would be invisible until the next `list`. Keeping the providers above the dispatcher is what makes one startup enough.
 
 -----
 

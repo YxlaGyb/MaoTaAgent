@@ -13,7 +13,8 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/boot/app-boot` | Resolves the config file and the kernel binary for one launch. | [README](../packages/boot/app-boot/README.md) |
 | `packages/boot/host` | Spawns the kernel and drives it over stdio. | [README](../packages/boot/host/README.md) |
 | `packages/boot/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/boot/hmr/src/index.ts` |
-| `packages/*` | The kernel plugins: api, pwsh-local, tool-pwsh, tool-fs, tool-fs-search, tools, skill, skill-filesystem, session and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
+| `packages/interaction/permission` | The approval gate: the mode a session runs under, the questions waiting for an answer, and the audit file that pairs each ask with its decision. | [README](../packages/interaction/permission/README.md) |
+| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tools, skill, skill-filesystem, session and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 
@@ -40,6 +41,7 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 ## Boundaries
 
 - Plugins never call each other directly; they go through capabilities the kernel routes.
+- The approval gate is a plugin, not a kernel feature: the kernel routes `permission` like any other capability and never inspects a command.
 - The Node host never interprets plugin config values; it picks paths and speaks the protocol.
 - `apps/web` is a plugin like any other; the browser side holds no kernel privileges of its own.
 - The kernel never watches source files; it watches its own config and restarts one named plugin when a host asks it to.
@@ -49,6 +51,8 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - [boot package group](../packages/boot/README.md)
 - [fs package group](../packages/fs/README.md)
 - [shell package group](../packages/shell/README.md)
+- [interaction package group](../packages/interaction/README.md)
+- [the permission gate](permission.md)
 - [bundle package group](../packages/bundle/README.md)
 - [the tools dispatcher](../packages/agent/tools/README.md)
 - [maota CLI](../apps/cli/README.md)

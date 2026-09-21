@@ -235,6 +235,7 @@ export const definition: Definition = {
   requires: [
     { capability: "session", version: "^1" },
     { capability: "agent.loop", version: "^1" },
+    { capability: "permission", version: "^1", optional: true },
   ],
   configKeys: ["port", "host", "dev", "open"],
 
@@ -263,6 +264,7 @@ export const definition: Definition = {
 
   async start(wiring) {
     capabilities = wiring.capabilities ?? {};
+    await bridge.open();
     await new Promise<void>((resolve) => {
       server.once("error", () => resolve());
       server.listen(settings.port, settings.host, resolve);

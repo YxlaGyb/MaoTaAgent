@@ -9,7 +9,7 @@ import {
   type ToolSpec,
 } from "@maota/agent-loop";
 import { systemPrompt, type SkillSummary } from "./prompt.ts";
-import { SKILL_TOOL, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "./tools.ts";
+import { SKILL_TOOL, hostValue, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "./tools.ts";
 
 export const LEVELS = ["off", "low", "medium", "high"] as const;
 export type Level = (typeof LEVELS)[number];
@@ -109,6 +109,22 @@ async function listSkills(ctx: Call): Promise<SkillSummary[]> {
   }
 }
 
+/// The policy is read so the prompt can state it, and a deployment without a
+/// permission capability simply says nothing about approval.
+async function approvalMode(ctx: Call, sessionId: string, cwd: string): Promise<string | null> {
+  try {
+    const reply = (await ctx.channel.call(
+      "permission",
+      "policy",
+      { session_id: sessionId, cwd },
+      { signal: ctx.signal },
+    )) as { mode?: unknown } | null;
+    return typeof reply?.mode === "string" ? reply.mode : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadHistory(ctx: Call, sessionId: string, cwd: string | null): Promise<Message[]> {
   const reply = (await ctx.channel.call(
     "session",
@@ -171,6 +187,7 @@ export const definition: Definition = {
     { capability: "tools", version: "^1" },
     { capability: "session", version: "^1" },
     { capability: "skill", version: "^1", optional: true },
+    { capability: "permission", version: "^1", optional: true },
   ],
 
   setup(wiring) {
@@ -199,11 +216,19 @@ export const definition: Definition = {
       const setting = resolveLevel(settings.thinking, level);
       const input = typeof params?.input === "string" ? params.input : "";
 
-      const [available, skills] = await Promise.all([listTools(ctx), listSkills(ctx)]);
+      const [available, skills, mode] = await Promise.all([
+        listTools(ctx),
+        listSkills(ctx),
+        approvalMode(ctx, sessionId, cwd ?? ""),
+      ]);
       const tools = setting.tools ? available : [];
       if (setting.tools && skills.length > 0) tools.push(SKILL_TOOL);
       const modelTools = tools.map(stripHostArgs);
-      const host: HostValues = { session_cwd: cwd };
+      const host = (callId: string | null): HostValues => ({
+        session_cwd: cwd,
+        session_id: sessionId,
+        call_id: callId,
+      });
       const specOf = (name: string): ToolSpec | undefined => tools.find((tool) => tool.name === name);
 
       const history = await loadHistory(ctx, sessionId, cwd);
@@ -213,7 +238,7 @@ export const definition: Definition = {
       await persist(ctx, sessionId, cwd, history, titleOf(first?.content));
 
       const messages: Message[] = [
-        { role: "system", content: systemPrompt(settings.system, skills, cwd) },
+        { role: "system", content: systemPrompt(settings.system, skills, cwd, mode) },
         ...history,
       ];
 
@@ -237,13 +262,13 @@ export const definition: Definition = {
                 : ctx.channel.call(
                     "tools",
                     "call",
-                    { name: invoked.name, args: injectHostArgs(specOf(invoked.name), invoked.args, host) },
+                    { name: invoked.name, args: injectHostArgs(specOf(invoked.name), invoked.args, host(invoked.id)) },
                     { signal: step.signal },
                   ),
             classify: (invoked, step) =>
               invoked.name === SKILL_TOOL.name
                 ? Promise.resolve(true)
-                : classifyTool(ctx, specOf(invoked.name), invoked, host, step.signal),
+                : classifyTool(ctx, specOf(invoked.name), invoked, host(invoked.id), step.signal),
           },
           messages,
           ctx.signal,
@@ -312,7 +337,14 @@ export const definition: Definition = {
     if ([...segmenter.segment(family)].length > 31) problems.push("titleOf split a grapheme cluster");
     if (!family.endsWith("…")) problems.push("titleOf did not cut the long family line");
 
-    const host: HostValues = { session_cwd: "E:\\proj" };
+    if (systemPrompt("base", [], null, "ask")?.includes("approval: ask") !== true) {
+      problems.push("the system prompt did not state the approval policy");
+    }
+    if (systemPrompt("base", [], null, null) !== "base") {
+      problems.push("the system prompt invented an approval line with no policy");
+    }
+
+    const host: HostValues = { session_cwd: "E:\\proj", session_id: "s1", call_id: "c1" };
     const pwsh: ToolSpec = {
       name: "pwsh",
       input_schema: { type: "object", properties: { command: { type: "string" } } },
@@ -331,9 +363,31 @@ export const definition: Definition = {
     if ((injectHostArgs(other, { a: 1 }, host) as { workdir?: unknown }).workdir !== undefined) {
       problems.push("host args were injected into a tool that declares none");
     }
-    if ((injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null }) as { workdir?: unknown }).workdir !== undefined) {
+    if (
+      (injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null, session_id: null, call_id: null }) as {
+        workdir?: unknown;
+      }).workdir !== undefined
+    ) {
       problems.push("host args were injected without a session workdir");
     }
+    const gate: ToolSpec = {
+      name: "pwsh",
+      input_schema: { type: "object", properties: { command: { type: "string" } } },
+      host_args: [
+        { name: "workdir", source: "session_cwd" },
+        { name: "session_id", source: "session_id" },
+        { name: "call_id", source: "call_id" },
+      ],
+    };
+    const injected = injectHostArgs(gate, { command: "ls" }, host) as {
+      workdir?: string;
+      session_id?: string;
+      call_id?: string;
+    };
+    if (injected.session_id !== "s1" || injected.call_id !== "c1" || injected.workdir !== "E:\\proj") {
+      problems.push(`the session and call identity were not injected: ${JSON.stringify(injected)}`);
+    }
+    if (hostValue("elsewhere", host) !== null) problems.push("an unknown host source invented a value");
     if ((stripHostArgs(pwsh) as { host_args?: unknown }).host_args !== undefined) {
       problems.push("host_args leaked into the model visible spec");
     }

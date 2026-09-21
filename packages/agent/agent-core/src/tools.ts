@@ -8,6 +8,8 @@ export const SKILL_TOOL: ToolSpec = {
 
 export interface HostValues {
   session_cwd: string | null;
+  session_id: string | null;
+  call_id: string | null;
 }
 
 export function readToolList(reply: unknown): ToolSpec[] {
@@ -36,11 +38,20 @@ export function injectHostArgs(spec: ToolSpec | undefined, args: unknown, host: 
   const input = args as Record<string, unknown>;
   let out = input;
   for (const entry of declared) {
-    const value = entry.source === "session_cwd" ? host.session_cwd : null;
+    const value = hostValue(entry.source, host);
     if (value === null || value === "") continue;
     const current = out[entry.name];
     if (typeof current === "string" && current !== "") continue;
     out = { ...out, [entry.name]: value };
   }
   return out;
+}
+
+/// Only the sources a tool declares are filled, and an unknown source stays
+/// empty rather than reaching for a value the declaration never asked for.
+export function hostValue(source: string, host: HostValues): string | null {
+  if (source === "session_cwd") return host.session_cwd;
+  if (source === "session_id") return host.session_id;
+  if (source === "call_id") return host.call_id;
+  return null;
 }

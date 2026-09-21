@@ -60,6 +60,19 @@ export interface HostEvent {
   steps?: number;
   code?: number;
   message?: string;
+  request_id?: string;
+  call_id?: string;
+  reason?: string;
+  outcome?: string;
+}
+
+export interface Approval {
+  id: string;
+  session_id: string;
+  tool: string;
+  call_id?: string;
+  reason?: string;
+  at?: string;
 }
 
 export interface BridgeFacts {

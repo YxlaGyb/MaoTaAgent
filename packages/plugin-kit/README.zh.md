@@ -31,7 +31,7 @@ kind: "package-reference"
 | `Definition` | `provides`、`requires`、`configKeys`、`setup`、`start`、`methods`、`close` 与 `selfCheck`。 |
 | `Call` | 方法收到的东西：`channel`、`signal`、`config`、`capabilities`、`caller`、`capability`、`method` 与 `stream`。 |
 | `CallError` | 带 JSON-RPC 码与可选 `data` 的失败。 |
-| `Channel` | 在内核连接上的 `call`、`notify` 与 `log`。 |
+| `Channel` | 在内核连接上的 `call`、`stream`、`publish`、`subscribe`、`unsubscribe`、`notify` 与 `log`。 |
 | `ProviderStream` | 为要了 `meta.stream` 的 invoke 推块。 |
 
 ### 声明一个工具

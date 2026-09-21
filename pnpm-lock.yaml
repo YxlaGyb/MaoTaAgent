@@ -39,6 +39,9 @@ importers:
       '@maota/host':
         specifier: workspace:^
         version: link:packages/boot/host
+      '@maota/permission':
+        specifier: workspace:^
+        version: link:packages/interaction/permission
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:packages/plugin-kit
@@ -191,6 +194,12 @@ importers:
       '@maota/fs':
         specifier: workspace:^
         version: link:../fs
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/interaction/permission:
+    dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit

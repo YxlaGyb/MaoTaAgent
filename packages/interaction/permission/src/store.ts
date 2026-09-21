@@ -1,0 +1,163 @@
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { CallError } from "@maota/plugin-kit";
+
+export const SCHEMA_VERSION = 1;
+export const MODES = ["ask", "auto", "full"] as const;
+export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export const DEFAULT_DIRNAME = "default";
+
+/// What an operation that the guard stops is put through: ask the user, approve
+/// it without asking, or stop raising the question at all.
+export type Mode = (typeof MODES)[number];
+
+/// `allowed-once` is the only grant; a caller treats the other three as a refusal.
+export type Outcome = "allowed-once" | "rejected" | "cancelled" | "unavailable";
+
+export interface PolicyRecord {
+  kind: "policy";
+  at: string;
+  mode: Mode;
+  caller: string;
+}
+
+export interface AskedRecord {
+  kind: "asked";
+  at: string;
+  id: string;
+  tool: string;
+  call_id?: string;
+  reason?: string;
+}
+
+export interface DecidedRecord {
+  kind: "decided";
+  at: string;
+  id: string;
+  outcome: Outcome;
+  decided_by: string;
+  cause?: string;
+  tool?: string;
+}
+
+export type AuditRecord = PolicyRecord | AskedRecord | DecidedRecord;
+
+export interface PermissionFile {
+  schema_version: number;
+  session_id: string;
+  cwd: string;
+  mode: Mode | null;
+  records: AuditRecord[];
+}
+
+/// A policy that answers a call by itself, with the label its audit record
+/// carries, or `unavailable` for a question nobody can answer.
+export interface Verdict {
+  outcome: Outcome;
+  decided_by: string;
+  cause?: string;
+}
+
+export function isMode(value: unknown): value is Mode {
+  return typeof value === "string" && (MODES as readonly string[]).includes(value);
+}
+
+export function sessionIdOf(value: unknown): string {
+  const id = String(value ?? "");
+  if (!SESSION_ID.test(id)) {
+    throw new CallError(-32602, `session_id must match ${SESSION_ID.source}, got ${JSON.stringify(value)}`);
+  }
+  return id;
+}
+
+export function encodeDir(cwd: string): string {
+  const trimmed = cwd.replace(/[\\/]+$/, "");
+  return trimmed === "" ? DEFAULT_DIRNAME : trimmed.replace(/[^A-Za-z0-9]/g, "-");
+}
+
+export function filePath(root: string, sessionId: string, cwd: string): string {
+  return join(root, encodeDir(cwd), `${sessionId}.json`);
+}
+
+export function effectiveMode(file: PermissionFile, fallback: Mode): Mode {
+  return file.mode ?? fallback;
+}
+
+/// The decision table: the two policy answers, the fail-closed answer for a
+/// question with no answerer, and `ask` for the one case that needs a human.
+export function decide(mode: Mode, answerers: number): Verdict | "ask" {
+  if (mode === "full") return { outcome: "allowed-once", decided_by: "policy:full" };
+  if (mode === "auto") return { outcome: "allowed-once", decided_by: "policy:auto" };
+  if (answerers === 0) return { outcome: "unavailable", decided_by: "none", cause: "no-answerer" };
+  return "ask";
+}
+
+/// Every `asked` needs exactly one `decided`, and a `decided` without one is
+/// legal only for a decision the policy made by itself.
+export function pairingProblems(records: readonly AuditRecord[]): string[] {
+  const asked = new Set<string>();
+  const decided = new Map<string, number>();
+  for (const record of records) {
+    if (record.kind === "asked") asked.add(record.id);
+    if (record.kind === "decided") decided.set(record.id, (decided.get(record.id) ?? 0) + 1);
+  }
+  const problems: string[] = [];
+  for (const id of asked) {
+    const count = decided.get(id) ?? 0;
+    if (count !== 1) problems.push(`asked ${id} has ${count} decided records`);
+  }
+  for (const record of records) {
+    if (record.kind !== "decided" || asked.has(record.id)) continue;
+    if (!record.decided_by.startsWith("policy:")) {
+      problems.push(`decided ${record.id} has no asked record and is not a policy decision`);
+    }
+  }
+  return problems;
+}
+
+/// Keeps the newest `maxRecords`, never splitting an ask from its decision: a
+/// head that lost its question goes with it.
+function trim(records: readonly AuditRecord[], maxRecords: number): AuditRecord[] {
+  const kept = records.slice(Math.max(0, records.length - maxRecords));
+  for (;;) {
+    const first = kept[0];
+    if (first === undefined || first.kind !== "decided" || first.decided_by.startsWith("policy:")) return kept;
+    kept.shift();
+  }
+}
+
+function emptyFile(sessionId: string, cwd: string): PermissionFile {
+  return { schema_version: SCHEMA_VERSION, session_id: sessionId, cwd, mode: null, records: [] };
+}
+
+export function read(root: string, sessionId: string, cwd: string): PermissionFile {
+  let text: string;
+  try {
+    text = readFileSync(filePath(root, sessionId, cwd), "utf8");
+  } catch {
+    return emptyFile(sessionId, cwd);
+  }
+  try {
+    const parsed = JSON.parse(text) as PermissionFile;
+    if (typeof parsed?.session_id !== "string" || !Array.isArray(parsed.records)) return emptyFile(sessionId, cwd);
+    return { ...parsed, mode: isMode(parsed.mode) ? parsed.mode : null };
+  } catch {
+    return emptyFile(sessionId, cwd);
+  }
+}
+
+export function write(root: string, file: PermissionFile, maxRecords: number): PermissionFile {
+  const next: PermissionFile = { ...file, records: trim(file.records, maxRecords) };
+  const path = filePath(root, file.session_id, file.cwd);
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, JSON.stringify(next), { encoding: "utf8", mode: 0o600 });
+    renameSync(tmp, path);
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    throw error;
+  }
+  return next;
+}
