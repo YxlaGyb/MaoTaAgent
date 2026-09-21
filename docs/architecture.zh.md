@@ -15,7 +15,8 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `packages/boot/hmr` | 开发期监视插件：为它盯着的路径发布 `dev.source.changed`。 | `packages/boot/hmr/src/index.ts` |
 | `packages/interaction/permission` | 审批闸门：会话跑在哪一档、还在等回答的问题，以及把每次提问和它的决定配成对的审计文件。 | [README](../packages/interaction/permission/README.zh.md) |
 | `packages/hooks` | 四个 hook 点：持有那四个事件的方言包，以及发现 hook 插件、合并它们答案的引擎。 | [四个 hook 点](hooks.zh.md) |
-| `packages/*` | 内核插件：api、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tools、skill、skill-filesystem、session、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
+| `packages/todo` | 模型持有的计划：它写下任务清单用的工具，以及清单所住的会话文档。 | [README](../packages/todo/tool-todo/README.zh.md) |
+| `packages/*` | 内核插件：api、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tool-todo、tools、skill、skill-filesystem、session、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
 | `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
 

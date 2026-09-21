@@ -37,6 +37,7 @@ kind: "package-group"
 | `@maota/tool-fs` | [`fs/tool-fs`](fs/tool-fs/) | `tool.read`、`tool.write`、`tool.edit` | 模型借它读文件、写文件、改文件。 |
 | `@maota/tool-fs-search` | [`fs/tool-fs-search`](fs/tool-fs-search/) | `tool.glob` | 按路径模式找文件的工具。 |
 | `@maota/tool-pwsh` | [`shell/tool-pwsh`](shell/tool-pwsh/) | `tool.pwsh` | 模型借它跑命令的工具，也是先问闸门的那个。 |
+| `@maota/tool-todo` | [`todo/tool-todo`](todo/tool-todo/) | `tool.todo_write` | 计划：模型写下任务清单用的那个工具，以及清单所住的那个会话文档。 |
 | `@maota/tools` | [`agent/tools`](agent/tools/) | `tools` | 工具注册表：每个工具都从这里列出与分发。 |
 | `@maota/agent-loop` | [`agent/agent-loop`](agent/agent-loop/) |  | `agent-core` 在自己进程里跑的循环引擎：调用模型、执行工具、给出退出原因。 |
 | `@maota/app-boot` | [`boot/app-boot`](boot/app-boot/) |  | 定下一次启动读哪个配置文件、跑哪个内核二进制，并生成某个 profile 的配置与链接。 |
@@ -49,7 +50,7 @@ kind: "package-group"
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | `serve` profile 在 `default` 那份之上追加的那一行。 |
 
 <a id="bundles"></a>
-一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的十三行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
+一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的十四行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
 `pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`requires`、`configKeys` 与 `selfCheck`。
 

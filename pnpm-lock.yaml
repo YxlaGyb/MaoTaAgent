@@ -75,6 +75,9 @@ importers:
       '@maota/tool-pwsh':
         specifier: workspace:^
         version: link:packages/shell/tool-pwsh
+      '@maota/tool-todo':
+        specifier: workspace:^
+        version: link:packages/todo/tool-todo
       '@maota/tools':
         specifier: workspace:^
         version: link:packages/agent/tools
@@ -263,6 +266,12 @@ importers:
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../plugin-kit
+
+  packages/todo/tool-todo:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
 
 packages:
 

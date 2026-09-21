@@ -1,6 +1,6 @@
 {
-  "name": "@maota/base",
-  "version": "0.1.3",
+  "name": "@maota/tool-todo",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -12,10 +12,8 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "maota": {
-    "bundle": {
-      "rows": "./src/rows.ts"
-    }
+  "dependencies": {
+    "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"
 }

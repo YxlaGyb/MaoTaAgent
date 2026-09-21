@@ -12,6 +12,7 @@ export const rows: PluginRow[] = [
   { id: "tool-pwsh", name: "@maota/tool-pwsh" },
   { id: "tool-fs", name: "@maota/tool-fs" },
   { id: "tool-fs-search", name: "@maota/tool-fs-search" },
+  { id: "tool-todo", name: "@maota/tool-todo" },
   { id: "tools", name: "@maota/tools" },
   { id: "skill", name: "@maota/skill" },
   { id: "skill-filesystem", name: "@maota/skill-filesystem" },

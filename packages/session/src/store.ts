@@ -5,7 +5,9 @@ import { join } from "node:path";
 
 import { CallError } from "@maota/plugin-kit";
 
-export const SCHEMA_VERSION = 1;
+import { eventsOf, validateTodos, viewOf, type SessionEvent, type TodosView } from "./plan.ts";
+
+export const SCHEMA_VERSION = 2;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
@@ -25,6 +27,7 @@ export interface SessionFile {
   created_at: string;
   updated_at: string;
   messages: SessionMessage[];
+  events: SessionEvent[];
   dangling: boolean;
 }
 
@@ -110,9 +113,13 @@ function readFileAt(path: string): SessionFile | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(text) as SessionFile;
+    const parsed = JSON.parse(text) as SessionFile & { schema_version?: unknown };
     if (typeof parsed?.id !== "string" || !Array.isArray(parsed.messages)) return null;
-    return parsed;
+    const version = parsed.schema_version;
+    if (version !== undefined && version !== 1 && version !== SCHEMA_VERSION) return null;
+    const events = eventsOf((parsed as { events?: unknown }).events);
+    if (events === null) return null;
+    return { ...parsed, schema_version: SCHEMA_VERSION, events, dangling: false };
   } catch {
     return null;
   }
@@ -148,6 +155,7 @@ export function load(
       created_at: now,
       updated_at: now,
       messages: [],
+      events: [],
       dangling: false,
     };
   }
@@ -159,6 +167,22 @@ export interface SaveInput {
   cwd: unknown;
   title?: unknown;
   messages: unknown;
+}
+
+function writeDocument(path: string, dir: string, id: string, file: SessionFile, limits: Limits): void {
+  const body = JSON.stringify(file);
+  if (Buffer.byteLength(body, "utf8") > limits.max_bytes) {
+    throw new CallError(-32602, `session ${id} is over the ${limits.max_bytes} byte cap; start a new session`);
+  }
+  mkdirSync(dir, { recursive: true });
+  const tmp = join(dir, `.${id}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  try {
+    writeFileSync(tmp, body, { encoding: "utf8", mode: 0o600 });
+    renameSync(tmp, path);
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    throw error;
+  }
 }
 
 export function save(root: string, input: SaveInput, limits: Limits, now = new Date().toISOString()): SessionFile {
@@ -177,25 +201,48 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
     created_at: found?.created_at ?? now,
     updated_at: now,
     messages,
+    events: found?.events ?? [],
     dangling: messages.at(-1)?.role === "user",
   };
 
-  const body = JSON.stringify(file);
-  if (Buffer.byteLength(body, "utf8") > limits.max_bytes) {
-    throw new CallError(-32602, `session ${id} is over the ${limits.max_bytes} byte cap; start a new session`);
-  }
-
-  const dir = join(root, encodeDir(workdir));
-  mkdirSync(dir, { recursive: true });
-  const tmp = join(dir, `.${id}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
-  try {
-    writeFileSync(tmp, body, { encoding: "utf8", mode: 0o600 });
-    renameSync(tmp, path);
-  } catch (error) {
-    rmSync(tmp, { force: true });
-    throw error;
-  }
+  writeDocument(path, join(root, encodeDir(workdir)), id, file, limits);
   return file;
+}
+
+export function write(root: string, id: unknown, cwd: unknown, file: SessionFile, limits: Limits): void {
+  const safeId = assertId(id);
+  const workdir = typeof cwd === "string" ? cwd : "";
+  const path = pathOf(root, safeId, workdir, limits);
+  assertOwnership(readFileAt(path), safeId, workdir);
+  writeDocument(path, join(root, encodeDir(workdir)), safeId, file, limits);
+}
+
+export function todosOf(
+  root: string,
+  id: unknown,
+  cwd: unknown,
+  limits: Limits,
+  now = new Date().toISOString(),
+): TodosView {
+  return viewOf(load(root, id, cwd, limits, now).events);
+}
+
+export function appendTodos(
+  root: string,
+  input: { id: unknown; cwd: unknown; todos: unknown },
+  limits: Limits,
+  now = new Date().toISOString(),
+): TodosView {
+  const todos = validateTodos(input.todos);
+  const found = load(root, input.id, input.cwd, limits, now);
+  const written: SessionFile = {
+    ...found,
+    schema_version: SCHEMA_VERSION,
+    updated_at: now,
+    events: [...found.events, { kind: "todos.write", at: now, todos }],
+  };
+  write(root, input.id, input.cwd, written, limits);
+  return viewOf(written.events);
 }
 
 export function remove(root: string, id: unknown, cwd: unknown, limits: Limits): boolean {
