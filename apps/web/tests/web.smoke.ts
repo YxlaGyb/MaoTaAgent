@@ -26,8 +26,10 @@ const PLUGINS: Array<[string, string]> = [
   ["tool-fs-search", "packages/fs/tool-fs-search/src/index.ts"],
   ["tool-subagent", "packages/subagent/tool-subagent/src/index.ts"],
   ["tools", "packages/agent/tools/src/index.ts"],
-  ["skill-filesystem", "packages/skill-filesystem/src/index.ts"],
-  ["skill", "packages/skill/src/index.ts"],
+  ["skill-filesystem", "packages/skill/skill-filesystem/src/index.ts"],
+  ["skill-bundled", "packages/skill/skill-bundled/src/index.ts"],
+  ["skill", "packages/skill/skill/src/index.ts"],
+  ["tool-skill", "packages/skill/tool-skill/src/index.ts"],
   ["session", "packages/session/src/index.ts"],
   ["agent-core", "packages/agent/agent-core/src/index.ts"],
   ["web", "apps/web/src/index.ts"],
@@ -190,6 +192,13 @@ function textOf(turnId: string): string {
     .join("");
 }
 
+/// The harness writes the skill catalog into the history itself, so a check
+/// about what a person said has to look past it.
+function isCatalog(message: unknown): boolean {
+  const source = (message as { source?: { kind?: unknown } } | null)?.source;
+  return source?.kind === "skill-catalog";
+}
+
 async function turn(session: string, input: string, cwd = "", thinking = "off"): Promise<string> {
   return (await call("chat.send", { session_id: session, cwd, input, thinking })).turn_id as string;
 }
@@ -229,6 +238,39 @@ await check("ui", async () => {
   }
 });
 
+await check("skills.list", async () => {
+  const listed = (await call("skills.list")) as {
+    complete: boolean;
+    skills: Array<{
+      name: string;
+      description: string;
+      source: string;
+      provider: string;
+      active: boolean;
+      paths?: string[];
+      rank?: unknown;
+      invocation: { modelInvocable: boolean; userInvocable: boolean };
+    }>;
+  };
+  assert.equal(listed.complete, true, "every provider should have answered");
+  const names = listed.skills.map((skill) => skill.name);
+  assert.ok(names.includes("code-review"), `the bundled skills should be listed, got ${JSON.stringify(names)}`);
+  const review = listed.skills.find((skill) => skill.name === "code-review");
+  assert.equal(review?.source, "bundled", "a built-in skill should say where it came from");
+  assert.equal(review?.provider, "skill.bundled", "the registry should name the provider that served it");
+  assert.equal(review?.invocation.modelInvocable, true, "a bundled skill should be open to the model");
+  assert.equal(review?.invocation.userInvocable, true, "a bundled skill should be open to a person");
+  assert.equal(review?.active, true, "a skill without paths is always active");
+  const conditional = listed.skills.find((skill) => skill.name === "plugin-authoring");
+  assert.deepEqual(conditional?.paths, ["packages/**"], "a conditional skill should report its patterns");
+  assert.equal(conditional?.active, false, "a conditional skill stays hidden until a matching path is touched");
+  assert.equal(
+    listed.skills.every((skill) => skill.rank === undefined),
+    true,
+    "a summary should not leak the provider's own rank",
+  );
+});
+
 await check("api key from the page", async () => {
   assert.equal((await call("app.info")).has_key, false, "a fresh home should report no key");
   assert.equal((await call("settings.set_key", { api_key: "sk-smoke" })).has_key, true, "saving should report back");
@@ -255,8 +297,13 @@ await check("streaming turn", async () => {
   }
   const loaded = await call("sessions.load", { id: "smoke-one", cwd: "" });
   assert.deepEqual(
-    loaded.messages.map((message: { role: string }) => message.role),
+    loaded.messages.filter((message: { source?: unknown }) => !isCatalog(message)).map((message: { role: string }) => message.role),
     ["user", "assistant"],
+  );
+  assert.equal(
+    loaded.messages.filter((message: { source?: unknown }) => isCatalog(message)).length,
+    1,
+    "the session should record the one skill catalog it was sent",
   );
   assert.equal(loaded.dangling, false, "a finished turn is not dangling");
 });
@@ -271,11 +318,26 @@ await check("long turn flushes mid-stream", async () => {
 
 await check("half turn stays dangling on disk", async () => {
   const id = await turn("smoke-half", "half");
-  const error = await waitFor((event) => event.event === "turn.error" && event.turn_id === id);
-  assert.equal(error.code, -32602, `the scripted backend should report -32602, got ${error.code}`);
+  const failed = (await waitFor((event) => event.event === "turn.done" && event.turn_id === id)) as {
+    reason?: string;
+    text?: string;
+  };
+  assert.equal(
+    failed.reason,
+    "model_error",
+    `a backend that broke for good should end the turn as model_error, got ${JSON.stringify(failed)}`,
+  );
+  assert.ok(
+    String(failed.text).includes("the model call failed"),
+    `the closing text should say what broke: ${JSON.stringify(failed.text)}`,
+  );
   const half = await call("sessions.load", { id: "smoke-half", cwd: "" });
   assert.equal(half.dangling, true, "a turn cut in half should be marked dangling");
-  assert.equal(half.messages.length, 1, "only the user message should survive");
+  assert.equal(
+    half.messages.filter((message: { source?: unknown }) => !isCatalog(message)).length,
+    1,
+    "only the user message should survive",
+  );
 });
 
 await check("cwd: encoded dir and identity", async () => {
@@ -460,6 +522,11 @@ await check("subagent: the child runs, and the page hears it under the parent's 
     child.messages.map((message: { role: string }) => message.role),
     ["user", "assistant", "tool", "assistant"],
     "the child's own session should hold what it did",
+  );
+  assert.equal(
+    child.messages.filter((message: { source?: unknown }) => isCatalog(message)).length,
+    0,
+    "a subagent is never sent the skill catalog",
   );
 });
 

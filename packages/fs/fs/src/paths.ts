@@ -99,9 +99,13 @@ export function resolvePath(request: PathRequest): string {
   return target;
 }
 
+/// A path inside the root is shown relative to it, with forward slashes, so an
+/// answer reads the same on every platform. A path outside — which only a read
+/// root or a spill directory can produce — is shown as its canonical absolute
+/// self, because a relative one would be a path nobody could open.
 export function displayPath(root: string, target: string): string {
   const rest = relative(root, target);
   if (rest === "") return ".";
-  if (rest.startsWith("..") || isAbsolute(rest)) return target;
+  if (rest.startsWith("..") || isAbsolute(rest)) return bestEffortRoot(target);
   return rest.split(/[\\/]/).join("/");
 }

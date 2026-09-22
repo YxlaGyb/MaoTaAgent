@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import { CallError } from "@maota/plugin-kit";
+import { CallError, packageVersion } from "@maota/plugin-kit";
 
 import {
   DEFAULT_EXPLORE_SYSTEM,
@@ -91,7 +91,7 @@ const report = JSON.parse(line) as {
 };
 assert.equal(run.status, 0, `the tool entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the tool selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "tool.task", version: "1.0.0" }]);
+assert.deepEqual(report.provides, [{ capability: "tool.task", version: packageVersion(import.meta.url) }]);
 
 console.log(
   "tool-subagent ok: the types, the child plans, the child ids, the three result shapes and the entry --check report",

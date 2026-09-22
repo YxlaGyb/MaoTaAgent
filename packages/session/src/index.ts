@@ -1,31 +1,35 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runPlugin, type Definition } from "@maota/plugin-kit";
+import { packageVersion, runPlugin, type Definition } from "@maota/plugin-kit";
 import {
   appendTodos,
   childrenOf,
+  DEFAULT_MAX_EVENTS,
   defaultMaxPath,
   defaultRoot,
   encodeDir,
   list,
   load,
+  messageSource,
   remove,
   save,
   SCHEMA_VERSION,
   serially,
+  setWarner,
   sameCwd,
   todosOf,
+  write,
   type Limits,
 } from "./store.ts";
-import { MAX_TODO_CONTENT_CHARS, MAX_TODO_ITEMS, type TodoItem } from "./plan.ts";
+import { MAX_TODO_CONTENT_CHARS, MAX_TODO_ITEMS, viewOf, type SessionEvent, type TodoItem } from "./plan.ts";
 
 const MIB = 1024 * 1024;
 
 let settings: { root: string; limits: Limits } = {
   root: defaultRoot(),
-  limits: { max_bytes: 50 * MIB, max_path: defaultMaxPath() },
+  limits: { max_bytes: 50 * MIB, max_path: defaultMaxPath(), max_events: DEFAULT_MAX_EVENTS },
 };
 
 function positive(value: unknown, fallback: number): number {
@@ -37,9 +41,11 @@ function keyOf(params: unknown): string {
   return `session:${encodeDir(typeof input.cwd === "string" ? input.cwd : "")}:${String(input.id ?? "")}`;
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "session", version: "1.2.0" }],
-  configKeys: ["dir", "max_bytes", "max_path"],
+  provides: [{ capability: "session", version: VERSION }],
+  configKeys: ["dir", "max_bytes", "max_path", "max_events"],
 
   setup(wiring) {
     const configured = wiring.config.dir;
@@ -48,8 +54,13 @@ export const definition: Definition = {
       limits: {
         max_bytes: positive(wiring.config.max_bytes, 50 * MIB),
         max_path: positive(wiring.config.max_path, defaultMaxPath()),
+        max_events: positive(wiring.config.max_events, DEFAULT_MAX_EVENTS),
       },
     };
+  },
+
+  start(wiring) {
+    setWarner((message, data) => wiring.channel.log("warn", message, data));
   },
 
   methods: {
@@ -89,6 +100,13 @@ export const definition: Definition = {
       );
     },
 
+    events(params) {
+      return serially(keyOf(params), () => {
+        const found = load(settings.root, params?.id, params?.cwd, settings.limits);
+        return { events: found.events, todos: viewOf(found.events) };
+      });
+    },
+
     save_todos(params) {
       return serially(keyOf(params), () =>
         appendTodos(
@@ -109,7 +127,7 @@ export const definition: Definition = {
   async selfCheck() {
     const problems: string[] = [];
     const root = mkdtempSync(join(tmpdir(), "session-check-"));
-    const limits: Limits = { max_bytes: 4096, max_path: defaultMaxPath() };
+    const limits: Limits = { max_bytes: 4096, max_path: defaultMaxPath(), max_events: DEFAULT_MAX_EVENTS };
     try {
       const cases: Array<[string, string]> = [
         ["", "default"],
@@ -226,7 +244,7 @@ export const definition: Definition = {
 
       const folder = join(root, encodeDir("E:\\proj"));
       const planPath = join(folder, "old.json");
-      for (const version of [1, 2]) {
+      for (const version of [1, 2, 3]) {
         writeFileSync(
           planPath,
           JSON.stringify({
@@ -257,6 +275,67 @@ export const definition: Definition = {
         }
       }
 
+      const note = {
+        role: "user",
+        name: "skill-catalog",
+        content: "<available_skills>",
+        source: { kind: "skill-catalog", entries: [{ name: "code-review", description: "about it" }] },
+      };
+      save(root, { id: "note", cwd: "E:\\proj", title: "note", messages: [note] }, limits);
+      const reread = load(root, "note", "E:\\proj", limits);
+      if (messageSource(reread.messages[0]?.source)?.entries[0]?.name !== "code-review") {
+        problems.push(`a catalog note came back as ${JSON.stringify(reread.messages[0]?.source)}`);
+      }
+      if (reread.schema_version !== SCHEMA_VERSION) problems.push("a catalog note wrote the wrong schema");
+      save(
+        root,
+        {
+          id: "note",
+          cwd: "E:\\proj",
+          title: "note",
+          messages: [
+            {
+              ...note,
+              source: { kind: "skill-catalog", update: true, entries: [{ name: "code-review", description: "changed" }] },
+            },
+          ],
+        },
+        limits,
+      );
+      const noted = load(root, "note", "E:\\proj", limits);
+      if (noted.messages[0]?.source?.update !== true) problems.push("the update flag was lost");
+      if (messageSource({ kind: "other", entries: [] }) !== null) problems.push("messageSource accepted a foreign kind");
+      if (messageSource({ kind: "skill-catalog", entries: [{ name: 1, description: "x" }] }) !== null) {
+        problems.push("messageSource accepted a malformed entry");
+      }
+      if (messageSource({ kind: "skill-catalog", update: "yes", entries: [] }) !== null) {
+        problems.push("messageSource accepted a malformed update flag");
+      }
+      try {
+        save(root, { id: "torn", cwd: "E:\\proj", messages: [{ role: "user", source: { kind: "nope" } }] }, limits);
+        problems.push("save accepted a source this build does not know");
+      } catch (error) {
+        if ((error as { code?: number }).code !== -32602) {
+          problems.push("save refused an unreadable source with the wrong code");
+        }
+      }
+      writeFileSync(
+        join(root, encodeDir("E:\\proj"), "torn.json"),
+        JSON.stringify({
+          schema_version: 3,
+          id: "torn",
+          cwd: "E:\\proj",
+          title: "torn",
+          created_at: "2025-01-01T00:00:00.000Z",
+          updated_at: "2025-01-01T00:00:00.000Z",
+          messages: [{ role: "user", content: "hi", source: { kind: "nope" } }, { role: "user", content: "kept" }],
+          dangling: false,
+        }),
+      );
+      const torn = load(root, "torn", "E:\\proj", limits);
+      if (torn.messages.length !== 2) problems.push(`a torn note lost a message: ${torn.messages.length}`);
+      if (torn.messages[0]?.source !== undefined) problems.push("a torn note kept a source this build cannot read");
+
       const parent = { id: "abc-parent", cwd: "E:\\proj", call_id: "call_2", type: "explore", description: "find it" };
       save(root, { id: "child-a", cwd: "E:\\proj", title: "find it", messages, parent }, limits);
       save(root, { id: "child-b", cwd: "E:\\proj", title: "fix it", messages, parent }, limits);
@@ -268,11 +347,13 @@ export const definition: Definition = {
       if (kids[0]?.parent?.call_id !== "call_2" || kids[0]?.parent?.type !== "explore") {
         problems.push(`a child lost its link: ${JSON.stringify(kids[0]?.parent)}`);
       }
-      const visible = list(root).map((entry) => entry.id);
-      if (visible.includes("child-a") || visible.includes("child-b")) {
-        problems.push(`list showed a child session: ${visible.join(",")}`);
+      const visible = list(root);
+      const visibleIds = visible.map((entry) => entry.id);
+      if (!visibleIds.includes("abc-parent")) problems.push(`list hid the parent: ${visibleIds.join(",")}`);
+      const listedChild = visible.find((entry) => entry.id === "child-a");
+      if (listedChild?.parent?.id !== "abc-parent") {
+        problems.push(`a listed child lost its link: ${JSON.stringify(listedChild?.parent)}`);
       }
-      if (!visible.includes("abc-parent")) problems.push(`list hid the parent: ${visible.join(",")}`);
       if (childrenOf(root, "child-b", "E:\\proj").length !== 0) {
         problems.push("a child reported children of its own");
       }
@@ -311,6 +392,65 @@ export const definition: Definition = {
       if (existsSync(join(root, encodeDir("E:\\proj"), "bad.json"))) {
         problems.push("a refused plan was written anyway");
       }
+
+      // A lock left behind by a process that is gone is taken over rather than
+      // waited on, and the write that took it over cleans up after itself.
+      const stranded = join(root, encodeDir("E:\\proj"), "abc.json.lock");
+      writeFileSync(stranded, "999999\n" + Date.now());
+      save(root, { id: "abc", cwd: "E:\\proj", messages }, limits);
+      if (existsSync(stranded)) problems.push("a write left its lock file behind");
+
+      const events: SessionEvent[] = Array.from({ length: 8 }, (_unused, index) => ({
+        kind: "todos.write",
+        at: new Date(Date.UTC(2025, 0, 1, 0, 0, index)).toISOString(),
+        todos: [{ content: `step ${index}`, status: "pending" }],
+      }));
+      const tight: Limits = { ...limits, max_events: 5 };
+      const foldedFile = write(
+        root,
+        "folded",
+        "E:\\proj",
+        { ...load(root, "folded", "E:\\proj", tight), events },
+        tight,
+      );
+      if (foldedFile.events.length !== 5) problems.push(`folding kept ${foldedFile.events.length} events`);
+      if (foldedFile.events[0]?.kind !== "todos.snapshot") problems.push("folding did not leave a snapshot first");
+      const projected = viewOf(foldedFile.events);
+      if (projected.todos[0]?.content !== "step 7") {
+        problems.push(`folding lost the last plan: ${JSON.stringify(projected.todos)}`);
+      }
+      if (load(root, "folded", "E:\\proj", tight).events.length !== 5) {
+        problems.push("the folded document did not keep the folded event list");
+      }
+
+      // The listing rides an index the writers keep current, and a document
+      // written past that index, or under a directory of its own, is still
+      // found because a missing index is rebuilt from the documents.
+      const indexFile = join(root, "index.json");
+      if (!existsSync(indexFile)) problems.push("no index was written");
+      const indexed = JSON.parse(readFileSync(indexFile, "utf8")) as { sessions: Array<{ id: string }> };
+      if (!indexed.sessions.some((entry) => entry.id === "abc")) problems.push("the index lost a session it wrote");
+      mkdirSync(join(root, "nested"), { recursive: true });
+      writeFileSync(
+        join(root, "nested", "deep.json"),
+        readFileSync(join(root, encodeDir("E:\\proj"), "abc.json"), "utf8").replace('"id":"abc"', '"id":"deep"'),
+      );
+      rmSync(indexFile);
+      const rebuilt = list(root).map((entry) => entry.id);
+      if (!rebuilt.includes("abc")) problems.push(`a rebuilt index lost abc: ${rebuilt.join(",")}`);
+      if (!rebuilt.includes("deep")) problems.push(`a rebuilt index missed a nested document: ${rebuilt.join(",")}`);
+      if (!existsSync(indexFile)) problems.push("a rebuilt index was not written back");
+
+      const ruined = join(root, encodeDir("E:\\proj"), "ruined.json");
+      writeFileSync(ruined, "{ not json");
+      if (load(root, "ruined", "E:\\proj", limits).messages.length !== 0) {
+        problems.push("a corrupt document did not read as an empty session");
+      }
+      if (existsSync(ruined)) problems.push("a corrupt document was left where the next save would overwrite it");
+      const aside = readdirSync(join(root, encodeDir("E:\\proj"))).filter((name) =>
+        name.startsWith("ruined.json.bad-"),
+      );
+      if (aside.length !== 1) problems.push(`a corrupt document was not set aside: ${aside.join(",")}`);
 
       await Promise.all(
         [1, 2, 3, 4].map((n) =>

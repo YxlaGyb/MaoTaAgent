@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -108,6 +107,8 @@ const outcome = await runLoop(deps, messages, signal, emit);
 
 `agent-core` 里的 `selfCheck` 用脚本化的接缝驱动这个模块。仓库在它旁边还留了一份测试 [`tests/loop.smoke.ts`](tests/loop.smoke.ts)，覆盖正常结束、一次两个调用的工具轮、抛错的工具、预算用尽、第一步之前就中止、工具轮中途中止、畸形的助手消息、分批与批次上限、不安全调用把一轮切开、结果乱序到达、被拒绝的调用既不被分类也不被派发却仍留下一条 `{ error }` 结果、注入文本落在对应结果之后、halt 以 `stopped` 收尾、steer 只续跑一次、被取消的运行和到达步数上限的运行都不会走到 stop 接缝，以及缺 `classify`、缺某条生命周期接缝或它们抛错。它不需要内核，也不联网，`pnpm loop:smoke` 可以单独跑它。
 
+三条边界值得直说，其中两条在上文已经可见。批量只合并相邻的调用，所以一个不安全调用就会切断一轮；模型还在流式输出时不开工，因为一轮要等助手消息结束。循环自己不落盘、不读配置：保存回合与每一项设置都属于驱动它的插件。它自己没有重试也没有压缩，因为给被拒的模型调用分类并重试属于 `@maota/api`，把旧消息折叠起来属于 `@maota/agent-core`。`steps` 计的是已经开始的调用，所以在一个 step 内部被中止的 run 把这一步报为它的计数。
+
 -----
 
 <a id="further-exploration"></a>
@@ -116,15 +117,3 @@ const outcome = await runLoop(deps, messages, signal, emit);
 - [agent-core](../agent-core/README.zh.md)：提供模型接缝与工具接缝的插件。
 - [agent 包](../README.zh.md)：插件与这个引擎怎么分工。
 - [packages 包组](../../README.zh.md)：这个模块所属的插件树。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **分批只看连续段**：一个不安全的调用会把这一轮切开，所以它两侧的安全调用永远不会同批。
-- **模型还在流式输出时什么都不启动**：一轮会等助手消息先结束。
-- **没有失败分类，也没有重试**：模型调用被拒是调用方的事，循环自己从不重来一次。
-- **没有上下文压缩**：消息数组一直长下去，直到调用方不再传回来。
-- **循环什么都不持久化**：保存一轮属于插件，每一个配置值也一样。
-- **`steps` 统计已发起的调用**：在某一轮中途被中止的运行，报出的就是这个序号。

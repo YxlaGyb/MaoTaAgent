@@ -1,14 +1,29 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError, runPlugin, type Call, type Definition, type ToolPolicy } from "@maota/plugin-kit";
+import {
+  CallError,
+  isPluginEntry,
+  packageVersion,
+  runPlugin,
+  type Call,
+  type Channel,
+  type Definition,
+  type Route,
+  type ToolPolicy,
+} from "@maota/plugin-kit";
 
 import { discover, sorted, type ToolRoute } from "./registry.ts";
 
-const DEFAULTS = { max_result_chars: 20000, preview_chars: 2000 };
+const DEFAULTS = {
+  max_result_chars: 20000,
+  preview_chars: 2000,
+  spill_max_age_ms: 24 * 60 * 60 * 1000,
+  spill_max_bytes: 64 * 1024 * 1024,
+};
 
 function defaultSpillDir(): string {
   const home = process.env.MAOTA_HOME;
@@ -17,6 +32,7 @@ function defaultSpillDir(): string {
 
 let settings = { ...DEFAULTS, spill_dir: defaultSpillDir() };
 let tools = new Map<string, ToolRoute>();
+let watch: { channel: Channel; id: string } | undefined;
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -30,13 +46,56 @@ function render(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value ?? null);
 }
 
+/// Spilled results are how a large answer reaches the model, and a directory of
+/// them grows without bound unless it is swept: anything past `spill_max_age_ms`
+/// goes, and what remains is trimmed oldest first until it fits `spill_max_bytes`.
+function sweepSpill(): void {
+  let names: string[];
+  try {
+    names = readdirSync(settings.spill_dir);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - settings.spill_max_age_ms;
+  const kept: Array<{ path: string; at: number; size: number }> = [];
+  for (const name of names) {
+    const path = join(settings.spill_dir, name);
+    try {
+      const info = statSync(path);
+      if (!info.isFile()) continue;
+      if (info.mtimeMs < cutoff) {
+        rmSync(path, { force: true });
+        continue;
+      }
+      kept.push({ path, at: info.mtimeMs, size: info.size });
+    } catch {
+    }
+  }
+  let total = kept.reduce((sum, file) => sum + file.size, 0);
+  kept.sort((left, right) => left.at - right.at);
+  for (const file of kept) {
+    if (total <= settings.spill_max_bytes) break;
+    rmSync(file.path, { force: true });
+    total -= file.size;
+  }
+}
+
 function budgetOf(policy: ToolPolicy | null): number | null {
   const declared = policy?.max_result_chars;
   return declared === undefined ? settings.max_result_chars : declared;
 }
 
+/// The pool, rebuilt from whichever table is current. Nothing here caches a
+/// policy, so a tool that changed its mind about concurrency or its budget is
+/// believed on the next call rather than on the next list.
+function adopt(capabilities: Record<string, Route>, channel: Channel): void {
+  tools = discover(capabilities);
+  channel.log("info", `tools: ${[...tools.keys()].join(", ") || "(none)"}`, { count: tools.size });
+}
+
 function spill(text: string, budget: number): { spilled: true; path: string; chars: number; preview: string } {
   mkdirSync(settings.spill_dir, { recursive: true, mode: 0o700 });
+  sweepSpill();
   const path = join(settings.spill_dir, `${randomUUID()}.txt`);
   writeFileSync(path, text, { flag: "wx", mode: 0o600 });
   return {
@@ -57,9 +116,11 @@ async function policyOf(tool: ToolRoute, ctx: Call): Promise<ToolPolicy | null> 
   }
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "tools", version: "1.1.0" }],
-  configKeys: ["max_result_chars", "preview_chars", "spill_dir"],
+  provides: [{ capability: "tools", version: VERSION }],
+  configKeys: ["max_result_chars", "preview_chars", "spill_dir", "spill_max_age_ms", "spill_max_bytes"],
 
   setup(wiring) {
     settings = {
@@ -69,12 +130,35 @@ export const definition: Definition = {
         typeof wiring.config.spill_dir === "string" && wiring.config.spill_dir.trim() !== ""
           ? wiring.config.spill_dir
           : defaultSpillDir(),
+      spill_max_age_ms: positive(wiring.config.spill_max_age_ms, DEFAULTS.spill_max_age_ms),
+      spill_max_bytes: positive(wiring.config.spill_max_bytes, DEFAULTS.spill_max_bytes),
     };
   },
 
   start(wiring) {
-    tools = discover(wiring.capabilities);
-    wiring.channel.log("info", `tools: ${[...tools.keys()].join(", ") || "(none)"}`, { count: tools.size });
+    adopt(wiring.capabilities, wiring.channel);
+    // A tool plugin may be mounted, restarted or dropped after start, and the
+    // table handed over at start is only a snapshot, so the pool follows the
+    // kernel's own announcements rather than the one it was born with.
+    void wiring.channel
+      .subscribe(["kernel.capabilities.changed"], (_topic, _seq, payload) => {
+        const table = (payload as { capabilities?: Record<string, Route> } | null)?.capabilities;
+        if (table === undefined || table === null) return;
+        adopt(table, wiring.channel);
+      })
+      .then((id) => {
+        watch = { channel: wiring.channel, id };
+      })
+      .catch((error) => {
+        wiring.channel.log("warn", "tools could not watch the capability table", { error: message(error) });
+      });
+  },
+
+  close() {
+    const found = watch;
+    watch = undefined;
+    if (found === undefined) return;
+    void found.channel.unsubscribe(found.id).catch(() => undefined);
   },
 
   methods: {
@@ -83,7 +167,6 @@ export const definition: Definition = {
       for (const tool of sorted(tools)) {
         try {
           const spec = await ctx.channel.call(tool.capability, "describe", {}, { signal: ctx.signal });
-          tool.policy = await policyOf(tool, ctx);
           listed.push({ ...(spec as Record<string, unknown>), capability: tool.capability });
         } catch (error) {
           ctx.channel.log("warn", `tool ${tool.name} describe failed`, { error: message(error) });
@@ -97,7 +180,7 @@ export const definition: Definition = {
       const tool = tools.get(name);
       if (!tool) throw new CallError(-32602, `no such tool: ${name}`);
       const result = await ctx.channel.call(tool.capability, "run", params?.args ?? {}, { signal: ctx.signal });
-      const budget = budgetOf(tool.policy);
+      const budget = budgetOf(await policyOf(tool, ctx));
       if (budget === null) return result;
       const text = render(result);
       return text.length <= budget ? result : spill(text, budget);
@@ -107,7 +190,7 @@ export const definition: Definition = {
       const name = String(params?.name ?? "");
       const tool = tools.get(name);
       if (!tool) throw new CallError(-32602, `no such tool: ${name}`);
-      const policy = tool.policy;
+      const policy = await policyOf(tool, ctx);
       if (policy === null) return { safe: false };
       if (policy.concurrency === "always") return { safe: true };
       if (policy.concurrency === "never") return { safe: false };
@@ -141,9 +224,35 @@ export const definition: Definition = {
     if (render("x") !== "x" || render({ a: 1 }) !== '{"a":1}' || render(undefined) !== "null") {
       problems.push("render drifted");
     }
+
+    const pool = tools;
+    const logging = { log: (): void => {} } as unknown as Channel;
+    adopt({ "tool.pwsh": { plugin: "pwsh-local", version: "1.0.0" } }, logging);
+    if (tools.size !== 1 || !tools.has("pwsh")) problems.push("adopt did not rebuild the pool");
+    adopt({}, logging);
+    if (tools.size !== 0) problems.push("adopt kept a tool the table had dropped");
+    tools = pool;
+
     const dir = settings.spill_dir;
+    const previous = { age: settings.spill_max_age_ms, bytes: settings.spill_max_bytes };
     settings.spill_dir = join(tmpdir(), `maota-spill-${randomUUID()}`);
+    settings.spill_max_age_ms = 60_000;
+    settings.spill_max_bytes = 1024;
     try {
+      mkdirSync(settings.spill_dir, { recursive: true, mode: 0o700 });
+      const fresh = join(settings.spill_dir, "fresh.txt");
+      const stale = join(settings.spill_dir, "stale.txt");
+      writeFileSync(fresh, "x".repeat(30), { mode: 0o600 });
+      writeFileSync(stale, "y".repeat(30), { mode: 0o600 });
+      const past = new Date(Date.now() - 120_000);
+      utimesSync(stale, past, past);
+      sweepSpill();
+      if (existsSync(stale)) problems.push("the sweep kept a result past its age");
+      if (!existsSync(fresh)) problems.push("the sweep dropped a result inside its age");
+      settings.spill_max_bytes = 10;
+      sweepSpill();
+      if (existsSync(fresh)) problems.push("the sweep did not trim down to the byte cap");
+
       const spilled = spill("x".repeat(100), 10);
       if (spilled.chars !== 100) problems.push("spill lost the char count");
       if (spilled.preview.length !== 10) problems.push(`spill previewed ${spilled.preview.length} chars`);
@@ -152,9 +261,13 @@ export const definition: Definition = {
     } finally {
       rmSync(settings.spill_dir, { recursive: true, force: true });
       settings.spill_dir = dir;
+      settings.spill_max_age_ms = previous.age;
+      settings.spill_max_bytes = previous.bytes;
     }
     return problems;
   },
 };
 
-runPlugin(definition);
+/// This package is spawned as the dispatcher and imported by nothing else, but
+/// a check that imports it to exercise a method must not start a server.
+if (isPluginEntry(import.meta.url)) runPlugin(definition);

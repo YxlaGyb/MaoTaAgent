@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -61,6 +60,8 @@ const status = parseExitStatus(result);
 
 只返回输出的 provider 会丢掉四种情况之间的差别：命令成功、失败、被杀，以及根本没跑完。把 `exit_code`、`signal` 与 `timed_out` 分开，工具才能把这四种如实报出来；把 `truncated` 分开，读的人才能分得清“没有更多输出”与“没有更多位置”。
 
+四条事实界定了这个接口。结果在结束时一次性到达，所以一条长时间运行的命令在结束前什么都不显示。请求不带环境，provider 自己决定这件事。调用方写一行命令，而不是一个程序加参数。`signal` 是名字而不是数字，因为平台报告什么就按文本传出去。
+
 -----
 
 <a id="further-exploration"></a>
@@ -69,13 +70,3 @@ const status = parseExitStatus(result);
 - [pwsh-local](../pwsh-local/README.zh.md)：今天答这个能力的 provider。
 - [tool-pwsh](../tool-pwsh/README.zh.md)：把结果渲染给模型的那个工具。
 - [shell 组](../README.zh.md)：三个包怎么分工。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **没有流式**：结果在结束时一次到位，所以长命令在跑完之前什么都看不到。
-- **环境不是值**：请求里不带环境，由 provider 自己决定。
-- **只有一条命令行，没有 argv**：调用方写的是 shell 命令串，而不是程序加参数。
-- **`signal` 是名字而不是数字**：平台报什么就原样传成文本。

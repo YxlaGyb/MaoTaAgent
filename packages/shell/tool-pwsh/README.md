@@ -16,7 +16,6 @@ One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a comman
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -87,6 +86,8 @@ The wait is wider than a normal capability call on purpose. `approval_timeout_ms
 
 The model is not offered a working-directory parameter, so it cannot move a command out of the session's directory, and it is not offered a session, a call id or a subagent label either, so it cannot claim to be another session, to be answering a question it was not asked, or to be a subagent it is not. All four are declared with a `host` source, which keeps them out of the published schema and makes them required at run time; `agent-core` fills them from the session and the call before forwarding. A call that arrives without one is a `-32602` naming the missing argument, and the one exception is the subagent label, which is simply absent for a call the session itself made.
 
+Four facts bound these tools. There are no sandbox parameters, so a command that needs more room has nowhere to ask. Only three shapes are flagged, `rm `, `> /etc/` and `chmod 777`, and a destructive command carrying none of them runs without a question. Nothing is offered about the environment, so the model cannot set a variable for the process it starts. And `timeout_ms` is the model's to choose, bounded only by the provider's own ceiling rather than by its default.
+
 -----
 
 <a id="further-exploration"></a>
@@ -96,13 +97,3 @@ The model is not offered a working-directory parameter, so it cannot move a comm
 - [shell](../shell/README.md): the request, result and status types shared with the provider.
 - [tools](../../agent/tools/README.md): the dispatcher that lists this tool.
 - [shell group](../README.md): how the three packages divide the work.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **No sandbox parameters**: there is no upgrade path and no justification argument, so a command that needs more room has nowhere to ask.
-- **Only three shapes are flagged**: a destructive command that contains none of `rm `, `> /etc/` and `chmod 777` runs without a question, because nothing here classifies a command.
-- **Nothing is offered about the environment**: the model cannot set a variable for the process it starts.
-- **`timeout_ms` is the model's to choose**: a call may ask for a longer wait than the provider's default, and only the provider's own ceiling bounds it.

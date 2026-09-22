@@ -1,4 +1,5 @@
-import { writeSync } from "node:fs";
+import { readFileSync, realpathSync, writeSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { Channel, CallError, type Route } from "./channel.ts";
 
@@ -213,6 +214,40 @@ export function runPlugin(definition: Definition, argv: readonly string[] = proc
     return;
   }
   serve(definition);
+}
+
+/// A package that is spawned as a plugin and imported by its siblings as a
+/// library cannot serve on an import: `runPlugin` runs at module scope, so an
+/// import would open a second server on the same stdin and one plugin would
+/// answer twice. A module that can be imported asks this first, and only the
+/// file the process was started with is the plugin; both sides are resolved so
+/// a package reached through a linked `node_modules` still matches.
+export function isPluginEntry(moduleUrl: string, started: string | undefined = process.argv[1]): boolean {
+  if (started === undefined || started === "") return false;
+  const here = real(moduleUrl);
+  const main = real(started);
+  return here !== null && main !== null && here === main;
+}
+
+function real(path: string): string | null {
+  try {
+    return realpathSync(path.includes("://") ? fileURLToPath(path) : path);
+  } catch {
+    return null;
+  }
+}
+
+/// A plugin's version is the version of the package it ships as, read from the
+/// manifest beside it: one release is numbered in one place, and a definition
+/// that typed its own would drift the first time the package was bumped
+/// without the source following.
+export function packageVersion(moduleUrl: string): string {
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", moduleUrl), "utf8")) as { version?: unknown };
+  const version = manifest.version;
+  if (typeof version !== "string" || version.trim() === "") {
+    throw new Error(`no version in the package.json beside ${moduleUrl}`);
+  }
+  return version;
 }
 
 async function check(definition: Definition): Promise<void> {

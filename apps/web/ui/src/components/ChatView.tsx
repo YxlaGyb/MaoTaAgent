@@ -4,7 +4,6 @@ import type { AppInfo, Approval, SessionMessage, SessionSummary } from "../lib/r
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
 import { Icon, ICON } from "./Icon.tsx";
-import { KeyPrompt } from "./KeyPrompt.tsx";
 import { MessageList, type LiveTurn } from "./MessageList.tsx";
 
 export function ChatView({
@@ -16,13 +15,11 @@ export function ChatView({
   pending,
   live,
   failure,
-  hasKey,
   thinking,
   permission,
   approvals,
   spawned,
   onRetry,
-  onKeySaved,
   onThinking,
   onPermission,
   onAnswer,
@@ -57,6 +54,7 @@ export function ChatView({
   const composer = (
     <Composer
       info={info}
+      cwd={session?.cwd ?? ""}
       thinking={thinking}
       permission={permission}
       permissionDisabled={permissionDisabled}
@@ -86,13 +84,6 @@ export function ChatView({
           </MaoButton>
         </div>
       )}
-
-      {hasKey === false ? (
-        <div className="banner banner-key">
-          <span>{t("keyMissing")}</span>
-          <KeyPrompt onSaved={onKeySaved} />
-        </div>
-      ) : null}
 
       {idle ? (
         <div className="chat-hello">

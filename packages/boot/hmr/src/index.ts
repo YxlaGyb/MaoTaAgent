@@ -1,7 +1,7 @@
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import { resolve } from "node:path";
 
-import { runPlugin, type Channel, type Definition } from "@maota/plugin-kit";
+import { packageVersion, runPlugin, type Channel, type Definition } from "@maota/plugin-kit";
 
 const DEFAULT_ROOTS = ["apps", "packages"];
 const IGNORED = new Set(["node_modules", ".git", "dist", "target"]);
@@ -35,8 +35,10 @@ function flush(): void {
   }
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "dev.hmr", version: "0.1.0" }],
+  provides: [{ capability: "dev.hmr", version: VERSION }],
   configKeys: ["roots"],
 
   setup(wiring) {

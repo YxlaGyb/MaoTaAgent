@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   defineTools,
+  packageVersion,
   runPlugin,
   type Call,
   type Definition,
@@ -28,10 +29,12 @@ function positive(value: unknown, fallback: number): number {
 
 const limitsOf = (): PlanLimits => ({ max_items: settings.max_items, max_content_chars: settings.max_content_chars });
 
+const VERSION = packageVersion(import.meta.url);
+
 const toolkit = defineTools([
   {
     capability: "tool.todo_write",
-    version: "1.0.0",
+    version: VERSION,
     description:
       "Create and manage the task list for this session. Call it with the whole list, in order, every time: the " +
       "list replaces the one before it, so write the full plan back rather than describing a change. Keep the steps " +

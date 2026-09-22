@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { defineTools, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import type { ShellRunResult } from "@maota/shell";
 
 import {
@@ -39,10 +39,12 @@ async function modeOf(call: Call, sessionId: string, cwd: string): Promise<strin
   }
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 const toolkit = defineTools([
   {
     capability: "tool.pwsh",
-    version: "1.1.0",
+    version: VERSION,
     description:
       "Run a PowerShell command in the working directory and return its exit code, stdout and stderr. " +
       "A command the permission gate treats as destructive needs approval before it runs.",

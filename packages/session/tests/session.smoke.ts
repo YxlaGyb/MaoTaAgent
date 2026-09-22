@@ -4,12 +4,21 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError } from "@maota/plugin-kit";
+import { CallError, packageVersion } from "@maota/plugin-kit";
 
-import { SCHEMA_VERSION, childrenOf, encodeDir, list, load, save, type Limits } from "../src/store.ts";
+import {
+  DEFAULT_MAX_EVENTS,
+  SCHEMA_VERSION,
+  childrenOf,
+  encodeDir,
+  list,
+  load,
+  save,
+  type Limits,
+} from "../src/store.ts";
 
 const root = mkdtempSync(join(tmpdir(), "maota-session-smoke-"));
-const limits: Limits = { max_bytes: 4096, max_path: 250 };
+const limits: Limits = { max_bytes: 4096, max_path: 250, max_events: DEFAULT_MAX_EVENTS };
 const messages = [
   { role: "user", content: "hi" },
   { role: "assistant", content: "there" },
@@ -30,10 +39,16 @@ try {
   assert.equal(read.title, "look at it", "a child keeps its own title");
   assert.equal(load(root, "parent", "E:\\proj", limits).parent, null, "a session nobody spawned has no link");
 
+  const listed = list(root);
   assert.deepEqual(
-    list(root).map((entry) => entry.id),
-    ["parent"],
-    "the sidebar should only list sessions nobody spawned",
+    listed.map((entry) => entry.id).sort(),
+    ["child-a", "child-b", "parent"],
+    "the listing should carry every session, the ones a subagent opened included",
+  );
+  assert.equal(
+    listed.find((entry) => entry.id === "child-a")?.parent?.id,
+    "parent",
+    "a listed child should carry the link back to the session that spawned it",
   );
   assert.deepEqual(
     childrenOf(root, "parent", "E:\\proj").map((entry) => entry.id),
@@ -85,6 +100,6 @@ const report = JSON.parse(line) as {
 };
 assert.equal(run.status, 0, `the session entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the session selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "session", version: "1.2.0" }]);
+assert.deepEqual(report.provides, [{ capability: "session", version: packageVersion(import.meta.url) }]);
 
-console.log("session ok: the parent link, the hidden children, their order, the version 2 migration, the entry report");
+console.log("session ok: the parent link, the listed children, their order, the version 2 migration, the entry report");

@@ -4,6 +4,7 @@ import { MaoButton, MaoTextArea } from "maotaui";
 import { useT } from "../lib/i18n.ts";
 import type { AppInfo } from "../lib/rpc.ts";
 import { PermissionPicker } from "./PermissionPicker.tsx";
+import { SkillPicker } from "./SkillPicker.tsx";
 import { ThinkingPicker } from "./ThinkingPicker.tsx";
 
 function SendIcon() {
@@ -34,6 +35,7 @@ function StopIcon() {
 
 export function Composer({
   info,
+  cwd,
   thinking,
   permission,
   permissionDisabled,
@@ -45,6 +47,7 @@ export function Composer({
   onCancel,
 }: {
   info: AppInfo | null;
+  cwd: string;
   thinking: string;
   permission: string;
   permissionDisabled: boolean;
@@ -62,6 +65,15 @@ export function Composer({
     if (running || blocked || text.trim() === "") return;
     onSend(text);
     setText("");
+  };
+
+  /// A reference rather than the instructions, so the sentence stays readable
+  /// and the model still does the loading.
+  const reference = (name: string): void => {
+    setText((was) => {
+      const line = `Use the "${name}" skill.`;
+      return was.trim() === "" ? line : `${was.replace(/\s+$/, "")}\n${line}`;
+    });
   };
 
   return (
@@ -87,6 +99,7 @@ export function Composer({
           note={info?.capabilities?.permission === undefined ? t("permissionOff") : undefined}
           onChange={onPermission}
         />
+        <SkillPicker cwd={cwd} disabled={blocked || info?.capabilities?.skill === undefined} onPick={reference} />
         <ThinkingPicker info={info} value={thinking} disabled={blocked} onChange={onThinking} />
         {running ? (
           <MaoButton className="composer-send" aria-label={t("stop")} onClick={onCancel}>

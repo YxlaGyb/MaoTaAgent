@@ -1,16 +1,46 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { CallError } from "@maota/plugin-kit";
+import { CallError, patternToRegExp } from "@maota/plugin-kit";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const MODES = ["ask", "auto", "full"] as const;
+export const ACTIONS = ["allow", "deny", "ask"] as const;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
 /// What an operation that the guard stops is put through: ask the user, approve
 /// it without asking, or stop raising the question at all.
 export type Mode = (typeof MODES)[number];
+
+/// What a rule says about a tool whose name it matches. `ask` is the one action
+/// that survives every mode: a rule that wants a person asked wins over `auto`.
+export type RuleAction = (typeof ACTIONS)[number];
+
+export interface Rule {
+  match: string;
+  action: RuleAction;
+}
+
+/// Rules are configuration, so a malformed one is refused where the profile that
+/// wrote it can see why rather than quietly becoming no rule at all.
+export function readRules(value: unknown): Rule[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new CallError(-32602, "rules must be a list of { match, action }");
+  return value.map((raw) => {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new CallError(-32602, "each rule must be an object with a match and an action");
+    }
+    const input = raw as Record<string, unknown>;
+    if (typeof input.match !== "string" || input.match.trim() === "") {
+      throw new CallError(-32602, "each rule needs a non-empty match");
+    }
+    if (typeof input.action !== "string" || !(ACTIONS as readonly string[]).includes(input.action)) {
+      throw new CallError(-32602, `a rule action must be one of ${ACTIONS.join(", ")}, got ${JSON.stringify(input.action)}`);
+    }
+    return { match: input.match, action: input.action as RuleAction };
+  });
+}
 
 /// `allowed-once` is the only grant; a caller treats the other three as a refusal.
 export type Outcome = "allowed-once" | "rejected" | "cancelled" | "unavailable";
@@ -52,13 +82,24 @@ export interface DecidedRecord {
   subagent?: SubagentRef;
 }
 
-export type AuditRecord = PolicyRecord | AskedRecord | DecidedRecord;
+/// A grant is why a tool stopped being asked about, and a withdrawal is why it
+/// started being asked again: both belong in the trail, not only in the state.
+export interface GrantRecord {
+  kind: "grant";
+  at: string;
+  tool: string;
+  caller: string;
+  revoked?: true;
+}
+
+export type AuditRecord = PolicyRecord | AskedRecord | DecidedRecord | GrantRecord;
 
 export interface PermissionFile {
   schema_version: number;
   session_id: string;
   cwd: string;
   mode: Mode | null;
+  grants: string[];
   records: AuditRecord[];
 }
 
@@ -125,9 +166,24 @@ export function effectiveMode(file: PermissionFile, fallback: Mode): Mode {
   return file.mode ?? fallback;
 }
 
-/// The decision table: the two policy answers, the fail-closed answer for a
-/// question with no answerer, and `ask` for the one case that needs a human.
-export function decide(mode: Mode, answerers: number): Verdict | "ask" {
+/// The decision table, strictest first: a rule that refuses, then a grant from a
+/// remembered answer, then a rule that allows or asks, then the mode. `ask` is
+/// the only answer that needs somebody, and with nobody listening it fails
+/// closed rather than open.
+export function decide(
+  mode: Mode,
+  answerers: number,
+  tool: string,
+  rules: readonly Rule[],
+  grants: readonly string[],
+): Verdict | "ask" {
+  const rule = rules.find((item) => new RegExp(patternToRegExp(item.match)).test(tool));
+  if (rule?.action === "deny") return { outcome: "rejected", decided_by: "policy:rule", cause: `rule ${rule.match}` };
+  if (grants.includes(tool)) return { outcome: "allowed-once", decided_by: "policy:remember" };
+  if (rule?.action === "allow") return { outcome: "allowed-once", decided_by: "policy:rule", cause: `rule ${rule.match}` };
+  if (rule?.action === "ask") {
+    return answerers === 0 ? { outcome: "unavailable", decided_by: "none", cause: "no-answerer" } : "ask";
+  }
   if (mode === "full") return { outcome: "allowed-once", decided_by: "policy:full" };
   if (mode === "auto") return { outcome: "allowed-once", decided_by: "policy:auto" };
   if (answerers === 0) return { outcome: "unavailable", decided_by: "none", cause: "no-answerer" };
@@ -169,7 +225,7 @@ function trim(records: readonly AuditRecord[], maxRecords: number): AuditRecord[
 }
 
 function emptyFile(sessionId: string, cwd: string): PermissionFile {
-  return { schema_version: SCHEMA_VERSION, session_id: sessionId, cwd, mode: null, records: [] };
+  return { schema_version: SCHEMA_VERSION, session_id: sessionId, cwd, mode: null, grants: [], records: [] };
 }
 
 export function read(root: string, sessionId: string, cwd: string): PermissionFile {
@@ -182,7 +238,11 @@ export function read(root: string, sessionId: string, cwd: string): PermissionFi
   try {
     const parsed = JSON.parse(text) as PermissionFile;
     if (typeof parsed?.session_id !== "string" || !Array.isArray(parsed.records)) return emptyFile(sessionId, cwd);
-    return { ...parsed, mode: isMode(parsed.mode) ? parsed.mode : null };
+    return {
+      ...parsed,
+      mode: isMode(parsed.mode) ? parsed.mode : null,
+      grants: Array.isArray(parsed.grants) ? parsed.grants.filter((tool) => typeof tool === "string") : [],
+    };
   } catch {
     return emptyFile(sessionId, cwd);
   }

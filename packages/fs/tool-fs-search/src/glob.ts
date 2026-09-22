@@ -1,7 +1,7 @@
 import { displayPath, type Workspace } from "@maota/fs";
-import { CallError } from "@maota/plugin-kit";
+import { CallError, patternToRegExp } from "@maota/plugin-kit";
 
-import { patternToRegExp, searchBase, walkFiles, type WalkLimits } from "./walk.ts";
+import { searchBase, walkFiles, type WalkLimits } from "./walk.ts";
 
 export interface GlobLimits extends WalkLimits {
   max_glob_results: number;
@@ -12,6 +12,8 @@ export interface GlobResult {
   path: string;
   count: number;
   truncated: boolean;
+  incomplete: boolean;
+  skipped: number;
   files: string[];
 }
 
@@ -38,7 +40,9 @@ export function globFiles(args: Record<string, unknown>, space: Workspace, limit
     pattern,
     path: displayPath(space.root, base),
     count: files.length,
-    truncated: progress.capped || stopped,
+    truncated: stopped,
+    incomplete: progress.capped,
+    skipped: progress.skipped,
     files,
   };
 }

@@ -16,7 +16,6 @@ One capability, `tool.todo_write`, offered to the model as `todo_write`. The mod
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -94,6 +93,8 @@ The parameter language reaches two levels and no further: a tool declares its to
 
 `never` is the honest answer for a whole-list write: two calls for one session that ran side by side would leave the stored plan to whoever finished last. The dispatcher therefore runs this tool alone, and the session's own per-session lock protects the document from the plan write and the message write landing together.
 
+Five facts bound this tool. It writes one whole list at a time: there is no create, update or get per item, and no dependency graph between items. Several items may be in progress at once, which is what parallel work needs, and the description advises one without anything enforcing it. The nudge is advice, so a model that skips verification is not stopped and nothing re-reads the plan later. No event is published for a panel to follow along, so the plan is visible in the session document and in the tool results only. And the plan dies with the session, because there is no plan file and no cross-session list.
+
 -----
 
 <a id="further-exploration"></a>
@@ -103,14 +104,3 @@ The parameter language reaches two levels and no further: a tool declares its to
 - [session](../../session/README.md): the capability that keeps the plan, and the projection it answers with.
 - [tools](../../agent/tools/README.md): the dispatcher that lists this capability and injects the host arguments.
 - [Architecture](../../../docs/architecture.md): the component map and the launch path.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **One tool, one whole list**: there is no create, update or get per item, and no dependency graph between items. Both belong to the task system the wider ecosystem grew from this one, not to this version.
-- **`in_progress` is not counted**: several items may be in progress at once, which is what parallel work needs. The description advises one; nothing enforces it.
-- **The nudge is advice**: a model that skips verification is not stopped, and nothing re-reads the plan later.
-- **No front end**: the plan is in the session document and in the tool results, and no event is published for a panel to follow along.
-- **The plan dies with the session**: there is no plan file and no cross-session list, so deleting a session deletes its plan.

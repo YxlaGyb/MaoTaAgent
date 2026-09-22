@@ -2,6 +2,7 @@
 import {
   CallError,
   defineTools,
+  packageVersion,
   runPlugin,
   type Call,
   type Definition,
@@ -34,7 +35,7 @@ interface Settings {
 const DEFAULTS: Settings = {
   max_concurrent: 4,
   child_max_steps: 8,
-  child_tools_deny: [],
+  child_tools_deny: ["skill"],
   explore_tools: ["read", "glob", "grep"],
   general_system: DEFAULT_GENERAL_SYSTEM,
   explore_system: DEFAULT_EXPLORE_SYSTEM,
@@ -132,10 +133,12 @@ async function runChild(call: Call, run: ChildRun): Promise<{ text: unknown; rea
   return { text: done.text, reason };
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 const toolkit = defineTools([
   {
     capability: "tool.task",
-    version: "1.0.0",
+    version: VERSION,
     description:
       "Hand one self-contained piece of work to a subagent. It gets a fresh context of its own, works on the " +
       "task with its own tools, and answers with one final message; nothing else of what it did comes back, so " +
@@ -281,6 +284,17 @@ export const definition: Definition = {
     }
     const sneaky = childPlan("explore", { ...plan, explore_tools: ["task", "read"] });
     if (!sneaky.tools_deny.includes(TASK_TOOL)) problems.push("an explore list could re-enable the task tool");
+
+    // A subagent gets no skill tool by default, because loading a skill spends
+    // the context of a conversation nobody can steer; a deployment that wants
+    // the other behaviour configures an explicit deny list instead.
+    if (!DEFAULTS.child_tools_deny.includes("skill")) {
+      problems.push("the default deny list does not close the skill tool");
+    }
+    const closed = childPlan("general", { ...plan, child_tools_deny: DEFAULTS.child_tools_deny });
+    if (!closed.tools_deny.includes("skill")) problems.push("a subagent was offered the skill tool by default");
+    const reopened = childPlan("general", { ...plan, child_tools_deny: [] });
+    if (reopened.tools_deny.includes("skill")) problems.push("an explicit deny list could not reopen the skill tool");
 
     const id = childId();
     if (!/^sub-[0-9a-f]{12}$/.test(id)) problems.push(`a child id looks like ${JSON.stringify(id)}`);

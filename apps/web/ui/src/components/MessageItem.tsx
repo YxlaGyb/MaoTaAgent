@@ -3,6 +3,8 @@ import { marked } from "marked";
 import { Fragment, useMemo } from "react";
 
 import type { SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import { useT } from "../lib/i18n.ts";
+import { Icon, ICON } from "./Icon.tsx";
 import { SubagentLink } from "./SubagentCard.tsx";
 
 export function Markdown({ text }: { text: string }) {
@@ -48,6 +50,25 @@ export function MessageItem({
   message: SessionMessage;
   spawned?: Record<string, SessionSummary[]>;
 }) {
+  const t = useT();
+
+  /// The catalog is written by the harness, not by a person, so it is a folded
+  /// grey line rather than a message bubble: it is worth being able to read, and
+  /// not worth reading on every turn.
+  if (message.source?.kind === "skill-catalog") {
+    return (
+      <div className="msg-note">
+        <details className="note">
+          <summary className="note-summary">
+            <Icon d={ICON.plug} className="icon icon-sm" />
+            {message.source.update === true ? t("skillCatalogUpdated") : t("skillCatalog")}
+          </summary>
+          <pre className="note-body">{String(message.content ?? "")}</pre>
+        </details>
+      </div>
+    );
+  }
+
   if (message.role === "user") {
     return (
       <div className="msg msg-user">

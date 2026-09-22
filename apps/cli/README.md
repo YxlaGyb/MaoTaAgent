@@ -12,7 +12,6 @@ English | [中文](README.zh.md)
 - [Configuration resolution](#configuration-resolution)
 - [Dev hot reload](#dev-hot-reload)
 - [Development](#development)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -103,15 +102,4 @@ Run from source; there is no build step for this app:
 
 The first Ctrl-C asks the kernel to shut down with `ui_quit` and exits with the code the kernel returns; later Ctrl-C keystrokes are ignored while that shutdown is in flight. `check` deliberately bypasses `boot()` and uses the kernel's own checker with inherited stdio, so its diagnostics and exit code are the kernel's.
 
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-These limits say when this launcher needs care. They are current constraints, not a task backlog.
-
-- **Options never reach plugins**: every plugin setting lives in the profile's `eggshell.toml` or the `eggshell.local.toml` beside it.
-- **`serve` has no options of its own**: the web port comes from `[plugins.web.config]` only.
-- **A `serve` whose web plugin never listens waits forever**: there is no startup deadline.
-- **Sessions are addressed by `--session` only**: there is no subcommand for managing them.
-- **The import graph is read statically**: a module reached only through a computed specifier or a path alias is not in the graph, and editing it restarts nothing.
-- **Hot reload restarts whole plugin processes**: nothing inside a plugin survives a restart.
-- **All of it needs the `hmr` row enabled**: the generated one is disabled.
+Seven facts bound this launcher. Options never reach plugins, since every plugin setting lives in the profile's `eggshell.toml` or the `eggshell.local.toml` beside it, and `serve` has no options of its own because the web port comes from `[plugins.web.config]` alone. A `serve` whose web plugin never listens waits forever, because there is no startup deadline. Sessions are addressed by `--session` only. The import graph is read statically, so a module reached only through a computed specifier or a path alias is not in the graph and editing it restarts nothing. Hot reload restarts whole plugin processes, so nothing inside a plugin survives a restart. And all of it needs the `hmr` row enabled, while the generated one is disabled.

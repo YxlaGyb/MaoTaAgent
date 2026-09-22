@@ -16,7 +16,6 @@ This is the smallest package in the group and the one both halves agree on. It h
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -61,6 +60,8 @@ Timeout is checked before the exit code, because a killed process can still repo
 
 A provider that only returned output would lose the difference between a command that succeeded, one that failed, one that was killed, and one that never finished. Keeping `exit_code`, `signal` and `timed_out` apart lets the tool report all four honestly, and keeping `truncated` apart means a reader can tell "no more output" from "no more room".
 
+Four facts bound this interface. A result arrives once, at the end, so a long command shows nothing until it finishes. The request carries no environment, so a provider decides that on its own. The caller writes one command line rather than a program and its arguments. And `signal` is a name rather than a number, because whatever the platform reports is passed through as text.
+
 -----
 
 <a id="further-exploration"></a>
@@ -69,13 +70,3 @@ A provider that only returned output would lose the difference between a command
 - [pwsh-local](../pwsh-local/README.md): the provider that answers this capability today.
 - [tool-pwsh](../tool-pwsh/README.md): the tool that renders a result for the model.
 - [shell group](../README.md): how the three packages divide the work.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **No streaming**: a result arrives once, at the end, so a long command shows nothing until it finishes.
-- **No environment as a value**: the request carries no environment, so a provider decides that on its own.
-- **One command line, no argv**: the caller writes a shell command string, not a program and arguments.
-- **`signal` is a name, not a number**: whatever the platform reports is passed through as text.

@@ -1,5 +1,7 @@
 # Documentation Conventions
 
+English | [中文](CONVENTIONS.zh.md)
+
 ## Language pairs
 
 - A document kept in both languages is a three-file pair in one directory: English `x.md`, Chinese `x.zh.md`, and a record `x.i18n.yaml` holding the git blob hash of each side.
@@ -12,7 +14,8 @@
 
 - A package README uses the kind its position implies: `packages/<group>/README.md` is a `package-group` map that never restates a package contract, while `packages/<group>/<pkg>/README.md` is a `package-reference` that owns it.
 - YAML front matter carries `description` and `kind`.
-- Keep the shape the kind names: a Summary of at most 100 words, a table of contents with an anchor on every linked section, `Use this package` with a table for each input the contract accepts, `Understand the implementation`, `Further exploration` when there are sibling docs to point at, and `Known Limitations and Deferred Work`.
+- Keep the shape the kind names: a Summary of at most 100 words, a table of contents with an anchor on every linked section, `Use this package` with a table for each input the contract accepts, `Understand the implementation`, and `Further exploration` when there are sibling docs to point at.
+- There is no limitations section. What a reader must know about a boundary goes in `Use this package` or `Understand the implementation` as a plain statement of fact, and work that is genuinely not done does not go in a README at all: either do it, or write it as a `Dev Note` open question. Work that is deliberately left for later is listed in `docs/pending.md` instead, one entry per gap, each naming the file that would change.
 - A `Dev Note` section is optional and exists only for a real open question; when there is none, leave the section out instead of writing a placeholder.
 
 ## Plain prose

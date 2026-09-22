@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 
 import { CallError } from "./channel.ts";
+import { matchesAnyPath, matchesPath, patternToRegExp, toPosix } from "./glob.ts";
 import { assertSupportedJsonSchema, JsonSchemaError } from "./json-schema.ts";
 import { defineTools, ToolArgsError, validateParameters, type ToolBlueprint } from "./tool.ts";
 import type { Call } from "./plugin.ts";
 
 import type { JsonSchemaNode } from "./json-schema.ts";
+
+
 
 function schemaViolations(schema: unknown): string[] {
   try {
@@ -42,6 +45,7 @@ assert.deepEqual(schemaViolations({ type: "object", default: undefined }), []);
 
 const cyclic: Record<string, unknown> = { type: "object" };
 cyclic.properties = { self: cyclic };
+
 assert.deepEqual(schemaViolations(cyclic), ["schema.properties.self is a cycle"]);
 
 const shape: JsonSchemaNode = {
@@ -112,10 +116,12 @@ const reader: ToolBlueprint = {
   },
   concurrency: "always",
   maxResultChars: null,
+  paths: ["file_path"],
   run: (args) => ({ read: args.file_path, from: args.cwd }),
 };
 
 const hosted = defineTools([reader]);
+
 const hostedAll: ToolBlueprint = {
   ...reader,
   parameters: {
@@ -126,6 +132,7 @@ const hostedAll: ToolBlueprint = {
     subagent: { type: "object", host: "subagent", description: "The subagent asking, when one is." },
   },
 };
+
 const everyHost = defineTools([hostedAll]);
 assert.deepEqual(everyHost.methods.describe({}, call("tool.read")), {
   name: "read",
@@ -137,11 +144,14 @@ assert.deepEqual(everyHost.methods.describe({}, call("tool.read")), {
     { name: "call_id", source: "call_id" },
     { name: "subagent", source: "subagent" },
   ],
+  paths: ["file_path"],
 });
+
 assert.deepEqual(await everyHost.methods.run({ file_path: "a", cwd: "E:\\x", session_id: "s1", call_id: "c1" }, call("tool.read")), {
   read: "a",
   from: "E:\\x",
 });
+
 assert.deepEqual(
   await everyHost.methods.run(
     { file_path: "a", cwd: "E:\\x", session_id: "s1", call_id: "c1", subagent: { id: "sub-1", type: "explore" } },
@@ -155,11 +165,14 @@ assert.deepEqual(hosted.methods.describe({}, call("tool.read")), {
   description: "Read one file.",
   input_schema: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] },
   host_args: [{ name: "cwd", source: "session_cwd" }],
+  paths: ["file_path"],
 });
+
 assert.deepEqual(await hosted.methods.run({ file_path: "a", cwd: "E:\\x" }, call("tool.read")), {
   read: "a",
   from: "E:\\x",
 });
+
 assert.deepEqual(await hosted.methods.classify({ file_path: "a", cwd: "E:\\x" }, call("tool.read")), { safe: true });
 assert.deepEqual(await hosted.methods.classify({ file_path: "a" }, call("tool.read")), { safe: false });
 
@@ -171,6 +184,7 @@ const noCwd = await (async () => {
     return error as ToolArgsError;
   }
 })();
+
 assert.ok(noCwd instanceof ToolArgsError);
 assert.equal(noCwd.message, "invalid arguments: arguments.cwd is required");
 assert.deepEqual(noCwd.violations, ["arguments.cwd is required"]);
@@ -181,11 +195,13 @@ assert.throws(
     error instanceof JsonSchemaError
     && error.violations.includes("parameters.cwd.host is always required, drop required"),
 );
+
 assert.throws(
   () => defineTools([{ ...reader, parameters: { cwd: { type: "integer", host: "session_cwd" } } }]),
   (error: unknown) =>
     error instanceof JsonSchemaError && error.violations.includes('parameters.cwd.host needs type "string" or "object"'),
 );
+
 assert.throws(
   () =>
     defineTools([
@@ -195,6 +211,7 @@ assert.throws(
     error instanceof JsonSchemaError
     && error.violations.includes('parameters.cwd.host "elsewhere" is not a known host source'),
 );
+
 assert.throws(
   () =>
     defineTools([
@@ -209,10 +226,12 @@ assert.throws(
 );
 
 const kit = defineTools([echo, writer]);
+
 assert.deepEqual(kit.provides, [
   { capability: "tool.echo", version: "1.0.0" },
   { capability: "tool.write", version: "1.0.0" },
 ]);
+
 assert.deepEqual(kit.methods.describe({}, call("tool.echo")), {
   name: "echo",
   description: "Echo one value back.",
@@ -222,7 +241,9 @@ assert.deepEqual(kit.methods.describe({}, call("tool.echo")), {
     required: ["value"],
   },
   host_args: [],
+  paths: [],
 });
+
 assert.deepEqual(kit.methods.policy({}, call("tool.echo")), { concurrency: "always" });
 assert.deepEqual(kit.methods.policy({}, call("tool.write")), { concurrency: "args", max_result_chars: null });
 assert.deepEqual(await kit.methods.run({ value: "x" }, call("tool.echo")), { echoed: "x" });
@@ -239,6 +260,7 @@ const refused = await (async () => {
     return error as ToolArgsError;
   }
 })();
+
 assert.ok(refused instanceof ToolArgsError);
 assert.equal(refused.code, -32602);
 assert.equal(refused.message, "invalid arguments: arguments.value is required");
@@ -253,6 +275,7 @@ const missing = (() => {
     return error;
   }
 })();
+
 assert.ok(missing instanceof CallError);
 assert.equal(missing.code, -32602);
 
@@ -272,4 +295,69 @@ assert.throws(
     && error.violations.includes("parameters.list.items.required is only valid on a top-level parameter"),
 );
 
-console.log("ok   plugin-kit tool schema: keywords, values, host args, errors");
+assert.equal(patternToRegExp("**/*.ts").test("a.ts"), true);
+assert.equal(patternToRegExp("**/*.ts").test("src/a.ts"), true);
+assert.equal(patternToRegExp("**/*.ts").test("src/a.md"), false);
+assert.equal(patternToRegExp("src/*.ts").test("src/a.ts"), true);
+assert.equal(patternToRegExp("src/*.ts").test("src/deep/a.ts"), false);
+assert.equal(toPosix("src\\ui\\a.tsx"), "src/ui/a.tsx");
+assert.equal(matchesPath("src/ui/**", "src/ui/a.tsx", false), true);
+assert.equal(matchesPath("src/ui/**", "src/db/a.ts", false), false);
+assert.equal(matchesPath("**/*.tsx", "a.tsx", false), true);
+assert.equal(matchesPath("src/ui", "src/ui", false), true);
+assert.equal(matchesPath("src/ui", "src/ui/a.tsx", false), true);
+assert.equal(matchesPath("src/ui", "src/ui2/a.tsx", false), false);
+assert.equal(matchesPath("", "a.ts", false), false);
+assert.equal(matchesPath("src/ui/**", "SRC/UI/A.TSX", true), true);
+assert.equal(matchesPath("src/ui/**", "SRC/UI/A.TSX", false), false);
+assert.equal(matchesAnyPath(undefined, ["a.ts"]), true);
+assert.equal(matchesAnyPath([], ["a.ts"]), true);
+assert.equal(matchesAnyPath(["src/**"], ["a.ts"]), false);
+assert.equal(matchesAnyPath(["src/**"], ["", "src/a.ts"]), true);
+
+const listed: ToolBlueprint = {
+  ...reader,
+  parameters: { files: { type: "array", items: { type: "string" } } },
+  paths: ["files"],
+};
+
+assert.deepEqual((defineTools([listed]).methods.describe({}, call("tool.read")) as { paths: string[] }).paths, ["files"]);
+
+assert.throws(
+  () => defineTools([{ ...reader, paths: ["nope"] }]),
+  (error: unknown) =>
+    error instanceof JsonSchemaError
+    && error.violations.includes('paths names "nope", which parameters does not declare'),
+);
+
+assert.throws(
+  () => defineTools([{ ...reader, paths: ["file_path", "file_path"] }]),
+  (error: unknown) =>
+    error instanceof JsonSchemaError && error.violations.includes('paths lists "file_path" twice'),
+);
+
+assert.throws(
+  () => defineTools([{ ...reader, paths: ["cwd"] }]),
+  (error: unknown) =>
+    error instanceof JsonSchemaError
+    && error.violations.includes("parameters.cwd.host cannot be declared in paths"),
+);
+
+assert.throws(
+  () => defineTools([{ ...writer, paths: ["dry_run"] }]),
+  (error: unknown) =>
+    error instanceof JsonSchemaError
+    && error.violations.includes('parameters.dry_run carries no path: declare it as type "string" or an array of string'),
+);
+
+assert.throws(
+  () =>
+    defineTools([
+      { ...reader, parameters: { files: { type: "array", items: { type: "integer" } } }, paths: ["files"] },
+    ]),
+  (error: unknown) =>
+    error instanceof JsonSchemaError
+    && error.violations.includes('parameters.files carries no path: declare it as type "string" or an array of string'),
+);
+
+console.log("ok   plugin-kit tool schema: keywords, values, host args, paths, errors");

@@ -23,6 +23,11 @@ function plugin(id: string, pkg: string): string[] {
   ];
 }
 
+function manifestVersion(pkg: string): string {
+  const manifest = JSON.parse(readFileSync(join(root, pkg, "package.json"), "utf8")) as { version: string };
+  return manifest.version;
+}
+
 const dir = mkdtempSync(join(tmpdir(), "maota-subagent-"));
 writeFileSync(join(dir, "note.txt"), "hi\n");
 
@@ -100,8 +105,8 @@ function show(label: string, events: any[]): void {
 
 const table = await kernel.capabilities();
 assert.equal(table["tool.task"]?.plugin, "tool-subagent");
-assert.equal(table["agent.loop"]?.version, "1.3.0");
-assert.equal(table["session"]?.version, "1.2.0");
+assert.equal(table["agent.loop"]?.version, manifestVersion("packages/agent/agent-core"));
+assert.equal(table["session"]?.version, manifestVersion("packages/session"));
 assert.equal(table["tool.grep"]?.plugin, "tool-fs-search");
 
 const tools = (await kernel.invoke("tools", "list", {})) as { tools: Array<{ name: string }> };
@@ -178,11 +183,18 @@ assert.equal(child.parent?.call_id, "call_0");
 assert.equal(child.parent?.type, "explore");
 assert.equal(child.title, "look at the note", "the child's title is the call's label");
 
-const listed = (await kernel.invoke("session", "list", {})) as { sessions: Array<{ id: string }> };
+const listed = (await kernel.invoke("session", "list", {})) as {
+  sessions: Array<{ id: string; parent?: { call_id?: string } | null }>;
+};
 assert.deepEqual(
-  listed.sessions.map((session) => session.id),
-  ["sub1"],
-  "the sidebar should not see a subagent's session",
+  listed.sessions.map((session) => session.id).sort(),
+  ["sub1", born.subagent_id].sort(),
+  "the index should carry the session and the subagent it started",
+);
+assert.equal(
+  listed.sessions.find((session) => session.id === born.subagent_id)?.parent?.call_id,
+  "call_0",
+  "a listed child should say which call started it, so a sidebar can leave it out",
 );
 const kids = (await kernel.invoke("session", "children", { id: "sub1", cwd: dir })) as {
   children: Array<{ id: string; parent?: { call_id?: string } | null }>;

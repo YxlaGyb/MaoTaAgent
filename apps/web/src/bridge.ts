@@ -14,6 +14,7 @@ interface LoopEvent {
   ok?: boolean;
   output?: unknown;
   steps?: number;
+  reason?: string;
 }
 
 interface Turn {
@@ -147,6 +148,7 @@ export function createBridge(channel: Channel): Bridge {
           turn_id: turnId,
           steps: Number(event.steps ?? 0),
           text: String(event.text ?? ""),
+          ...(typeof event.reason === "string" ? { reason: event.reason } : {}),
         });
         return true;
       default:
@@ -247,8 +249,18 @@ export function createBridge(channel: Channel): Bridge {
 
     async handle(method: string, params: Record<string, unknown>): Promise<unknown> {
       switch (method) {
-        case "sessions.list":
-          return await channel.call("session", "list", {});
+        case "sessions.list": {
+          // The index carries a session's subagents too, each with the call that
+          // started it. A sidebar lists conversations, so those are left out here
+          // and read per session through `sessions.children`.
+          const all = (await channel.call("session", "list", {})) as {
+            sessions?: Array<{ parent?: unknown }>;
+          } | null;
+          return {
+            ...(all ?? {}),
+            sessions: (all?.sessions ?? []).filter((entry) => entry.parent === undefined || entry.parent === null),
+          };
+        }
         case "sessions.load":
           return await channel.call("session", "load", {
             id: params.id,
@@ -256,6 +268,8 @@ export function createBridge(channel: Channel): Bridge {
           });
         case "sessions.children":
           return await channel.call("session", "children", { id: params.id, cwd: cwdOf(params) });
+        case "skills.list":
+          return await channel.call("skill", "list", { cwd: cwdOf(params) });
         case "settings.set_key":
           return await channel.call("api", "key_set", {
             api_key: typeof params.api_key === "string" ? params.api_key : "",

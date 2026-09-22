@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError, runPlugin, type Call, type Channel, type Definition } from "@maota/plugin-kit";
+import { CallError, packageVersion, runPlugin, type Call, type Channel, type Definition } from "@maota/plugin-kit";
 
 import {
   MODES,
@@ -13,22 +13,27 @@ import {
   isMode,
   pairingProblems,
   read,
+  readRules,
   sessionIdOf,
   subagentOf,
   write,
   type AuditRecord,
+  type GrantRecord,
   type Mode,
   type Outcome,
   type PermissionFile,
+  type Rule,
   type SubagentRef,
 } from "./store.ts";
 
-const DEFAULTS = { mode: "ask" as Mode, maxRecords: 500 };
+const DEFAULTS = { mode: "ask" as Mode, maxRecords: 500, remember: false };
 
 interface Settings {
   root: string;
   mode: Mode;
   maxRecords: number;
+  remember: boolean;
+  rules: Rule[];
 }
 
 interface Target {
@@ -53,7 +58,13 @@ function defaultRoot(): string {
   return join(home !== undefined && home.trim() !== "" ? home : join(homedir(), ".maota"), "permissions");
 }
 
-let settings: Settings = { root: defaultRoot(), mode: DEFAULTS.mode, maxRecords: DEFAULTS.maxRecords };
+let settings: Settings = {
+  root: defaultRoot(),
+  mode: DEFAULTS.mode,
+  maxRecords: DEFAULTS.maxRecords,
+  remember: DEFAULTS.remember,
+  rules: [],
+};
 
 /// One entry per plugin that answers questions, keyed by its caller label, so a
 /// restarted front end replaces its own registration instead of adding another.
@@ -140,9 +151,10 @@ function decidedRecord(
   };
 }
 
-function policy(params: unknown): { mode: Mode } {
+function policy(params: unknown): { mode: Mode; grants: string[] } {
   const target = targetOf(params);
-  return { mode: effectiveMode(fileOf(target), settings.mode) };
+  const file = fileOf(target);
+  return { mode: effectiveMode(file, settings.mode), grants: file.grants };
 }
 
 function setPolicy(params: unknown, call: Call): { mode: Mode } {
@@ -187,15 +199,78 @@ function listPending(params: unknown): { requests: unknown[] } {
 }
 
 function answer(params: unknown, call: Call): { settled: boolean } {
-  const input = (params ?? {}) as { id?: unknown; decision?: unknown };
+  const input = (params ?? {}) as { id?: unknown; decision?: unknown; remember?: unknown };
   const id = text(input.id, "id");
   if (input.decision !== "allow" && input.decision !== "deny") {
     throw new CallError(-32602, `decision must be "allow" or "deny", got ${JSON.stringify(input.decision)}`);
   }
   const found = waiting.get(id);
   if (found === undefined) throw new CallError(-32602, `no pending request ${JSON.stringify(id)}`);
+  // An allowance can be meant for this call or for every later call of the same
+  // tool, and a deployment may make the second the default.
+  const remember = input.remember === true || (input.remember === undefined && settings.remember);
+  if (input.decision === "allow" && remember) {
+    grant({ sessionId: found.session_id, cwd: found.cwd }, found.tool, answererId(call));
+  }
   found.settle(input.decision === "allow" ? "allowed-once" : "rejected", answererId(call));
   return { settled: true };
+}
+
+/// A remembered answer is a grant, and a grant is written where the decision it
+/// replaced is written: the file is the record of why a tool stopped asking.
+function grant(target: Target, tool: string, caller: string): void {
+  const file = fileOf(target);
+  if (file.grants.includes(tool)) return;
+  const record: GrantRecord = { kind: "grant", at: now(), tool, caller };
+  write(settings.root, { ...file, grants: [...file.grants, tool], records: [...file.records, record] }, settings.maxRecords);
+}
+
+function forget(params: unknown, call: Call): { grants: string[] } {
+  const target = targetOf(params);
+  const input = (params ?? {}) as { tool?: unknown };
+  const only = optionalText(input.tool);
+  const file = fileOf(target);
+  const kept = only === undefined ? [] : file.grants.filter((item) => item !== only);
+  const revoked = file.grants.filter((item) => !kept.includes(item));
+  if (revoked.length === 0) return { grants: file.grants };
+  const records: GrantRecord[] = revoked.map((tool) => ({
+    kind: "grant",
+    at: now(),
+    tool,
+    caller: answererId(call),
+    revoked: true,
+  }));
+  const next = write(
+    settings.root,
+    { ...file, grants: kept, records: [...file.records, ...records] },
+    settings.maxRecords,
+  );
+  return { grants: next.grants };
+}
+
+/// A call id is claimed by whoever is asking, so it is checked against the
+/// session it names whenever the session store is reachable. `null` means the
+/// claim could not be checked, which is not the same as a claim being false.
+async function callIdKnown(ctx: Call, target: Target, callId: string): Promise<boolean | null> {
+  if (ctx.capabilities.session === undefined) return null;
+  try {
+    const document = (await ctx.channel.call(
+      "session",
+      "load",
+      { id: target.sessionId, cwd: target.cwd },
+      { signal: ctx.signal },
+    )) as { messages?: unknown } | null;
+    if (!Array.isArray(document?.messages)) return null;
+    return document.messages.some((message) => {
+      const calls = (message as { tool_calls?: unknown } | null)?.tool_calls;
+      return Array.isArray(calls) && calls.some((item) => (item as { id?: unknown } | null)?.id === callId);
+    });
+  } catch (error) {
+    ctx.channel.log("warn", "permission: the session could not be read to check a call id", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 /// Publish the question before waiting for it, so an answerer already listening
@@ -261,7 +336,18 @@ async function request(params: unknown, call: Call): Promise<{ outcome: Outcome 
   const reason = optionalText(input.reason);
   const subagent = subagentOf(input.subagent);
   const id = randomUUID();
-  const verdict = decide(effectiveMode(fileOf(target), settings.mode), answerers.size);
+  // A subagent asks under its parent's identity, and the call id it carries is
+  // the parent's `task` call, which the parent's history already holds, so that
+  // claim can be checked. A session's own call is the one in flight right now
+  // and is not written down until the turn is saved, so checking it would call
+  // every honest question a forgery.
+  if (subagent !== undefined && callId !== undefined && call.capabilities.session !== undefined) {
+    if ((await callIdKnown(call, target, callId)) === false) {
+      throw new CallError(-32602, `call_id ${JSON.stringify(callId)} is not a call in this session`);
+    }
+  }
+  const file = fileOf(target);
+  const verdict = decide(effectiveMode(file, settings.mode), answerers.size, tool, settings.rules, file.grants);
   if (verdict === "ask") return await park(call, target, id, tool, callId, reason, subagent);
   if (verdict.cause === "no-answerer") {
     append(target, [
@@ -274,9 +360,11 @@ async function request(params: unknown, call: Call): Promise<{ outcome: Outcome 
   return { outcome: verdict.outcome };
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "permission", version: "1.0.0" }],
-  configKeys: ["mode", "dir", "max_records"],
+  provides: [{ capability: "permission", version: VERSION }],
+  configKeys: ["mode", "dir", "max_records", "rules", "remember"],
 
   setup(wiring) {
     const configured = wiring.config.dir;
@@ -284,6 +372,8 @@ export const definition: Definition = {
       root: typeof configured === "string" && configured.trim() !== "" ? configured : defaultRoot(),
       mode: isMode(wiring.config.mode) ? wiring.config.mode : DEFAULTS.mode,
       maxRecords: positive(wiring.config.max_records, DEFAULTS.maxRecords),
+      remember: wiring.config.remember === true,
+      rules: readRules(wiring.config.rules),
     };
   },
 
@@ -294,6 +384,7 @@ export const definition: Definition = {
     unregister_answerer: unregisterAnswerer,
     pending: listPending,
     answer,
+    forget,
     request,
   },
 
@@ -325,22 +416,112 @@ export const definition: Definition = {
         stream: undefined,
       }) as unknown as Call;
     const asked = (): number => published.filter((item) => item.topic === "permission.requested").length;
-    settings = { root, mode: "ask", maxRecords: 6 };
+    settings = { root, mode: "ask", maxRecords: 6, remember: false, rules: [] };
     const session = { session_id: "check", cwd: "E:\\work" };
     try {
-      const full = decide("full", 0);
+      const full = decide("full", 0, "pwsh", [], []);
       if (full === "ask" || full.outcome !== "allowed-once" || full.decided_by !== "policy:full") {
         problems.push(`full decided ${JSON.stringify(full)}`);
       }
-      const auto = decide("auto", 0);
+      const auto = decide("auto", 0, "pwsh", [], []);
       if (auto === "ask" || auto.outcome !== "allowed-once" || auto.decided_by !== "policy:auto") {
         problems.push(`auto decided ${JSON.stringify(auto)}`);
       }
-      const alone = decide("ask", 0);
+      const alone = decide("ask", 0, "pwsh", [], []);
       if (alone === "ask" || alone.cause !== "no-answerer") {
         problems.push(`ask with no answerer decided ${JSON.stringify(alone)}`);
       }
-      if (decide("ask", 1) !== "ask") problems.push("ask with an answerer should hand the question over");
+      if (decide("ask", 1, "pwsh", [], []) !== "ask") {
+        problems.push("ask with an answerer should hand the question over");
+      }
+
+      // Rules are read in table order and the first match decides, a rule that
+      // asks outranks the mode, and a remembered grant outranks the mode too.
+      const rules: Rule[] = [
+        { match: "pwsh", action: "deny" },
+        { match: "write", action: "allow" },
+        { match: "edit", action: "ask" },
+      ];
+      const denied = decide("full", 1, "pwsh", rules, []);
+      if (denied === "ask" || denied.outcome !== "rejected" || denied.cause !== "rule pwsh") {
+        problems.push(`a denying rule decided ${JSON.stringify(denied)}`);
+      }
+      const byRule = decide("ask", 0, "write", rules, []);
+      if (byRule === "ask" || byRule.decided_by !== "policy:rule") {
+        problems.push(`an allowing rule decided ${JSON.stringify(byRule)}`);
+      }
+      if (decide("full", 1, "edit", rules, []) !== "ask") problems.push("a rule that asks lost to the mode");
+      const unanswerable = decide("full", 0, "edit", rules, []);
+      if (unanswerable === "ask" || unanswerable.cause !== "no-answerer") {
+        problems.push(`a rule that asks with nobody listening decided ${JSON.stringify(unanswerable)}`);
+      }
+      let badRule = "";
+      try {
+        readRules([{ match: "x", action: "maybe" }]);
+      } catch (error) {
+        badRule = error instanceof Error ? error.message : String(error);
+      }
+      if (!badRule.includes("a rule action must be one of")) {
+        problems.push(`readRules answered ${JSON.stringify(badRule)}`);
+      }
+
+      // A claim that the session can be read to check is only checked when it
+      // comes from a subagent; the session's own call cannot be checked yet.
+      const reader = {
+        publish: channel.publish,
+        log: (): void => {},
+        call: async (capability: string, method: string): Promise<unknown> => {
+          if (capability === "session" && method === "load") {
+            return { messages: [{ role: "assistant", tool_calls: [{ id: "call_4" }] }] };
+          }
+          throw new Error(`no ${capability}/${method} here`);
+        },
+      } as unknown as Channel;
+      const withSession = (): Call =>
+        ({
+          channel: reader,
+          config: {},
+          capabilities: { session: { plugin: "session", version: "1.4.0" } },
+          capability: "permission",
+          method: "request",
+          caller: "web",
+          signal: new AbortController().signal,
+        }) as unknown as Call;
+      settings = { ...settings, rules: [{ match: "pwsh", action: "deny" }] };
+      const mine = await request({ ...session, tool: "pwsh", call_id: "call_9" }, withSession());
+      if (mine.outcome !== "rejected") {
+        problems.push(`a session's own in-flight call id was checked and decided ${JSON.stringify(mine)}`);
+      }
+      let forged = "";
+      try {
+        await request(
+          {
+            ...session,
+            tool: "pwsh",
+            call_id: "call_9",
+            subagent: { id: "sub-1", type: "explore", description: "look" },
+          },
+          withSession(),
+        );
+      } catch (error) {
+        forged = error instanceof Error ? error.message : String(error);
+      }
+      if (!forged.includes("call_9") || !forged.includes("is not a call in this session")) {
+        problems.push(`a subagent's invented call id said ${JSON.stringify(forged)}`);
+      }
+      settings = { ...settings, rules: [] };
+
+      const wire = { session_id: "check", cwd: "E:\\work" };
+      grant({ sessionId: wire.session_id, cwd: wire.cwd }, "pwsh", "web");
+      if (!policy(wire).grants.includes("pwsh")) problems.push("a remembered answer was not written down");
+      if (decide("ask", 0, "pwsh", [], policy(wire).grants) === "ask") {
+        problems.push("a remembered answer still asked");
+      }
+      forget({ ...wire, tool: "pwsh" }, call());
+      if (policy(wire).grants.length !== 0) problems.push("forget left a grant behind");
+      if (decide("ask", 1, "pwsh", [], policy(wire).grants) !== "ask") {
+        problems.push("a withdrawn grant still allowed the tool");
+      }
 
       if (policy(session).mode !== "ask") problems.push("a fresh session should fall back to the configured mode");
       registerAnswerer({}, call());

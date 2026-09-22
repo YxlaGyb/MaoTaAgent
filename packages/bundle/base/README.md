@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the fifteen plugins the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the seventeen plugins the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
 kind: "package-reference"
 ---
 
@@ -16,7 +16,6 @@ This package holds one array and nothing else: the list of rows a profile mounts
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -45,8 +44,10 @@ import { rows } from "@maota/base";
 | `tool-todo` | `@maota/tool-todo` | `tool.todo_write` |
 | `tool-subagent` | `@maota/tool-subagent` | `tool.task` |
 | `tools` | `@maota/tools` | `tools` |
+| `tool-skill` | `@maota/tool-skill` | `tool.skill` |
 | `skill` | `@maota/skill` | `skill` |
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
+| `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
 | `hooks` | `@maota/hooks-native` | `hooks` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
@@ -54,7 +55,7 @@ import { rows } from "@maota/base";
 
 ### Order
 
-The five `tool.*` plugins and their `shell` and `permission` providers come before `tools`, and `tools` comes before `agent-core`. The dispatcher reads the capability table once at `start` and caches what it finds, so a provider that has not started yet would be invisible until the next `list`. Keeping the providers above the dispatcher is what makes one startup enough.
+Every provider sits above the dispatcher that reads it: the six `tool.*` plugins and their `shell` and `permission` providers come before `tools`, and the two skill providers come before `skill`. Both dispatchers come before `agent-core`, which reads them. A dispatcher reads the capability table once at `start` and caches what it finds, so a provider that has not started yet would be invisible until the next `list`. Keeping the providers above their dispatcher is what makes one startup enough.
 
 -----
 
@@ -76,6 +77,8 @@ The five `tool.*` plugins and their `shell` and `permission` providers come befo
 
 The generated file is not the file a user edits. The profile directory also holds `eggshell.local.toml`, which extends the generated one, and that is where a config block such as `[plugins.tools.config]` belongs. Since a row names a package and nothing else, swapping a provider means editing the row list or the local layer, not editing this package.
 
+A bundle is one list, and a profile mounts all of it or none, so dropping a single row means editing this array. Order is manual: nothing checks that a provider sits above its dispatcher, and a mistake shows up as a tool that is simply missing. A config block ships in the generated file only when the row carries one, and everything else belongs to the user's local layer. The disabled row is still written, so `hmr` appears switched off in a fresh config and turning it on needs no other change.
+
 -----
 
 <a id="further-exploration"></a>
@@ -85,13 +88,3 @@ The generated file is not the file a user edits. The profile directory also hold
 - [app-boot](../../boot/app-boot/README.md): the code that reads this list and generates a profile.
 - [packages group](../../README.md): what each named package provides.
 - [bundle group](../README.md): what a row list is.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **One list per bundle**: a profile mounts a whole bundle or none of it, so dropping one row means editing this array.
-- **Order is manual**: nothing checks that a provider is mounted above its dispatcher, and a mistake shows up as a tool that is simply missing.
-- **No per-row config here**: a config block ships in the generated file only when the row carries one, and everything else belongs to the user's local layer.
-- **The disabled row is still written**: `hmr` appears in the generated config, switched off, so turning it on needs no other change.

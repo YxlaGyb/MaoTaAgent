@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -87,6 +86,8 @@ kind: "package-reference"
 
 模型拿不到工作目录参数，所以它没法把命令挪出会话目录；它同样拿不到会话 id、调用 id 与子代理标签，所以它没法自称是别的会话、冒充某个它没被问过的问题的回答者，也没法自称是某个它并不是的子代理。这四个都声明了 `host` 来源，这既让它们不进公开 schema，又让它们在运行期成为必填；`agent-core` 在转发之前从会话和调用里把它们填上。一个少带参数的调用，就是一个点名那个参数缺失的 `-32602`；唯一的例外是子代理标签，会话自己发起的调用就是没有它。
 
+四条事实界定了这些工具。没有沙箱参数，所以一个需要更多空间的命令没有地方去问。只有三种形状会被标记，`rm `、`> /etc/` 与 `chmod 777`，一个不含它们的破坏性命令会直接运行而不会被问。关于环境什么也没提供，所以模型无法为它启动的进程设置变量。`timeout_ms` 由模型自己选，只受 provider 自己的上限约束，而不受它的默认值约束。
+
 -----
 
 <a id="further-exploration"></a>
@@ -96,13 +97,3 @@ kind: "package-reference"
 - [shell](../shell/README.zh.md)：与 provider 共用的请求、结果与状态类型。
 - [tools](../../agent/tools/README.zh.md)：列出本工具的分发器。
 - [shell 组](../README.zh.md)：三个包怎么分工。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **没有沙箱参数**：既没有升级途径，也没有申请理由的参数，所以需要更多余地的命令无处可问。
-- **只认三种形状**：不含 `rm `、`> /etc/` 与 `chmod 777` 的破坏性命令不会被问一句，因为这里没有任何东西对命令做分类。
-- **环境方面什么都没提供**：模型没法为它启动的进程设一个变量。
-- **`timeout_ms` 由模型自己选**：一次调用可以要求比 provider 缺省更久的等待，只有 provider 自己的上限能约束它。

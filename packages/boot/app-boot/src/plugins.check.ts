@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-import { PROFILE_TEMPLATES, entryOf, rowsOfBundles, repoRoot } from "./index.ts";
+import { PROFILE_TEMPLATES, entryOf, packageDir, rowsOfBundles, repoRoot } from "./index.ts";
 
 interface Report {
   ok?: boolean;
@@ -27,6 +29,12 @@ for (const [name, id] of rows) {
   } catch {
   }
   const problems = report.problems ?? [];
+  const manifest = JSON.parse(readFileSync(join(packageDir(name), "package.json"), "utf8")) as { version?: string };
+  for (const item of report.provides ?? []) {
+    if (item.version !== manifest.version) {
+      problems.push(`${item.capability}: reports ${item.version} but its package.json says ${manifest.version}`);
+    }
+  }
   if (run.status !== 0 || problems.length > 0) {
     failed += 1;
     console.log(`FAIL ${id}`);

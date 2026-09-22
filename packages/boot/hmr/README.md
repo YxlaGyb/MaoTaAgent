@@ -9,14 +9,13 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`hmr` is a development-only plugin: it watches the directories named in `roots` and publishes `dev.source.changed` with the path that changed. It decides nothing else: the host maps that path through each plugin's module graph and restarts the plugins that import it. Nothing is watched in a run that does not load this plugin, so a production config simply leaves the row out. It provides one capability, `dev.hmr@0.1.0`, whose only method is `status`.
+`hmr` is a development-only plugin: it watches the directories named in `roots` and publishes `dev.source.changed` with the path that changed. It decides nothing else: the host maps that path through each plugin's module graph and restarts the plugins that import it. Nothing is watched in a run that does not load this plugin, so a production config simply leaves the row out. It provides one capability, `dev.hmr`, whose only method is `status`.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -76,6 +75,8 @@ This section explains how one plugin turns raw filesystem events into the single
 
 `selfCheck` fails a `--check` run when `roots` is empty or names a directory that does not exist, so `pnpm check:plugins` catches a typo before a run does.
 
+Five facts bound this watcher. Recursive watching is native on Windows and macOS and emulated by polling on Linux, so a deep tree there costs more. It publishes paths and not ownership: mapping a path to the plugins that import it belongs to the host and its module graph. A root that does not exist is skipped rather than awaited, and read again on the next plugin start. The ignore set and the debounce interval are fixed in code rather than configurable. And a disabled row is never spawned, so while the plugin is off `--check` does not reach it either.
+
 -----
 
 <a id="further-exploration"></a>
@@ -84,16 +85,3 @@ This section explains how one plugin turns raw filesystem events into the single
 - [packages group](../README.md): the plugin tree this package belongs to.
 - [maota CLI](../../apps/cli/README.md#dev-hot-reload): the host that consumes these events and restarts plugins.
 - [Architecture](../../docs/architecture.md#launch-path): where a development run differs from a production one.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-These limits say when this watcher needs care. They are current constraints, not a task backlog.
-
-- **Recursive watching is emulated on Linux**: native on Windows and macOS, polled on Linux, so a deep tree there costs more.
-- **It publishes paths, not ownership**: mapping a path to the plugins that import it belongs to the host and its module graph.
-- **A missing root is skipped, not awaited**: it is read again on the next plugin start, and never watched into existence.
-- **The ignore set and the debounce interval are fixed in code**: neither is configurable.
-- **A disabled row is never spawned**: while the plugin is off, `--check` does not reach it either.

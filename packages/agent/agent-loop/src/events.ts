@@ -48,11 +48,13 @@ export interface PreToolDecision {
   decision?: "allow" | "deny";
   reason?: string;
   context?: SourcedText[];
+  args?: unknown;
 }
 
 export interface PostToolDecision {
   context?: SourcedText[];
   halt?: boolean;
+  output?: unknown;
 }
 
 export interface StopDecision {
@@ -70,8 +72,10 @@ export interface LoopDeps {
   /// Runs before the call is dispatched and before `classify`: a refusal skips
   /// both, so a refused call is never handed to a tool. An `allow` loosens
   /// nothing, because `classify` and the tool's own approval still run.
+  /// `args` replaces what the model wrote, and the replacement is what runs.
   preTool?(call: ToolCall, ctx: StepContext): Promise<PreToolDecision | null | undefined>;
-  /// Runs after the call settled and before its result is written back.
+  /// Runs after the call settled and before its result is written back, so
+  /// `output` is what the model ends up reading.
   postTool?(call: ToolCall, outcome: ToolRunOutcome, ctx: StepContext): Promise<PostToolDecision | null | undefined>;
   /// Runs only when the model asked for no tool call, which is the moment the
   /// run would otherwise end.

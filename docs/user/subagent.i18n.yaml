@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run i18n:write <x.md>
-subagent.md: 3b9c1772b1d08f155c0e79432c7ec788f80c1485
-subagent.zh.md: 895f2c5f79a6a4fdd86ce2e9794681bb300d8c47
+subagent.md: bf08505a903dbc895ad7810baa6a323bcae0d35b
+subagent.zh.md: 709656d8d8d8638f3b7f5337fda8411d3ef20a97

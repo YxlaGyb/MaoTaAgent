@@ -31,7 +31,13 @@ export interface TodosEvent {
   todos: TodoItem[];
 }
 
-export type SessionEvent = TodosEvent;
+export interface TodosSnapshotEvent {
+  kind: "todos.snapshot";
+  at: string;
+  todos: TodoItem[];
+}
+
+export type SessionEvent = TodosEvent | TodosSnapshotEvent;
 
 export function isTodoStatus(value: unknown): value is TodoStatus {
   return typeof value === "string" && (TODO_STATUSES as readonly string[]).includes(value);
@@ -96,9 +102,10 @@ export function validateTodos(todos: unknown): TodoItem[] {
 export function eventOf(value: unknown): SessionEvent | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  if (raw.kind !== "todos.write" || typeof raw.at !== "string") return null;
+  if ((raw.kind !== "todos.write" && raw.kind !== "todos.snapshot") || typeof raw.at !== "string") return null;
+  const kind: SessionEvent["kind"] = raw.kind === "todos.snapshot" ? "todos.snapshot" : "todos.write";
   try {
-    return { kind: "todos.write", at: raw.at, todos: validateTodos(raw.todos) };
+    return { kind, at: raw.at, todos: validateTodos(raw.todos) };
   } catch {
     return null;
   }

@@ -90,6 +90,7 @@ export function Sidebar({
   onArchive,
   onSettings,
   onPlugins,
+  onSkills,
   onSearch,
 }: {
   groups: ProjectGroup[];
@@ -113,6 +114,7 @@ export function Sidebar({
   onArchive: (id: string) => void;
   onSettings: () => void;
   onPlugins: () => void;
+  onSkills: () => void;
   onSearch: () => void;
 }) {
   const t = useT();
@@ -163,6 +165,10 @@ export function Sidebar({
         <button type="button" className="side-row" onClick={onPlugins}>
           <Icon d={ICON.plug} />
           {t("plugins")}
+        </button>
+        <button type="button" className="side-row" onClick={onSkills}>
+          <Icon d={ICON.bulb} />
+          {t("skills")}
         </button>
       </nav>
 

@@ -9,14 +9,13 @@ kind: "package-reference"
 
 ## 摘要
 
-一个能力，`permission`，工具在做"该由用户决定"的事情之前调用它。它按会话与工作目录持有档位，把问题停在那里等人回答，并用四个词之一作答，其中只有 `allowed-once` 是放行。每一次提问都和它的决定配对写进审计文件，重启后依然在；档位本身变更时也留痕。注册以插件为单位，重启的前端替换的是自己那条注册。
+一个能力，`permission`，工具在做"该由用户决定"的事情之前调用它。它按会话与工作目录持有档位，套用 profile 配置的规则表，把问题停在那里等人回答，并用四个词之一作答，其中只有 `allowed-once` 是放行。回答可以被记住，此后同一个工具再被调用就由文件而不是由人来定。每一次提问都和它的决定配对写进审计文件，重启后依然在；档位与被记住的回答在变更时都留痕。注册以插件为单位，重启的前端替换的是自己那条注册。
 
 ## 目录
 
 - [使用这个包](#使用这个包)
 - [实现说明](#实现说明)
 - [延伸阅读](#延伸阅读)
-- [已知限制与待办](#已知限制与待办)
 
 -----
 
@@ -30,15 +29,18 @@ kind: "package-reference"
 | `mode` | string | `ask` | 会话自己选档之前的回退档位。取 `ask`、`auto`、`full` 之一。 |
 | `dir` | string | `$MAOTA_HOME/permissions` | 审计文件放在哪。一个工作目录一个目录，一个会话一个文件。 |
 | `max_records` | integer | `500` | 一个文件保留多少条记录。保留最新的，且绝不把一次提问和它的决定拆开。 |
+| `rules` | array | `[]` | `{ match, action }` 条目，按顺序读，第一个 `match` 命中工具名的条目做决定。`action` 取 `allow`、`deny` 或 `ask`。 |
+| `remember` | boolean | `false` | 为 `allow` 的 `answer` 是只对这一问有效，还是对同一个工具之后每一次调用都有效。 |
 
 ### 方法
 
 | 方法 | 参数 | 回答 |
 |---|---|---|
-| `policy` | `session_id`、`cwd` | `{ mode }`。没有文件的会话按配置的档位作答。 |
+| `policy` | `session_id`、`cwd` | `{ mode, grants }`。没有文件的会话按配置的档位作答，且没有任何记住的放行。 |
 | `set_policy` | `session_id`、`cwd`、`mode` | `{ mode }`。不属于三档的 mode 报 `-32602`；把会话设成它已有的那一档不产生任何变化。 |
-| `request` | `session_id`、`cwd`、`tool`、`call_id?`、`reason?`、`subagent?` | `{ outcome }`，取 `allowed-once`、`rejected`、`cancelled`、`unavailable` 之一。 |
-| `answer` | `id`、`decision` | `{ settled: true }`。`decision` 取 `allow` 或 `deny`；迟到或未知的 `id` 报 `-32602`。 |
+| `request` | `session_id`、`cwd`、`tool`、`call_id?`、`reason?`、`subagent?` | `{ outcome }`，取 `allowed-once`、`rejected`、`cancelled`、`unavailable` 之一。会话存储够得到时，所指会话从未发生过的 `call_id` 报 `-32602`。 |
+| `answer` | `id`、`decision`、`remember?` | `{ settled: true }`。`decision` 取 `allow` 或 `deny`；迟到或未知的 `id` 报 `-32602`。`remember` 缺省取配置里的 `remember`。 |
+| `forget` | `session_id`、`cwd`、`tool?` | `{ grants }`。撤掉一条被记住的回答；`tool` 缺席时撤掉全部。 |
 | `pending` | `session_id?` | `{ requests }`：还在等的问题，每条带 `id`、`session_id`、`tool`、`at` 以及可选的 `call_id`、`reason` 与 `subagent`。 |
 | `register_answerer` | 无 | `{ answerers }`。以 caller 标签为键，所以一个插件只占一条。 |
 | `unregister_answerer` | 无 | `{ answerers }`。 |
@@ -56,23 +58,24 @@ kind: "package-reference"
 
 子代理发起的调用是以父的身份到达闸门的：父的 `session_id`、派出这个子代理的那次调用的 id 作为 `call_id`、子代理真正调用的那个工具，以及一个 `subagent` 标签 `{ id, type?, description? }`。于是闸门答出来的一切都落在委派发生的地方：发布出去的问题带着这个标签，卡片就能出现在父会话那行 `task` 下面并写明是哪个子代理在问；`asked` 与 `decided` 两条记录也都留着它，所以重启之后审计读起来是同一回事。
 
-这个标签是被带过来的，而不是被核对的，因为只有调用方知道自己在哪次运行里。没有可用 `id` 的对象以 `-32602` 拒绝；标签缺席就只是会话自己在问。
+这个标签是被带过来的，而不是被核对的，因为只有调用方知道自己在哪次运行里。它带来的 `call_id` 是另一回事：那个东西指名的是一次调用，所以会话存储够得到时，闸门会读会话，并拒绝一条没有任何消息携带的 `call_id`。没有可用 `id` 的对象以 `-32602` 拒绝；标签缺席就只是会话自己在问。
 
 ### 审计文件
 
 | 字段 | 含义 |
 |---|---|
-| `schema_version` | `1`。 |
+| `schema_version` | `2`。 |
 | `session_id`、`cwd` | 这个文件属于哪个会话，以及它是按哪个工作目录解析出来的。 |
 | `mode` | 会话自己的选择；从未选过则为 `null`，此时套用配置的回退值。 |
-| `records` | 记录，从旧到新：`policy`、`asked` 与 `decided`。由子代理发起的调用，其 `asked` 与 `decided` 带 `subagent` 标签，`policy` 永远不带。 |
+| `grants` | 提问被以 `remember` 回答过的工具：其中之一的调用不再需要询问。 |
+| `records` | 记录，从旧到新：`policy`、`asked`、`decided` 与 `grant`。由子代理发起的调用，其 `asked` 与 `decided` 带 `subagent` 标签，`policy` 永远不带。`grant` 是一条被记住的回答，被撤回时带 `revoked: true`。 |
 
 ### 依赖与配置
 
 | 项 | 含义 |
 |---|---|
-| `provides permission@1.0.0` | 能力本身。它什么都不依赖：闸门是一片叶子。 |
-| `configKeys` | `mode`、`dir`、`max_records`。 |
+| `provides permission` | 能力本身。它什么都不依赖：闸门是一片叶子，`session` 能力只在恰好存在时才读。 |
+| `configKeys` | `mode`、`dir`、`max_records`、`rules`、`remember`。 |
 
 -----
 
@@ -88,7 +91,7 @@ kind: "package-reference"
 
 ### 只有一张决策表
 
-`decide(mode, answerers)` 就是全部策略：`full` 与 `auto` 答 `allowed-once`，`decided_by` 分别是 `policy:full` 与 `policy:auto`；`ask` 且没有注册应答者时答 `unavailable`，原因是 `no-answerer`；`ask` 且有应答者时返回那个"不是答案"的词，由调用方停下来去问。因为策略只有一个函数，一个没想清楚的档位不可能悄悄变成一次放行。
+`decide(mode, answerers, tool, rules, grants)` 就是全部策略，从最严到最松：`action` 为 `deny` 的规则直接拒绝，被记住的放行直接允许，`action` 为 `allow` 的规则允许，而 `action` 为 `ask` 的规则无论档位怎么说都要去问听得见的人。之后才轮到档位：`full` 与 `auto` 答 `allowed-once`，`decided_by` 分别是 `policy:full` 与 `policy:auto`；`ask` 且没有注册应答者时答 `unavailable`，原因是 `no-answerer`。凡是要问且有人可问的，都返回那个"不是答案"的词，由调用方停下来去问。因为策略只有一个函数，一个没想清楚的档位不可能悄悄变成一次放行，而一条要求问人的规则也不会被档位说服。
 
 ### 先发布问题，再去等
 
@@ -104,6 +107,8 @@ kind: "package-reference"
 
 原子写入是对 `packages/session/src/store.ts` 那个做法的复制（序列化到临时名，再改名覆盖），而不是 import 它。插件管自己的文件，而复制八行比让闸门依赖一个与它无关的包更划算。
 
+六条事实界定了这道闸门。这里没有任何东西知道破坏性命令长什么样：运行命令的工具自己决定，闸门只负责把问题带过去。许可是 `allowed-once`，除非回答被记住了；被记住的回答覆盖该工具之后每一次调用，直到 `forget` 把它撤掉，这也正是它值得一问的原因。第一个回答胜出，而且每个已注册的回答者都可以回答每一个问题，所以这里没有仲裁。规则按配置顺序对工具名做匹配，调用本身的其他任何东西都不参与。注册项以调用方标签为键活在内存里，所以带着一个悬置问题重启的部署会把它按 `cancelled` 结清，而档位与被记住的回答是写下来的，能挺过重启。事件是尽力而为的：错过 `permission.requested` 的订阅者从 `pending` 学到这个问题，所以建立在事件流之上的东西仍然要做对账。
+
 -----
 
 <a id="延伸阅读"></a>
@@ -112,15 +117,3 @@ kind: "package-reference"
 - [权限设计](../../../docs/user/permission.zh.md)：闸门落在哪，以及它刻意不做什么。
 - [tool-pwsh](../../shell/tool-pwsh/README.zh.md)：发起询问的那个工具。
 - [interaction 包组](../README.zh.md)：发问与决断如何分工。
-
------
-
-<a id="已知限制与待办"></a>
-## 已知限制与待办
-
-- **没有规则表**：这里没有任何东西知道什么样的命令叫破坏性。执行命令的工具自己判断，闸门只负责把问题带过去。
-- **没有记住的授权**：唯一的放行是 `allowed-once`，所以同一条命令批准两次就要回答两次。记住规则属于策略决定，这一版不交付。
-- **没有仲裁**：先到的回答生效，任何已注册的应答者都能回答任何问题。
-- **子代理标签只被带着走，从不被核对**：任何调用方都能指名任何子代理，调用方下游除了被告知的内容之外，分不出一次委派与会话自己的调用。
-- **注册活不过重启**：它们只存在内存里，以 caller 标签为键；带着一个停在那里的问题重启，会把它结案为 `cancelled`。
-- **事件是尽力而为**：漏掉 `permission.requested` 的订阅方改用 `pending` 得知问题，所以任何建立在事件流上的东西都必须回落到它。

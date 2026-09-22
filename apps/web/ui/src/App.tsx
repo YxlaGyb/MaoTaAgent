@@ -5,6 +5,7 @@ import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
 import { PluginsView } from "./components/PluginsView.tsx";
 import { SearchPalette } from "./components/SearchPalette.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
+import { SkillsView } from "./components/SkillsView.tsx";
 import { DEFAULT_PROJECT, projectLabel, Sidebar } from "./components/Sidebar.tsx";
 import { describe, errorText } from "./lib/errors.ts";
 import { useT } from "./lib/i18n.ts";
@@ -51,7 +52,7 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "settings" | "plugins">("chat");
+  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "skills">("chat");
   const [palette, setPalette] = useState(false);
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
@@ -492,10 +493,13 @@ export function App() {
         onArchive={flipArchive}
         onSettings={() => setPage("settings")}
         onPlugins={() => setPage("plugins")}
+        onSkills={() => setPage("skills")}
         onSearch={() => setPalette(true)}
       />
       {page === "plugins" ? (
         <PluginsView info={info} />
+      ) : page === "skills" ? (
+        <SkillsView cwd={project} />
       ) : (
         <ChatView
           info={info}

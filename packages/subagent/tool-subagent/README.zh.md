@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -39,7 +38,7 @@ kind: "package-reference"
 | `general` | 工具池里的全部，减去 `task`，再减去 `child_tools_deny`。 | `general_system` |
 | `explore` | 只有 `explore_tools`，同样减去那些拒绝项。 | `explore_system` |
 
-两种都不给 `skill` 工具：子代理的提示词保持很小，它也不是来把提示词撑大的。
+两种都不给 `skill` 工具，因为这正是 `child_tools_deny` 的默认值：子代理的提示词保持很小，它也不是来把提示词撑大的。
 
 ### 回什么
 
@@ -59,7 +58,7 @@ kind: "package-reference"
 |---|---|---|
 | `max_concurrent` | `4` | 本进程同时在跑的子代理上限。 |
 | `child_max_steps` | `8` | 交给每次子运行的步数上限。 |
-| `child_tools_deny` | `[]` | 任何子代理都不许用的工具名。`task` 永远在拒绝名单里，且无法被移除。 |
+| `child_tools_deny` | `["skill"]` | 任何子代理都不许用的工具名。`task` 永远在拒绝名单里，且无法被移除；想让子代理用上 `skill` 工具的部署写 `[]`，把它从这个默认值里拿掉。 |
 | `explore_tools` | `["read", "glob", "grep"]` | `explore` 子代理可以用的工具。 |
 | `general_system` | 包内自带的提示词 | `general` 子代理运行时的系统提示词。 |
 | `explore_system` | 包内自带的提示词 | `explore` 子代理运行时的系统提示词。 |
@@ -106,6 +105,8 @@ kind: "package-reference"
 `task` 的结果是对别人工作的摘要，可能很长。与其在这里裁掉，工具干脆不设上限，让 `tools` 分派器自己的 spill 把过大的结果写进文件，再把路径交给模型。
 
 ------
+七条事实界定了委派。深度只有一层：子 agent 不能再委派，深度也没有任何可配置之处。没有 resume 也没有后台运行：调用方等待子 agent，子会话 id 也不会交回，所以之后的回合无法继续那段对话。子 agent 的提示词来自这个插件的配置，而不是每个 agent 一个文件。每个子会话都从空开始，所以需要父上下文的子 agent 必须在 `prompt` 里拿到它。答案是文本，想要形状的调用方只能用文字把形状说出来。子会话只受 `child_max_steps` 与父回合的取消约束，不受别的约束。上限是按进程算的，这是 在飞 的诚实读法，但它也意味着一个部署无法按会话预留位置。
+
 
 <a id="further-exploration"></a>
 ## 进一步探索
@@ -116,14 +117,3 @@ kind: "package-reference"
 - [tools](../../agent/tools/README.zh.md)：列出本能力、注入宿主参数并溢出过长结果的分派器。
 
 ------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **永远只有一层**：子代理不能再委派。深度没有任何可配置的地方。
-- **不能续聊，也不能后台跑**：调用方等子代理结束，而子会话 id 不会交回，所以后面的轮次无法接着那段对话。
-- **没有 agent 定义文件**：子代理的提示词来自本插件的配置，而不是每个 agent 一个文件。
-- **不 fork 父会话**：每个子代理都从空开始。需要父上下文的子代理，只能在 `prompt` 里拿到。
-- **没有结构化输出**：答案就是文本。想要形状的调用方得用文字把形状说清楚。
-- **没有自己的超时**：子代理的边界只有 `child_max_steps` 和父轮次的取消，再没有别的。
-- **上限是按进程算的**：两个共用同一内核的前端共用一份预算，这是「在跑」最诚实的读法，但也就意味着部署无法按会话预留座位。

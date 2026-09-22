@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -34,8 +33,10 @@ writeAtomic(target, content);
 | `workspace(cwd, spillDir?)` | 会话工作目录，以及可选的第二个可读根。 | `{ root, read_roots }`。root 是 `cwd` 的真实路径；给了 spill 目录时，`read_roots` 是根本身再加上它。 |
 | `existingRoot(dir)` | 一个目录。 | 它的真实路径。不是非空字符串、不存在、或者不是目录时失败。 |
 | `resolvePath({ path, roots, write? })` | 待检查的路径、允许落在的根，以及这是不是一次写。 | 绝对目标路径。路径不可用或落到根外时抛错。 |
-| `displayPath(root, target)` | 根与一个绝对目标。 | 该给模型看的形式：正斜杠、相对根；根自身显示为 `.`。 |
+| `displayPath(root, target)` | 根与一个绝对目标。 | 该给模型看的形式：正斜杠、相对根；根自身显示为 `.`；目标在根之外时给的是规范化的绝对路径。 |
 | `writeAtomic(target, content)` | 目标文件与它的全文。 | 无。先建父目录，写临时文件，再改名。 |
+| `withFileLock(path, work)` | 调用方马上要碰的文件，以及要在锁里做的事。 | `work` 的返回值的 promise。同一个路径上的其他调用方——本进程的、以及另一个进程的——都排在前面。 |
+| `pendingFileLocks()` | 无。 | 此刻正在等待或持有锁的调用方有多少。 |
 
 ### `resolvePath` 拒绝什么
 
@@ -60,6 +61,7 @@ writeAtomic(target, content);
 |---|---|
 | [`src/paths.ts`](src/paths.ts) | `Workspace`、`existingRoot`、`workspace`、`resolvePath` 与 `displayPath`。 |
 | [`src/atomic.ts`](src/atomic.ts) | `writeAtomic`。 |
+| [`src/lock.ts`](src/lock.ts) | `withFileLock`、`pendingFileLocks`，以及第二个 host 也认的那把锁文件。 |
 | [`src/index.ts`](src/index.ts) | 再导出。 |
 
 ### 包含判定查两遍
@@ -70,6 +72,8 @@ writeAtomic(target, content);
 
 `writeAtomic` 在目标旁边建一个临时文件，名为 `.<名字>.<uuid>.tmp`，用独占创建标志与 `0600` 权限写全文，然后改名到目标上。同一个卷上的改名是原子的，所以读的人要么看到旧文件，要么看到新文件。改名失败会删掉临时文件并把错误抛出去。
 
+五条事实界定了这个模块。写入会拒绝符号链接，而一个已经解析到根之外的 junction 由包含性检查兜住，没有单独的检查。`displayPath` 对根之外的目标给出它规范化的绝对路径，因为相对形式等于给出一个谁也打不开的名字。`writeAtomic` 假定同一个卷，临时文件与目标同目录，这正是 rename 原子性的来源。`writeAtomic` 自己不拿锁：想要「一次只有一个写入者」的调用方去找 `withFileLock`，这棵树里每一次文件写入都这么做。mode 位在 Windows 上是建议性的，`0600` 与 `0700` 只在平台认可的地方生效。
+
 -----
 
 <a id="further-exploration"></a>
@@ -78,14 +82,3 @@ writeAtomic(target, content);
 - [tool-fs](../tool-fs/README.zh.md)：建在本库之上的三个工具。
 - [tool-fs-search](../tool-fs-search/README.zh.md)：用 `resolvePath` 给自己划定范围的搜索工具。
 - [fs 组](../README.zh.md)：库与插件怎么分工。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **目标端不查 junction**：写操作拒绝符号链接，而已经指向根外的 junction 由包含判定那一遍拦住。
-- **`displayPath` 不做解析**：它报告的是交进来的那条路径，所以拿着未解析路径的调用方看到的就是那个形态。
-- **`writeAtomic` 假定同一个卷**：临时文件是目标的同级文件，这正是原子改名的前提，所以落在另一个卷上的目标不在覆盖范围内。
-- **没有加锁**：两个写者对同一个文件都会成功，后改名的那次赢。
-- **权限位在 Windows 上只是建议**：`0600` 与 `0700` 在平台认可的地方才会生效。

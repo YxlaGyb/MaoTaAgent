@@ -62,10 +62,13 @@ importers:
         version: link:packages/shell/shell
       '@maota/skill':
         specifier: workspace:^
-        version: link:packages/skill
+        version: link:packages/skill/skill
+      '@maota/skill-bundled':
+        specifier: workspace:^
+        version: link:packages/skill/skill-bundled
       '@maota/skill-filesystem':
         specifier: workspace:^
-        version: link:packages/skill-filesystem
+        version: link:packages/skill/skill-filesystem
       '@maota/tool-fs':
         specifier: workspace:^
         version: link:packages/fs/tool-fs
@@ -75,6 +78,9 @@ importers:
       '@maota/tool-pwsh':
         specifier: workspace:^
         version: link:packages/shell/tool-pwsh
+      '@maota/tool-skill':
+        specifier: workspace:^
+        version: link:packages/skill/tool-skill
       '@maota/tool-subagent':
         specifier: workspace:^
         version: link:packages/subagent/tool-subagent
@@ -258,17 +264,38 @@ importers:
         specifier: workspace:^
         version: link:../shell
 
-  packages/skill:
+  packages/skill/skill:
     dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^
-        version: link:../plugin-kit
+        version: link:../../plugin-kit
 
-  packages/skill-filesystem:
+  packages/skill/skill-bundled:
     dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^
-        version: link:../plugin-kit
+        version: link:../../plugin-kit
+      '@maota/skill':
+        specifier: workspace:^
+        version: link:../skill
+
+  packages/skill/skill-filesystem:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+      '@maota/skill':
+        specifier: workspace:^
+        version: link:../skill
+
+  packages/skill/tool-skill:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+      '@maota/skill':
+        specifier: workspace:^
+        version: link:../skill
 
   packages/subagent/tool-subagent:
     dependencies:

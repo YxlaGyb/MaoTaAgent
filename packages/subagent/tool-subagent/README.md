@@ -16,7 +16,6 @@ One capability, `tool.task`, offered to the model as `task`. A call hands one se
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -39,7 +38,7 @@ One capability, `tool.task`, offered to the model as `task`. A call hands one se
 | `general` | Every tool the pool lists, minus `task` and minus `child_tools_deny`. | `general_system` |
 | `explore` | Only `explore_tools`, minus the same denials. | `explore_system` |
 
-Neither kind is given the `skill` tool: a subagent's prompt stays small, and it is not there to expand it.
+Neither kind is given the `skill` tool, because that is the `child_tools_deny` default: a subagent's prompt stays small, and it is not there to expand it.
 
 ### What comes back
 
@@ -59,7 +58,7 @@ Everything else becomes a thrown error, which the loop turns into a failed tool 
 |---|---|---|
 | `max_concurrent` | `4` | How many subagents this process may have in flight at once. |
 | `child_max_steps` | `8` | The step ceiling handed to each child run. |
-| `child_tools_deny` | `[]` | Tool names no subagent may use. `task` is always denied and cannot be taken off the list. |
+| `child_tools_deny` | `["skill"]` | Tool names no subagent may use. `task` is always denied and cannot be taken off the list, and a deployment that wants the `skill` tool inside a subagent writes `[]` to take it out of this default. |
 | `explore_tools` | `["read", "glob", "grep"]` | What an `explore` subagent may use. |
 | `general_system` | the packaged prompt | The system prompt a `general` child runs under. |
 | `explore_system` | the packaged prompt | The system prompt an `explore` child runs under. |
@@ -106,6 +105,8 @@ Two `task` calls in one step are the point of the tool, and the loop already gat
 The result of a `task` call is a summary of somebody else's work and can be long. Rather than cut it here, the tool leaves the ceiling unset and lets the `tools` dispatcher's own spill write an oversized result to a file and hand the model the path.
 
 ------
+Seven facts bound a delegation. One level is all there is: a subagent cannot delegate, and nothing about the depth is configurable. There is no resume and no background run: the caller waits for the child, and the child's session id is not handed back, so a later turn cannot continue that conversation. A subagent's prompt comes from this plugin's config rather than from a file per agent. Every child starts empty, so a subagent that needs the parent's context must be given it in `prompt`. The answer is text, so a caller that wants a shape asks for the shape in words. A child is bounded by `child_max_steps` and by the parent turn's cancellation and by nothing else. And the cap is per process, which is the honest reading of in flight, though it means a deployment cannot reserve seats per session.
+
 
 <a id="further-exploration"></a>
 ## Further exploration
@@ -116,14 +117,3 @@ The result of a `task` call is a summary of somebody else's work and can be long
 - [tools](../../agent/tools/README.md): the dispatcher that lists this capability, injects the host arguments and spills a long result.
 
 ------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **One level deep, always**: a subagent cannot delegate. Nothing is configurable about the depth.
-- **No resume and no background run**: the caller waits for the child, and the child's session id is not handed back, so a later turn cannot continue that conversation.
-- **No agent definition files**: a subagent's prompt comes from this plugin's config, not from a file per agent.
-- **No fork of the parent's conversation**: every child starts empty. A subagent that needs the parent's context must be given it in `prompt`.
-- **No structured output**: the answer is text. A caller that wants a shape has to ask for the shape in words.
-- **No timeout of its own**: a child is bounded by `child_max_steps` and by the parent turn's cancellation, and by nothing else.
-- **The cap is per process**: two front ends sharing one kernel share one budget, which is the honest reading of "in flight", but it means a deployment cannot reserve seats per session.

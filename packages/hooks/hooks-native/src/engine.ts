@@ -1,4 +1,4 @@
-import type { Channel, Route } from "@maota/plugin-kit";
+import { CallError, type Channel, type Route } from "@maota/plugin-kit";
 import {
   hookLabel,
   isHookCapability,
@@ -32,20 +32,25 @@ export async function describeProviders(
   channel: Channel,
   capabilities: Record<string, Route>,
   signal: AbortSignal,
+  strict = true,
 ): Promise<HookProvider[]> {
   const found: HookProvider[] = [];
   for (const capability of providerCapabilities(capabilities)) {
+    let events: HookEvent[] = [];
     try {
       const reply = (await channel.call(capability, "describe", {}, { signal })) as HookDescription | null;
-      const events = Array.isArray(reply?.events) ? reply.events.filter(isHookEvent) : [];
-      if (events.length === 0) {
-        channel.log("warn", `${capability} declares no hook event; skipped`, { capability });
-        continue;
-      }
-      found.push({ capability, events });
+      events = Array.isArray(reply?.events) ? reply.events.filter(isHookEvent) : [];
     } catch (error) {
+      if (strict) throw new CallError(-32603, `${capability} has no usable describe: ${messageOf(error)}`);
       channel.log("warn", `${capability} has no usable describe; skipped`, { capability, error: messageOf(error) });
+      continue;
     }
+    if (events.length === 0) {
+      if (strict) throw new CallError(-32603, `${capability} declares no hook event this engine knows`);
+      channel.log("warn", `${capability} declares no hook event; skipped`, { capability });
+      continue;
+    }
+    found.push({ capability, events });
   }
   return found;
 }
@@ -61,23 +66,42 @@ export async function runHooks(
   payload: unknown,
   maxContextChars: number,
   providers: readonly HookProvider[],
+  parallel = true,
 ): Promise<HookOutcome> {
-  const contributions: HookContribution[] = [];
-  for (const provider of providers) {
-    if (!provider.events.includes(event)) continue;
-    try {
-      const reply = (await channel.call(provider.capability, event, payload, { signal })) as HookReply | null;
-      if (reply !== null && reply !== undefined) {
-        contributions.push({ source: hookLabel(provider.capability), reply });
-      }
-    } catch (error) {
-      channel.log("warn", `${provider.capability} failed on ${event}`, { error: messageOf(error) });
-    }
-  }
+  const contributions = await collectHookContributions(channel, signal, event, payload, providers, parallel);
   const outcome = mergeHookOutcomes(contributions, event, maxContextChars);
   channel.log("info", `${event}: ${outcome.decision ?? "no opinion"}`, {
     event,
     answered: contributions.map((contribution) => contribution.source),
   });
   return outcome;
+}
+
+/// The same gathering without the fold, so a caller that also has command hooks
+/// can fold every opinion about one event together instead of folding twice.
+export async function collectHookContributions(
+  channel: Channel,
+  signal: AbortSignal,
+  event: HookEvent,
+  payload: unknown,
+  providers: readonly HookProvider[],
+  parallel = true,
+): Promise<HookContribution[]> {
+  const ask = async (provider: HookProvider): Promise<HookContribution | null> => {
+    try {
+      const reply = (await channel.call(provider.capability, event, payload, { signal })) as HookReply | null;
+      return reply === null || reply === undefined ? null : { source: hookLabel(provider.capability), reply };
+    } catch (error) {
+      channel.log("warn", `${provider.capability} failed on ${event}`, { error: messageOf(error) });
+      return null;
+    }
+  };
+  const listening = providers.filter((provider) => provider.events.includes(event));
+  const answers: Array<HookContribution | null> = [];
+  if (parallel) {
+    answers.push(...(await Promise.all(listening.map(ask))));
+  } else {
+    for (const provider of listening) answers.push(await ask(provider));
+  }
+  return answers.filter((answer): answer is HookContribution => answer !== null);
 }

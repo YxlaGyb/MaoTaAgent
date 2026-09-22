@@ -4,6 +4,7 @@ export interface Message {
   tool_calls?: unknown[];
   tool_call_id?: string;
   name?: string;
+  source?: unknown;
 }
 
 /// Text a seam injects, tagged with where it came from so the message it
@@ -24,6 +25,7 @@ export interface ToolSpec {
   input_schema?: unknown;
   capability?: string;
   host_args?: ToolHostArg[];
+  paths?: string[];
 }
 
 export interface ToolCall {

@@ -12,7 +12,6 @@
 - [配置解析](#configuration-resolution)
 - [开发期热重载](#dev-hot-reload)
 - [开发](#development)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -103,15 +102,4 @@ roots = ["<repo>/apps", "<repo>/packages"]
 
 第一次 Ctrl-C 让内核以 `ui_quit` 停机，并以内核返回的码退出；停机在路上时后续的 Ctrl-C 不再重复。`check` 故意绕开 `boot()`，用内核自己的检查器并继承 stdio，因此诊断与退出码都属于内核。
 
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-这些限制说明这个启动器在什么时候需要小心。它们是当前约束，不是任务积压。
-
-- **选项从不透传给插件**：每个插件的设置都住在该 profile 的 `eggshell.toml` 或它旁边的 `eggshell.local.toml`。
-- **`serve` 没有自己的选项**：web 端口只能来自 `[plugins.web.config]`。
-- **web 插件始终没监听的那次 `serve` 会一直等下去**：没有启动期限。
-- **会话只能靠 `--session` 指认**：没有管理会话的子命令。
-- **import 图是静态读出来的**：只经算出来的 specifier 或路径别名才能到达的模块不在图里，改它不重启任何东西。
-- **热重载重启的是整个插件进程**：插件里的内存状态不会留下来。
-- **这一切的前提是 `hmr` 那一行已经启用**：生成的那一行默认是关的。
+七条事实界定了这个启动器。选项从不抵达插件，因为每一项插件设置都在 profile 的 `eggshell.toml` 或它旁边的 `eggshell.local.toml` 里，而 `serve` 自己没有选项，web 端口只来自 `[plugins.web.config]`。web 插件始终不监听的 `serve` 会一直等下去，因为没有启动期限。会话只能用 `--session` 指认。导入图是静态读出来的，所以只能通过计算出来的 specifier 或路径别名到达的模块不在图里，改它不会重启任何东西。热重载重启整个插件进程，所以插件内部没有任何东西能活过一次重启。这一切都要求 `hmr` 行是打开的，而生成的那一行是关闭的。

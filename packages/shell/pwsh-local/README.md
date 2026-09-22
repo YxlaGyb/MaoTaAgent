@@ -16,7 +16,6 @@ This provider answers the `shell` capability by starting a real PowerShell proce
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -77,6 +76,8 @@ The command line is prefixed with a fixed preamble that assigns `[Console]::Outp
 
 Each stream is capped at `max_output_bytes`, counted separately, and the first chunk that does not fit sets `truncated`. A timer kills the process at `timeout_ms` and sets `timed_out`. An abort signal kills it too, and one that fires before the spawn returns still kills the child on the next line. The result is resolved from the process close event, so a killed process still reports whatever exit code or signal the platform gave it, and the timer and the abort listener are removed once it settles.
 
+Five facts bound this provider. There is no sandbox, so the command runs with the full rights of the host process. Every call is a new process, so a shell variable set in one call is gone in the next, and there are no background commands. Output past the cap is discarded rather than folded, and the tool reports only that the stream was cut. The cap is per stream, so a run can return twice `max_output_bytes` in total. And a kill is a kill: a process that ignores a termination request is not escalated to a harder one.
+
 -----
 
 <a id="further-exploration"></a>
@@ -85,14 +86,3 @@ Each stream is capped at `max_output_bytes`, counted separately, and the first c
 - [shell](../shell/README.md): the request and result shapes this provider answers with.
 - [tool-pwsh](../tool-pwsh/README.md): the tool that calls this capability.
 - [shell group](../README.md): how the three packages divide the work.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **No sandbox**: the command runs with the full rights of the host process.
-- **No background commands and no persistent session**: every call is a new process, so a shell variable set in one call is gone in the next.
-- **Output is dropped, not folded**: past the cap the extra bytes are discarded, and the tool reports only that the stream was cut.
-- **The cap is per stream**: stdout and stderr are each allowed `max_output_bytes`, so a run can return twice that in total.
-- **A kill is a kill**: a process that ignores a termination request is not escalated to a harder one.

@@ -46,12 +46,22 @@ export interface ToolCall {
   function?: { name?: string; arguments?: string };
 }
 
+/// What the harness attached to a message it wrote for itself. The only kind so
+/// far is the skill catalog, whose `entries` are what the model last read, so a
+/// reader can tell an injected note from something a person typed.
+export interface SessionMessageSource {
+  kind: string;
+  update?: boolean;
+  entries?: Array<{ name: string; description: string }>;
+}
+
 export interface SessionMessage {
   role: string;
   content?: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   name?: string;
+  source?: SessionMessageSource;
 }
 
 export interface SessionFile {
@@ -105,4 +115,25 @@ export interface BridgeFacts {
   levels: string[];
   thinking: Record<string, { model?: string; tools?: boolean }> | null;
   has_key: boolean | null;
+}
+
+export interface SkillInvocationPolicy {
+  modelInvocable: boolean;
+  userInvocable: boolean;
+}
+
+/// One skill as the registry reports it: the one line the model reads before it
+/// decides, where the skill came from, what discovered it, and whether this
+/// working directory activates it.
+export interface SkillSummary {
+  name: string;
+  description: string;
+  whenToUse?: string;
+  source: string;
+  provider: string;
+  invocation: SkillInvocationPolicy;
+  paths?: string[];
+  active: boolean;
+  resourceBase?: { kind: "directory"; path: string };
+  inert?: string[];
 }

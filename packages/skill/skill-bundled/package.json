@@ -1,5 +1,5 @@
 {
-  "name": "@maota/skill-filesystem",
+  "name": "@maota/skill-bundled",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/plugin-kit": "workspace:^"
+    "@maota/plugin-kit": "workspace:^",
+    "@maota/skill": "workspace:^"
   },
   "types": "lib/index.d.ts"
 }

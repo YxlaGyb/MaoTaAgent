@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { CallError, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { CallError, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import { readChat, type ChatReply } from "./messages.ts";
 import { asOpenAITools, chat as openaiChat, streamChat, upstreamError, transportError, GATEWAY_ERROR, type Gateway } from "./openai.ts";
 import { scriptedChat, type ScriptStep } from "./scripted.ts";
@@ -13,10 +13,19 @@ interface Settings {
   backend: "openai" | "scripted";
   model: string;
   key_env: string;
+  retry_max: number;
+  retry_backoff_ms: number;
   script: ScriptStep[];
 }
 
-let settings: Settings = { backend: "openai", model: "gpt-4o-mini", key_env: "OPENAI_API_KEY", script: [] };
+let settings: Settings = {
+  backend: "openai",
+  model: "gpt-4o-mini",
+  key_env: "OPENAI_API_KEY",
+  retry_max: 2,
+  retry_backoff_ms: 500,
+  script: [],
+};
 let gateway: Gateway = { base_url: "https://api.openai.com/v1", api_key: "" };
 let step = 0;
 
@@ -47,6 +56,54 @@ function resolveKey(config: Record<string, unknown>, key_env: string): string {
 }
 
 const SCRIPT_CHUNKS = 3;
+
+/// Only a failure that could plausibly go away is retried: the gateway being
+/// busy, broken or unreachable. A rejected key, a malformed request and a
+/// cancelled turn are answers, not accidents.
+const RETRYABLE = new Set<number>([GATEWAY_ERROR.rate_limit, GATEWAY_ERROR.server, GATEWAY_ERROR.transport]);
+
+function retryable(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "number" && RETRYABLE.has(code);
+}
+
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted === true) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+/// The backoff doubles, so a gateway that is briefly busy is not hammered. The
+/// caller decides whether another attempt is still honest, which is what keeps
+/// a half-delivered stream from being replayed.
+async function withRetry<T>(
+  work: () => Promise<T>,
+  again: () => boolean,
+  signal?: AbortSignal,
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await work();
+    } catch (error) {
+      attempt += 1;
+      if (attempt > settings.retry_max || !retryable(error) || !again() || signal?.aborted === true) throw error;
+      await pause(settings.retry_backoff_ms * 2 ** (attempt - 1), signal);
+    }
+  }
+}
 
 function requireKey(): void {
   if (settings.backend === "openai" && gateway.api_key === "") {
@@ -80,17 +137,30 @@ async function streamed(request: ReturnType<typeof readChat>, ctx: Call): Promis
     return { backend: "scripted", model: request.model };
   }
 
-  const reply = await streamChat(gateway, request, ctx.signal, (event) => {
-    if (event.text) stream.push({ type: "delta", text: event.text });
-    if (event.reasoning) stream.push({ type: "reasoning", text: event.reasoning });
-  });
+  // Text already pushed cannot be taken back, so a stream that broke after the
+  // first delta is reported as it happened rather than started over.
+  let emitted = false;
+  const reply = await withRetry(
+    () =>
+      streamChat(gateway, request, ctx.signal, (event) => {
+        if (event.text) {
+          emitted = true;
+          stream.push({ type: "delta", text: event.text });
+        }
+        if (event.reasoning) stream.push({ type: "reasoning", text: event.reasoning });
+      }),
+    () => !emitted,
+    ctx.signal,
+  );
   stream.push({ type: "message", message: reply.message });
   return { backend: "openai", model: request.model };
 }
 
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "api", version: "1.0.0" }],
-  configKeys: ["backend", "model", "base_url", "api_key", "api_key_env", "script"],
+  provides: [{ capability: "api", version: VERSION }],
+  configKeys: ["backend", "model", "base_url", "api_key", "api_key_env", "retry_max", "retry_backoff_ms", "script"],
 
   setup(wiring) {
     const config = wiring.config;
@@ -99,6 +169,12 @@ export const definition: Definition = {
       backend: config.backend === "scripted" ? "scripted" : "openai",
       model: typeof config.model === "string" ? config.model : "gpt-4o-mini",
       key_env,
+      retry_max:
+        typeof config.retry_max === "number" && Number.isInteger(config.retry_max) && config.retry_max >= 0
+          ? config.retry_max
+          : 2,
+      retry_backoff_ms:
+        typeof config.retry_backoff_ms === "number" && config.retry_backoff_ms >= 0 ? config.retry_backoff_ms : 500,
       script: Array.isArray(config.script) ? (config.script as ScriptStep[]) : [],
     };
     step = 0;
@@ -127,12 +203,12 @@ export const definition: Definition = {
       const reply: ChatReply =
         settings.backend === "scripted"
           ? scriptedChat(settings.script, step++)
-          : await openaiChat(gateway, request, ctx.signal);
+          : await withRetry(() => openaiChat(gateway, request, ctx.signal), () => true, ctx.signal);
       return { backend: settings.backend, model: request.model, ...reply };
     },
   },
 
-  selfCheck() {
+  async selfCheck() {
     const problems: string[] = [];
     const call = scriptedChat([{ tool: "shell", args: { command: "echo hi" } }], 0).message
       .tool_calls?.[0] as { function?: { name?: string; arguments?: string } } | undefined;
@@ -152,6 +228,25 @@ export const definition: Definition = {
       readChat({ messages: [] }, "m");
       problems.push("readChat accepted an empty message list");
     } catch {
+    }
+    const projected = readChat(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "hi",
+            name: "skill-catalog",
+            source: { kind: "skill-catalog", entries: [{ name: "s", description: "d" }] },
+            capability: "tool.read",
+          },
+        ],
+      },
+      "m",
+    ).messages[0] as unknown as Record<string, unknown>;
+    if ("source" in projected) problems.push("readChat sent the local message source to the provider");
+    if ("capability" in projected) problems.push("readChat sent a local field to the provider");
+    if (projected.name !== "skill-catalog" || projected.content !== "hi") {
+      problems.push(`readChat projected the message as ${JSON.stringify(projected)}`);
     }
 
     const parser = new SseParser();
@@ -190,6 +285,61 @@ export const definition: Definition = {
     if (transportError(new Error("boom")).code !== GATEWAY_ERROR.transport) problems.push("a network error is not mapped to transport");
     const aborted = transportError(Object.assign(new Error("stop"), { name: "AbortError" }));
     if (aborted.code !== -32013) problems.push(`an abort is mapped to ${aborted.code}, expected -32013`);
+
+    const slow = settings.retry_backoff_ms;
+    settings = { ...settings, retry_backoff_ms: 0 };
+    let attempts = 0;
+    const recovered = await withRetry(
+      async () => {
+        attempts += 1;
+        if (attempts < 3) throw new CallError(GATEWAY_ERROR.server, "upstream 503");
+        return "ok";
+      },
+      () => true,
+    );
+    if (recovered !== "ok" || attempts !== 3) problems.push(`a busy gateway was tried ${attempts} times`);
+    let hard = 0;
+    try {
+      await withRetry(
+        async () => {
+          hard += 1;
+          throw new CallError(GATEWAY_ERROR.auth, "no");
+        },
+        () => true,
+      );
+      problems.push("an auth failure was retried");
+    } catch {
+    }
+    if (hard !== 1) problems.push(`an auth failure was tried ${hard} times`);
+    let exhausted = 0;
+    try {
+      await withRetry(
+        async () => {
+          exhausted += 1;
+          throw new CallError(GATEWAY_ERROR.transport, "boom");
+        },
+        () => true,
+      );
+      problems.push("an unreachable gateway was never given up on");
+    } catch {
+    }
+    if (exhausted !== settings.retry_max + 1) {
+      problems.push(`a dead gateway was tried ${exhausted} times, expected ${settings.retry_max + 1}`);
+    }
+    let halfStreamed = 0;
+    try {
+      await withRetry(
+        async () => {
+          halfStreamed += 1;
+          throw new CallError(GATEWAY_ERROR.transport, "broke mid-stream");
+        },
+        () => halfStreamed < 1,
+      );
+      problems.push("a stream that already delivered text was replayed");
+    } catch {
+    }
+    if (halfStreamed !== 1) problems.push(`a half-delivered stream was tried ${halfStreamed} times`);
+    settings = { ...settings, retry_backoff_ms: slow };
 
     try {
       requireKey();

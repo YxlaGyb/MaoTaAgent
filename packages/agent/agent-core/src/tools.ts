@@ -1,16 +1,14 @@
 import type { ToolSpec } from "@maota/agent-loop";
 
-export const SKILL_TOOL: ToolSpec = {
-  name: "skill",
-  description: "Read the full text of a skill by name.",
-  input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
-};
-
 export interface HostValues {
   session_cwd: string | null;
   session_id: string | null;
   call_id: string | null;
   subagent: SubagentIdentity | null;
+  /// The paths this session has touched, newest last. It is a host value
+  /// because only the run knows it, and a tool that reasons about conditional
+  /// material would otherwise have to guess.
+  session_touched: string[];
 }
 
 /// Which subagent a call belongs to, as the tool that asks for approval needs
@@ -63,10 +61,11 @@ function filled(value: unknown): boolean {
 
 /// Only the sources a tool declares are filled, and an unknown source stays
 /// empty rather than reaching for a value the declaration never asked for.
-export function hostValue(source: string, host: HostValues): string | SubagentIdentity | null {
+export function hostValue(source: string, host: HostValues): string | string[] | SubagentIdentity | null {
   if (source === "session_cwd") return host.session_cwd;
   if (source === "session_id") return host.session_id;
   if (source === "call_id") return host.call_id;
   if (source === "subagent") return host.subagent;
+  if (source === "session_touched") return host.session_touched;
   return null;
 }

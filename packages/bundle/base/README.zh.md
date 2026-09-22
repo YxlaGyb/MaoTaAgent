@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的十五个插件、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的十七个插件、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
 kind: "package-reference"
 ---
 
@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -45,8 +44,10 @@ import { rows } from "@maota/base";
 | `tool-todo` | `@maota/tool-todo` | `tool.todo_write` |
 | `tool-subagent` | `@maota/tool-subagent` | `tool.task` |
 | `tools` | `@maota/tools` | `tools` |
+| `tool-skill` | `@maota/tool-skill` | `tool.skill` |
 | `skill` | `@maota/skill` | `skill` |
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
+| `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
 | `hooks` | `@maota/hooks-native` | `hooks` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
@@ -54,7 +55,7 @@ import { rows } from "@maota/base";
 
 ### 顺序
 
-五个 `tool.*` 插件与它们的 `shell`、`permission` provider 排在 `tools` 之前，`tools` 又排在 `agent-core` 之前。分发器在 `start` 时只读一次能力表，并把读到的东西缓存下来，所以一个尚未启动的 provider 要到下一次 `list` 才可见。让 provider 排在分发器上面，正是“启动一次就够”的原因。
+每个 provider 都排在读它的分发器上面：六个 `tool.*` 插件与它们的 `shell`、`permission` provider 排在 `tools` 之前，两个技能 provider 排在 `skill` 之前；两个分发器都排在读它们的 `agent-core` 之前。分发器在 `start` 时只读一次能力表，并把读到的东西缓存下来，所以一个尚未启动的 provider 要到下一次 `list` 才可见。让 provider 排在分发器上面，正是“启动一次就够”的原因。
 
 -----
 
@@ -76,6 +77,8 @@ import { rows } from "@maota/base";
 
 生成的那个文件不是用户改的文件。profile 目录里还有 `eggshell.local.toml`，它 extends 生成的那份，而 `[plugins.tools.config]` 这样的配置块就该写在那里。由于一行只点一个包，别的不写，换 provider 意味着改行清单或改本地层，而不是改这个包。
 
+一个 bundle 就是一份列表，profile 要么整份挂载要么完全不挂载，所以删掉一行就意味着改这个数组。顺序靠人手维护：没有东西检查 provider 是否排在它的派发器之前，写错的后果是一个工具干脆不见了。配置块只在行自带配置时才写进生成文件，其余设置属于用户的本地层。被禁用的行仍然会被写出来，所以 `hmr` 在全新配置里是关闭的，打开它不需要别的改动。
+
 -----
 
 <a id="further-exploration"></a>
@@ -85,13 +88,3 @@ import { rows } from "@maota/base";
 - [app-boot](../../boot/app-boot/README.zh.md)：读这份清单并生成 profile 的代码。
 - [packages/ ，插件树](../../README.zh.md)：被点名的每个包各提供什么。
 - [bundle 组](../README.zh.md)：行清单是什么。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **一个 bundle 一份清单**：profile 要么挂整个 bundle，要么一个都不挂，所以去掉一行意味着改这个数组。
-- **顺序靠人手**：没有任何东西检查某个 provider 是否排在它的分发器上面，弄错了的表现就是某个工具干脆不见了。
-- **这里没有逐行配置**：只有行自己带了配置块，生成的配置里才会有；其余都归用户的本地层。
-- **被禁用的行照样写出来**：`hmr` 出现在生成的配置里，只是关着，所以想打开不必改别的。

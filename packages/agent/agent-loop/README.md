@@ -16,7 +16,6 @@ The loop engine one turn runs on: call the model, run the tools it asked for, fe
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -108,6 +107,8 @@ A different policy, such as execution that starts while the model is still strea
 
 `selfCheck` in `agent-core` drives this module through scripted seams. The repository also keeps a test beside it, in [`tests/loop.smoke.ts`](tests/loop.smoke.ts), which covers completion, a two-call round, a tool that throws, an exhausted budget, an abort before the first step, an abort inside a tool round, malformed assistant messages, batching and its cap, an unsafe call splitting a round, out-of-order results, a refused call that is neither classified nor dispatched and still leaves an `{ error }` result, injected text landing right after the results it belongs to, a halt ending the run as `stopped`, one steer continuing the run exactly once, a cancelled run and a run at its step ceiling never reaching the stop seam, and a missing or throwing `classify` or lifecycle seam. It needs no kernel and no network, and `pnpm loop:smoke` runs it alone.
 
+Three boundaries are worth stating plainly, and two of them are already visible above. Batching groups consecutive calls only, so a single unsafe call splits the round, and nothing starts while the model is still streaming, because a round waits for the assistant message to finish. The loop persists nothing and reads no config: saving a turn and every setting belong to the plugin that drives it. It has no retry and no compaction of its own, because classifying a rejected model call and retrying it belongs to `@maota/api` and folding old messages belongs to `@maota/agent-core`. `steps` counts started calls, so a run aborted inside a step reports that step as its count.
+
 -----
 
 <a id="further-exploration"></a>
@@ -116,14 +117,3 @@ A different policy, such as execution that starts while the model is still strea
 - [agent-core](../agent-core/README.md): the plugin that supplies the model and tool seams.
 - [agent package](../README.md): how the plugin and this engine divide the work.
 - [packages group](../../README.md): the plugin tree this module belongs to.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **Batching is consecutive only**: one unsafe call splits the round, so two safe calls either side of it never share a batch.`n- **Nothing starts while the model is still streaming**: a round waits for the assistant message to finish.
-- **No failure classification and no retry**: a rejected model call is the caller's problem, and the loop never tries again on its own.
-- **No context compaction**: the message array grows until the caller stops handing it back.
-- **The loop persists nothing**: saving a turn belongs to the plugin, and so does every config value.
-- **`steps` counts started calls**: a run aborted inside a step reports that step as its count.

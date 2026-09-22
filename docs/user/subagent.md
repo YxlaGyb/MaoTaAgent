@@ -37,7 +37,7 @@ The split keeps the static dependency graph acyclic. `tool-subagent` requires `a
 
 `explore` is the one that makes the read-only promise structural rather than a matter of the prompt: its tool list is a fixed whitelist, so there is nothing to talk it out of. Both kinds are denied `task`, whatever a deployment writes in `child_tools_deny`, because one level of delegation is the whole shape of this version.
 
-Neither kind is offered the `skill` tool. A subagent has its own context to spend, and a skill list would spend it before the work started.
+Neither kind is offered the `skill` tool and neither is sent a skill catalog, which is the `child_tools_deny` default. A subagent has its own context to spend, and a catalog would spend it before the work started.
 
 <a id="the-child-run"></a>
 ## The child run
@@ -47,7 +47,7 @@ A child run is a run of `agent.loop`, so it reuses the loop, the provider, the t
 | Property | Ordinary run | Child run |
 |---|---|---|
 | History | Loaded from the session document. | Empty, always. The only input is the prompt. |
-| System prompt | The configured one, plus the skill list, the working directory and the approval policy. | The subagent's own, plus the working directory and the approval policy. No skill list. |
+| System prompt | The configured one, the working directory and the approval policy, and a skill catalog arrives as a message of its own. | The subagent's own, plus the working directory and the approval policy, and no catalog message. |
 | Title | The first user message. | The call's `description`. |
 | Step ceiling | `max_steps`. | The `child_max_steps` the call was given. |
 | Model and thinking level | Read from the level the caller picked. | Inherited from the parent run, which published them when it started. |

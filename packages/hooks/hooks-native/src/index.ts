@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import {
   CallError,
+  isPluginEntry,
+  packageVersion,
   runPlugin,
   type Call,
   type Channel,
@@ -8,13 +10,23 @@ import {
   type Route,
   type Wiring,
 } from "@maota/plugin-kit";
-import { HOOK_EVENTS, isHookEvent, type HookOutcome } from "@maota/hook-protocol";
-import { describeProviders, providerCapabilities, runHooks, type HookProvider } from "./engine.ts";
+import { HOOK_EVENTS, isHookEvent, mergeHookOutcomes, type HookOutcome } from "@maota/hook-protocol";
+import { runCommandHooks, type CommandHook } from "./command.ts";
+import {
+  collectHookContributions,
+  describeProviders,
+  providerCapabilities,
+  runHooks,
+  type HookProvider,
+} from "./engine.ts";
 
-const DEFAULTS = { max_context_chars: 4000 };
+const DEFAULTS = { max_context_chars: 4000, parallel: true, strict: true };
 
 let settings = { ...DEFAULTS };
 let providers: HookProvider[] = [];
+/// Command hooks grouped by the registration that owns them, because a scope is
+/// how a run that borrowed them gives them back.
+let commands = new Map<string, CommandHook[]>();
 /// Nothing here outlives the process; the controller exists so a discovery call
 /// still in flight when the kernel says goodbye stops with it.
 const life = new AbortController();
@@ -23,19 +35,70 @@ function positive(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-async function discover(channel: Channel, capabilities: Record<string, Route>): Promise<void> {
-  providers = await describeProviders(channel, capabilities, life.signal);
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
 }
 
+function readCommandHooks(value: unknown, scope: string): CommandHook[] {
+  if (!Array.isArray(value)) throw new CallError(-32602, "hooks must be a list");
+  const hooks: CommandHook[] = [];
+  for (const raw of value) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new CallError(-32602, "each hook must be an object with an event and a command");
+    }
+    const input = raw as Record<string, unknown>;
+    if (!isHookEvent(input.event)) {
+      throw new CallError(-32602, `each hook needs an event from ${HOOK_EVENTS.join(", ")}`);
+    }
+    if (typeof input.command !== "string" || input.command.trim() === "") {
+      throw new CallError(-32602, "each hook needs a command");
+    }
+    const matcher = input.matcher;
+    if (matcher !== undefined && typeof matcher !== "string") {
+      throw new CallError(-32602, "a hook matcher must be a string");
+    }
+    const timeout = input.timeout_ms;
+    if (timeout !== undefined && !(typeof timeout === "number" && Number.isFinite(timeout) && timeout > 0)) {
+      throw new CallError(-32602, "a hook timeout_ms must be a positive number");
+    }
+    hooks.push({
+      event: input.event,
+      command: input.command,
+      scope,
+      ...(matcher === undefined ? {} : { matcher }),
+      ...(timeout === undefined ? {} : { timeout_ms: Math.floor(timeout) }),
+    });
+  }
+  return hooks;
+}
+
+function allCommands(): CommandHook[] {
+  return [...commands.values()].flat();
+}
+
+async function discover(channel: Channel, capabilities: Record<string, Route>): Promise<void> {
+  providers = await describeProviders(channel, capabilities, life.signal, settings.strict);
+}
+
+const VERSION = packageVersion(import.meta.url);
+
 export const definition: Definition = {
-  provides: [{ capability: "hooks", version: "1.0.0" }],
-  configKeys: ["max_context_chars"],
+  provides: [{ capability: "hooks", version: VERSION }],
+  configKeys: ["max_context_chars", "command_hooks", "parallel", "strict"],
 
   setup(wiring) {
-    settings = { max_context_chars: positive(wiring.config.max_context_chars, DEFAULTS.max_context_chars) };
+    settings = {
+      max_context_chars: positive(wiring.config.max_context_chars, DEFAULTS.max_context_chars),
+      parallel: flag(wiring.config.parallel, DEFAULTS.parallel),
+      strict: flag(wiring.config.strict, DEFAULTS.strict),
+    };
   },
 
   async start(wiring) {
+    // A profile that lists its own command hooks hands them over here, and they
+    // are owned the same way a skill's are, under a scope named for the config.
+    const listed = wiring.config.command_hooks;
+    if (listed !== undefined) commands.set("config", readCommandHooks(listed, "config"));
     await discover(wiring.channel, { ...wiring.capabilities });
     wiring.channel.log("info", `hooks: ${providers.map((item) => item.capability).join(", ") || "(none)"}`, {
       count: providers.length,
@@ -58,16 +121,65 @@ export const definition: Definition = {
       if (!isHookEvent(event)) {
         throw new CallError(-32602, `event must be one of ${HOOK_EVENTS.join(", ")}`);
       }
-      return runHooks(ctx.channel, ctx.signal, event, params?.payload ?? null, settings.max_context_chars, providers);
+      const payload = params?.payload ?? null;
+      // Providers and commands are both opinions about the same event and fold
+      // the same way, so a command hook can refuse exactly where a plugin can.
+      // The two groups are asked at the same time and folded providers first,
+      // each group in its own registration order.
+      const [fromPlugins, fromCommands] = await Promise.all([
+        collectHookContributions(ctx.channel, ctx.signal, event, payload, providers, settings.parallel),
+        runCommandHooks(allCommands(), event, payload, ctx.signal, (level, message, fields) =>
+          ctx.channel.log(level, message, fields),
+        ),
+      ]);
+      const contributions = [...fromPlugins, ...fromCommands];
+      const outcome = mergeHookOutcomes(contributions, event, settings.max_context_chars);
+      ctx.channel.log("info", `${event}: ${outcome.decision ?? "no opinion"}`, {
+        event,
+        answered: contributions.map((contribution) => contribution.source),
+      });
+      return outcome;
     },
 
     list() {
-      return { hooks: providers.map((item) => ({ capability: item.capability, events: item.events })) };
+      return {
+        hooks: providers.map((item) => ({ capability: item.capability, events: item.events })),
+        commands: allCommands().map((hook) => ({
+          event: hook.event,
+          command: hook.command,
+          scope: hook.scope,
+          ...(hook.matcher === undefined ? {} : { matcher: hook.matcher }),
+        })),
+      };
+    },
+
+    /// A skill registers its hooks for one run and takes them back when that
+    /// run ends; the scope is what it takes back, so two skills that register
+    /// the same command never withdraw each other.
+    register(params) {
+      const scope = params?.scope;
+      if (typeof scope !== "string" || scope.trim() === "") {
+        throw new CallError(-32602, "register needs a scope");
+      }
+      const hooks = readCommandHooks(params?.hooks ?? [], scope);
+      commands.set(scope, hooks);
+      return { registered: hooks.length, scope };
+    },
+
+    unregister(params) {
+      const scope = params?.scope;
+      if (typeof scope !== "string" || scope.trim() === "") {
+        throw new CallError(-32602, "unregister needs a scope");
+      }
+      const removed = commands.get(scope)?.length ?? 0;
+      commands.delete(scope);
+      return { removed, scope };
     },
   },
 
   close() {
     life.abort();
+    commands = new Map<string, CommandHook[]>();
   },
 
   async selfCheck() {
@@ -119,7 +231,7 @@ export const definition: Definition = {
       problems.push(`providerCapabilities picked ${providerCapabilities(table).join(",")}`);
     }
 
-    const found = await describeProviders(alphaBeta, table, signal);
+    const found = await describeProviders(alphaBeta, table, signal, false);
     if (found.map((item) => item.capability).join(",") !== "hook.alpha,hook.beta") {
       problems.push(`describeProviders found ${found.map((item) => item.capability).join(",")}`);
     }
@@ -154,22 +266,33 @@ export const definition: Definition = {
         throw new Error(`beta was asked for ${method}`);
       },
     });
-    const survivors = await describeProviders(broken, table, signal);
+    const survivors = await describeProviders(broken, table, signal, false);
     if (survivors.map((item) => item.capability).join(",") !== "hook.beta") {
       problems.push(`a hook with no usable describe was not skipped: ${survivors.map((i) => i.capability).join(",")}`);
+    }
+    // Strict is the default, and the same broken hook is what it refuses: a
+    // capability that cannot be read is a startup failure, not a silent drop.
+    let strict = "";
+    try {
+      await describeProviders(broken, table, signal);
+    } catch (error) {
+      strict = error instanceof Error ? error.message : String(error);
+    }
+    if (!strict.includes("hook.alpha has no usable describe")) {
+      problems.push(`a strict discovery answered ${JSON.stringify(strict)}`);
     }
     const survived = await runHooks(broken, signal, "PreToolUse", {}, 4000, survivors);
     if (survived.decision !== "deny") problems.push("a failing hook swallowed the other hook's refusal");
 
     const silent = fake({ "hook.alpha": () => ({ events: [] }), "hook.beta": () => ({ events: ["Stop"] }) });
-    const declared = await describeProviders(silent, table, signal);
+    const declared = await describeProviders(silent, table, signal, false);
     if (declared.map((item) => item.capability).join(",") !== "hook.beta") {
       problems.push("a hook that declares no event was kept");
     }
     if (notes.length === 0) problems.push("nothing was logged while hooks were skipped");
 
     const changed = { "hook.gamma": { plugin: "gamma", version: "1.0.0" } } as unknown as Record<string, Route>;
-    const rebuilt = await describeProviders(fake({ "hook.gamma": () => ({ events: ["Stop"] }) }), changed, signal);
+    const rebuilt = await describeProviders(fake({ "hook.gamma": () => ({ events: ["Stop"] }) }), changed, signal, false);
     if (rebuilt.map((item) => item.capability).join(",") !== "hook.gamma") {
       problems.push("a changed capability table did not rebuild the provider list");
     }
@@ -213,4 +336,6 @@ export const definition: Definition = {
   },
 };
 
-runPlugin(definition);
+/// This package is spawned as the hook engine and imported by nothing else, but
+/// a check that imports it to exercise a method must not start a server.
+if (isPluginEntry(import.meta.url)) runPlugin(definition);

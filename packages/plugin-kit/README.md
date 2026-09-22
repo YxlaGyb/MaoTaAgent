@@ -16,7 +16,6 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -41,6 +40,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | Blueprint field | Meaning |
 |---|---|
 | `capability` | `tool.<name>`, the capability the kernel routes to. |
+| `paths` | The parameter names that carry a file path, each a `string` or an array of `string`, so a caller can tell which arguments touch the file system. |
 | `version` | A full semver. |
 | `description` | The text the model reads. |
 | `parameters` | Fields written by property, compiled into one `{ type: "object", properties, required }`. |
@@ -53,7 +53,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | `type` | One of `object`, `array`, `string`, `number`, `integer`, `boolean` and `null`. |
 | `required` | Top level only. The model must send it. |
 | `description`, `enum`, `items`, `additionalProperties` | The usual hints, inside the subset below. |
-| `host` | A host source: `session_cwd`, `session_id`, `call_id` or `subagent`. The host fills it before the call, and the model never sees it. The type is `string`, or `object` for a source that hands over a value rather than a name. |
+| `host` | A host source: `session_cwd`, `session_id`, `call_id`, `subagent` or `session_touched`. The host fills it before the call, and the model never sees it. The type is `string`, or `object` for a source that hands over a value rather than a name. |
 
 ### The controlled schema subset
 
@@ -73,6 +73,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | [`src/frame.ts`](src/frame.ts) | The stdio frame reader and writer. |
 | [`src/channel.ts`](src/channel.ts) | `Channel`, `CallError`, routing and cancel. |
 | [`src/plugin.ts`](src/plugin.ts) | `runPlugin`, `serve`, the initialize / start / invoke / shutdown handshake, `ProviderStream` and the unknown-config-key warning. |
+| [`src/glob.ts`](src/glob.ts) | `patternToRegExp`: the `**`, `*` and `?` matcher the file tools and the skill roots share. |
 | [`src/json-schema.ts`](src/json-schema.ts) | The controlled subset: `assertSupportedJsonSchema` and `validateJsonSchemaValue`. |
 | [`src/tool.ts`](src/tool.ts) | `defineTools`, `ToolArgsError`, host arguments and the two compiled schemas. |
 | [`src/config-keys.check.ts`](src/config-keys.check.ts) | The unknown-key warning, checked by a script. |
@@ -86,6 +87,8 @@ A blueprint's `parameters` compiles into two objects. The published one becomes 
 
 `run` validates first and only then calls the blueprint. `classify` validates the same way and answers `safe: false` for bad arguments or a throwing `safe`, so a call that is about to fail on its arguments still runs alone instead of beside a safe call.
 
+Five facts bound this contract. The host sources are a fixed set, `session_cwd`, `session_id`, `call_id`, `subagent` and `session_touched`, so a tool that needs another one cannot declare it, and only the optional ones may be missing from the arguments. Only the input side of a tool is described, because there is no output schema. The schema subset is closed: `pattern`, `minimum`, `maximum` and `$ref` are refused, so a tool that needs them needs a change here first. `oneOf` branches are checked for shape and not for exclusivity. And a capability name and a version range are all the routing check there is, because there is no permission layer.
+
 -----
 
 <a id="further-exploration"></a>
@@ -94,14 +97,3 @@ A blueprint's `parameters` compiles into two objects. The published one becomes 
 - [tools](../agent/tools/README.md): the dispatcher that lists and calls these capabilities.
 - [tool-fs](../fs/tool-fs/README.md): a worked example of three tools in one plugin.
 - [packages group](../README.md): the plugin tree this package belongs to.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **The host sources are a fixed four**: `session_cwd`, `session_id`, `call_id` and `subagent`, and a tool that needs another one cannot declare it. Only `subagent` may be missing from the arguments, because a call the session itself made has no subagent to name.
-- **No tool output schema**: only the input side is described.
-- **The subset is closed**: `pattern`, `minimum`, `$ref` and the rest of JSON Schema are refused, so a tool that needs them needs a change here first.
-- **`oneOf` is shallow**: branches are checked for shape, not for exclusivity, at declaration time.
-- **No permission layer**: a capability name and a version range are all the routing check there is.

@@ -16,7 +16,6 @@ This package holds one row. It exists so that the `serve` profile can mount the 
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -63,6 +62,8 @@ Nothing else about the launch changes: the generated config gains one block, and
 
 A bundle is a package, so `serve` can name it in `package.json` under `maota.profile.bundles` and the launcher resolves it the same way it resolves `base`. A flag in the launcher would put the decision in code rather than in the profile, and a row appended in code would be invisible to `pnpm check:plugins`, which walks the bundle lists to find the entries it should check.
 
+One row and no config: the port, whether it is a development server and every other setting belong to the user's local config layer. A bundle only adds rows, so a profile that wants fewer plugins than `base` needs a bundle of its own. And running the CLI without the serve profile gives no hint that a web front end exists.
+
 -----
 
 <a id="further-exploration"></a>
@@ -71,12 +72,3 @@ A bundle is a package, so `serve` can name it in `package.json` under `maota.pro
 - [base](../base/README.md): the row list this bundle is added to.
 - [bundle group](../README.md): what a row list is.
 - [web front end](../../../apps/web/README.md): the package this row spawns, which sits outside the packages tree.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-- **One row, no config**: the port, whether it is a development server and every other setting belong to the user's local config layer.
-- **It cannot remove a row**: a bundle only adds, so a profile that wants fewer plugins than `base` needs its own bundle instead.
-- **`default` never sees it**: running the CLI without the serve profile gives no hint that a web front end exists.

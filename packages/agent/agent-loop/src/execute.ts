@@ -112,8 +112,11 @@ export async function executeCalls(calls: readonly ToolCall[], deps: LoopDeps, c
       });
       continue;
     }
-    const safe = await safeToRun(call, deps, ctx);
-    plans.push({ call, disposition: safe ? "parallel" : "serial", context: pre?.context ?? [] });
+    // Rewritten arguments are the arguments: the call that runs, the call that
+    // is classified and the call the result is written against are one call.
+    const decided = pre?.args === undefined ? call : { ...call, args: pre.args };
+    const safe = await safeToRun(decided, deps, ctx);
+    plans.push({ call: decided, disposition: safe ? "parallel" : "serial", context: pre?.context ?? [] });
   }
 
   const planned = new Map(plans.map((plan) => [plan.call.id, plan]));
@@ -128,6 +131,14 @@ export async function executeCalls(calls: readonly ToolCall[], deps: LoopDeps, c
       ? await Promise.all(batch.map((call) => runOne(planned.get(call.id)!, deps, ctx)))
       : [await runOne(planned.get(batch[0]!.id)!, deps, ctx)];
 
+    const context = batch.flatMap((call) => planned.get(call.id)?.context ?? []);
+    let halt = false;
+    for (const item of settled) {
+      const post = await postDecision(item, deps, ctx);
+      context.push(...(post?.context ?? []));
+      if (post?.output !== undefined) item.output = post.output;
+      if (post?.halt === true) halt = true;
+    }
     for (const item of settled) {
       ctx.state.messages.push({
         role: "tool",
@@ -135,14 +146,6 @@ export async function executeCalls(calls: readonly ToolCall[], deps: LoopDeps, c
         name: item.call.name,
         content: item.ok ? asText(item.output) : JSON.stringify({ error: String(item.output) }),
       });
-    }
-
-    const context = batch.flatMap((call) => planned.get(call.id)?.context ?? []);
-    let halt = false;
-    for (const item of settled) {
-      const post = await postDecision(item, deps, ctx);
-      context.push(...(post?.context ?? []));
-      if (post?.halt === true) halt = true;
     }
     for (const message of sourcedMessages(context)) ctx.state.messages.push(message);
     if (halt) {

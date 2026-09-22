@@ -16,7 +16,6 @@ Decide the two inputs every launch needs: the config file to boot and the kernel
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -62,6 +61,8 @@ This section explains how the two resolvers work; the inputs they accept are cov
 
 The module never reads a config file: layering (`extends`, later keys winning, tables merging per key, arrays replacing wholesale) belongs to the kernel loader. A profile is a directory under `<home>/profiles/<name>` holding a `package.json` and the generated `eggshell.toml`. The manifest records the profile's `maota.profile.bundles` list, and boot reads that list back, so a person adds or drops a bundle without editing code. A bundle is a package whose own manifest points at its rows (`maota.bundle.rows`), and every row names a package rather than a path, so nothing in the file pins this machine's layout. `ensureProfile` writes the manifest on a first run, gives the profile a `node_modules` with one link per row pointing at the package in this repository, and rewrites the generated config only when its rows changed, reporting `MaoTa: wrote <path>` on stderr. A link that already points at the right package is left alone; one that exists and is not a link stops the boot. Resolution failures are loud: an unknown profile, a bundle without rows, an id listed twice, and a package that does not resolve each stop the boot with the name in the message. `repoRoot` walks up four levels from `src/`, so the resolvers work wherever they are imported from. `resolveKernelBin` imports the `eggshell-kernel` package for the installed binary path and accepts an `installed` override for tests.
 
+Four facts bound this module. Resolution is not validation: the kernel's own `--check` is the only thing that says a config is valid. The last kernel fallback is Windows-shaped, hard-coding the `.exe` suffix and the `debug` profile. A plugin is mounted only through a bundle, so adding a package to the repository does not run it until a bundle lists it. And there is no settings or credential layer, because session roots still belong to the session plugin.
+
 -----
 
 <a id="further-exploration"></a>
@@ -70,15 +71,3 @@ The module never reads a config file: layering (`extends`, later keys winning, t
 - [boot group](../README.md): the launch glue these resolvers belong to.
 - [maota CLI](../../../apps/cli/README.md): the only caller, and the flags that feed both resolvers.
 - [Architecture](../../../docs/architecture.md#configuration-layering): how the generated file and the machine layer stack.
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-These limits say when this package needs care. They are current constraints, not a task backlog.
-
-- **Resolution is not validation**: the kernel's own `--check` is the only thing that says a config is valid.
-- **The last kernel fallback is Windows-shaped**: it hard-codes the `.exe` suffix and the `debug` profile.
-- **A plugin is mounted only through a bundle**: adding a package to the repository does not run it until a bundle lists it.
-- **No settings or credential layer yet**: session roots still belong to the session plugin.

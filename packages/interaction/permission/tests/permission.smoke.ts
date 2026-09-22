@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError } from "@maota/plugin-kit";
+import { CallError, packageVersion } from "@maota/plugin-kit";
 
 import {
   MODES,
@@ -16,6 +16,7 @@ import {
   isMode,
   pairingProblems,
   read,
+  readRules,
   sessionIdOf,
   subagentOf,
   write,
@@ -61,15 +62,55 @@ try {
     session_id: "s1",
     cwd: "E:\\work",
     mode: null,
+    grants: [],
     records: [],
   });
   assert.equal(effectiveMode(empty, "ask"), "ask");
   assert.equal(effectiveMode({ ...empty, mode: "full" }, "ask"), "full");
 
-  assert.deepEqual(decide("full", 0), { outcome: "allowed-once", decided_by: "policy:full" });
-  assert.deepEqual(decide("auto", 3), { outcome: "allowed-once", decided_by: "policy:auto" });
-  assert.deepEqual(decide("ask", 0), { outcome: "unavailable", decided_by: "none", cause: "no-answerer" });
-  assert.equal(decide("ask", 2), "ask");
+  assert.deepEqual(decide("full", 0, "pwsh", [], []), { outcome: "allowed-once", decided_by: "policy:full" });
+  assert.deepEqual(decide("auto", 3, "pwsh", [], []), { outcome: "allowed-once", decided_by: "policy:auto" });
+  assert.deepEqual(decide("ask", 0, "pwsh", [], []), { outcome: "unavailable", decided_by: "none", cause: "no-answerer" });
+  assert.equal(decide("ask", 2, "pwsh", [], []), "ask");
+
+  /// Rules decide before the mode, the first match wins, a rule that asks
+  /// outranks `full`, and a remembered answer decides without asking at all.
+  assert.deepEqual(readRules(undefined), [], "no rules is no rules");
+  const rules = readRules([
+    { match: "pwsh", action: "deny" },
+    { match: "write", action: "allow" },
+    { match: "edit", action: "ask" },
+  ]);
+  assert.deepEqual(decide("full", 1, "pwsh", rules, []), {
+    outcome: "rejected",
+    decided_by: "policy:rule",
+    cause: "rule pwsh",
+  });
+  assert.deepEqual(decide("ask", 0, "write", rules, []), {
+    outcome: "allowed-once",
+    decided_by: "policy:rule",
+    cause: "rule write",
+  });
+  assert.equal(decide("full", 1, "edit", rules, []), "ask");
+  assert.deepEqual(decide("full", 0, "edit", rules, []), {
+    outcome: "unavailable",
+    decided_by: "none",
+    cause: "no-answerer",
+  });
+  assert.deepEqual(decide("ask", 0, "read", [], ["read"]), { outcome: "allowed-once", decided_by: "policy:remember" });
+  assert.throws(() => readRules("nope"), /rules must be a list/);
+  assert.throws(() => readRules([{ action: "allow" }]), /non-empty match/);
+  assert.throws(() => readRules([{ match: "x", action: "maybe" }]), /a rule action must be one of/);
+  assert.throws(() => readRules(["pwsh"]), /each rule must be an object/);
+
+  /// Grants are part of the file, so a remembered answer survives a restart and
+  /// a file written before grants existed reads as none.
+  const remembered = write(root, { ...empty, grants: ["read"] }, 10);
+  assert.deepEqual(remembered.grants, ["read"]);
+  assert.deepEqual(read(root, "s1", "E:\\work").grants, ["read"]);
+  writeFileSync(filePath(root, "s1", "E:\\work"), JSON.stringify({ schema_version: 1, session_id: "s1", cwd: "E:\\work", records: [] }));
+  assert.deepEqual(read(root, "s1", "E:\\work").grants, [], "a file without grants reads as none");
+  assert.equal(SCHEMA_VERSION, 2);
 
   const asked: AuditRecord = { kind: "asked", at: "t", id: "1", tool: "pwsh", call_id: "c-1", reason: "why" };
   const decided: AuditRecord = {
@@ -150,5 +191,5 @@ const report = JSON.parse((run.stdout ?? "").trim().split("\n").at(-1) ?? "") as
 };
 assert.equal(run.status, 0, `the permission entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the permission selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "permission", version: "1.0.0" }]);
+assert.deepEqual(report.provides, [{ capability: "permission", version: packageVersion(import.meta.url) }]);
 console.log("permission entry ok: the audit and subagent selfCheck report");

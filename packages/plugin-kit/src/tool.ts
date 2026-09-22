@@ -11,7 +11,7 @@ import type { Call, Method, Provide } from "./plugin.ts";
 
 export type ParameterType = JsonSchemaType;
 
-export type HostSource = "session_cwd" | "session_id" | "call_id" | "subagent";
+export type HostSource = "session_cwd" | "session_id" | "call_id" | "subagent" | "session_touched";
 
 export interface ParameterField {
   type: ParameterType;
@@ -37,6 +37,7 @@ export interface ToolBlueprint {
   parameters: Record<string, ParameterField>;
   concurrency: Concurrency;
   maxResultChars?: number | null;
+  paths?: readonly string[];
   run(args: Record<string, unknown>, call: Call): Promise<unknown> | unknown;
 }
 
@@ -50,6 +51,7 @@ export interface ToolDescription {
   description: string;
   input_schema: JsonSchemaNode;
   host_args: HostArg[];
+  paths?: string[];
 }
 
 export type ToolMethodName = "describe" | "policy" | "run" | "classify";
@@ -63,12 +65,17 @@ const CAPABILITY = /^tool\.[a-z][a-z0-9_]*$/;
 
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+].+)?$/;
 
-const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id", "subagent"]);
+const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id", "subagent", "session_touched"]);
 
 /// The host always knows where it is and which call it is running; it only
 /// knows an asking subagent when a subagent is asking, so that one source may
 /// be missing from the arguments.
-const HOST_SOURCES_OPTIONAL = new Set<string>(["subagent"]);
+const HOST_SOURCES_OPTIONAL = new Set<string>(["subagent", "session_touched"]);
+
+/// Most host values are one string; the touched-path set is a list, so a host
+/// parameter carries the type its source actually produces rather than being
+/// bent into a string.
+const HOST_SOURCES_LIST = new Set<string>(["session_touched"]);
 
 export class ToolArgsError extends CallError {
   readonly violations: string[];
@@ -114,19 +121,56 @@ interface CompiledParameters {
   published: JsonSchemaNode;
   validation: JsonSchemaNode;
   host_args: HostArg[];
+  paths: string[];
 }
 
 function objectSchema(properties: Record<string, JsonSchemaNode>, required: string[]): JsonSchemaNode {
   return { type: "object", properties, ...(required.length > 0 ? { required } : {}) };
 }
 
-function compileParameters(parameters: Record<string, ParameterField>): CompiledParameters {
+/// A tool that says which of its parameters carry a path lets the caller learn
+/// which files the model actually touched, so a name that is not a string path
+/// is refused here rather than turning into a silent non-match later.
+function compilePaths(
+  parameters: Record<string, ParameterField>,
+  declared: readonly string[] | undefined,
+  violations: string[],
+): string[] {
+  if (declared === undefined) return [];
+  const paths: string[] = [];
+  for (const name of declared) {
+    if (paths.includes(name)) {
+      violations.push(`paths lists ${JSON.stringify(name)} twice`);
+      continue;
+    }
+    const field = parameters[name];
+    if (field === undefined) {
+      violations.push(`paths names ${JSON.stringify(name)}, which parameters does not declare`);
+      continue;
+    }
+    if (field.host !== undefined) {
+      violations.push(`parameters.${name}.host cannot be declared in paths`);
+      continue;
+    }
+    const scalar = field.type === "string";
+    const list = field.type === "array" && field.items?.type === "string";
+    if (!scalar && !list) {
+      violations.push(`parameters.${name} carries no path: declare it as type "string" or an array of string`);
+      continue;
+    }
+    paths.push(name);
+  }
+  return paths;
+}
+
+function compileParameters(parameters: Record<string, ParameterField>, declaredPaths?: readonly string[]): CompiledParameters {
   const violations: string[] = [];
   const published: Record<string, JsonSchemaNode> = {};
   const validation: Record<string, JsonSchemaNode> = {};
   const publishedRequired: string[] = [];
   const validationRequired: string[] = [];
   const host_args: HostArg[] = [];
+  const paths = compilePaths(parameters, declaredPaths, violations);
   for (const [name, field] of Object.entries(parameters)) {
     const schema = compileField(field, `parameters.${name}`, violations, false);
     const source = field.host;
@@ -140,8 +184,9 @@ function compileParameters(parameters: Record<string, ParameterField>): Compiled
     if (!HOST_SOURCES.has(source)) {
       violations.push(`parameters.${name}.host ${JSON.stringify(source)} is not a known host source`);
     }
-    if (field.type !== "string" && field.type !== "object") {
-      violations.push(`parameters.${name}.host needs type "string" or "object"`);
+    const wanted = HOST_SOURCES_LIST.has(source) ? ["array"] : ["string", "object"];
+    if (!wanted.includes(field.type)) {
+      violations.push(`parameters.${name}.host needs type ${wanted.map((kind) => JSON.stringify(kind)).join(" or ")}`);
     }
     if (field.required === true) violations.push(`parameters.${name}.host is always required, drop required`);
     if (field.enum !== undefined) violations.push(`parameters.${name}.host cannot carry an enum`);
@@ -159,7 +204,7 @@ function compileParameters(parameters: Record<string, ParameterField>): Compiled
     else throw error;
   }
   if (violations.length > 0) throw new JsonSchemaError(violations);
-  return { published: publishedSchema, validation: validationSchema, host_args };
+  return { published: publishedSchema, validation: validationSchema, host_args, paths };
 }
 
 interface PreparedTool {
@@ -191,7 +236,7 @@ export function defineTools(blueprints: readonly ToolBlueprint[]): ToolKit {
 
     const name = blueprint.capability.slice("tool.".length);
     if (prepared.has(blueprint.capability)) throw new Error(`defineTools: ${blueprint.capability} is declared twice`);
-    const compiled = compileParameters(blueprint.parameters);
+    const compiled = compileParameters(blueprint.parameters, blueprint.paths);
     prepared.set(blueprint.capability, {
       name,
       capability: blueprint.capability,
@@ -201,6 +246,7 @@ export function defineTools(blueprints: readonly ToolBlueprint[]): ToolKit {
         description: blueprint.description,
         input_schema: compiled.published,
         host_args: compiled.host_args,
+        paths: compiled.paths,
       },
       schema: compiled.validation,
       policy: {

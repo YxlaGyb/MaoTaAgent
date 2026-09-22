@@ -49,6 +49,15 @@ export function SearchPalette({
           }}
         />
         <div className="palette-list">
+          {hits.length === 0 ? <div className="palette-empty">{t("noChats")}</div> : <div className="palette-group">{t("chats")}</div>}
+          {hits.map((session) => (
+            <button key={session.id} type="button" className="palette-item is-result" onClick={() => onPick(session)}>
+              <span className="palette-name">{session.title === "" ? t("newChat") : session.title}</span>
+              <span className="palette-where">
+                {projectLabel(session.cwd, t("defaultProject"), names[session.cwd] ?? "")}
+              </span>
+            </button>
+          ))}
           {actions.length === 0 ? null : (
             <>
               <div className="palette-group">{t("quick")}</div>
@@ -60,15 +69,6 @@ export function SearchPalette({
               ))}
             </>
           )}
-          {hits.length === 0 ? <div className="palette-empty">{t("noChats")}</div> : <div className="palette-group">{t("chats")}</div>}
-          {hits.map((session) => (
-            <button key={session.id} type="button" className="palette-item is-result" onClick={() => onPick(session)}>
-              <span className="palette-name">{session.title === "" ? t("newChat") : session.title}</span>
-              <span className="palette-where">
-                {projectLabel(session.cwd, t("defaultProject"), names[session.cwd] ?? "")}
-              </span>
-            </button>
-          ))}
         </div>
       </div>
     </div>

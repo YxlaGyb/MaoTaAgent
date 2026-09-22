@@ -4,43 +4,19 @@ import { join } from "node:path";
 import { displayPath, resolvePath, type Workspace } from "@maota/fs";
 import { CallError } from "@maota/plugin-kit";
 
+import { ignored, readIgnore, type IgnoreRule } from "./ignore.ts";
+
 export const VISITED_CAP = 50_000;
 
 export interface WalkLimits {
   follow_links: boolean;
+  dotfiles?: boolean;
 }
 
 export interface WalkProgress {
   visited: number;
   capped: boolean;
-}
-
-export function patternToRegExp(pattern: string): RegExp {
-  const normalized = pattern.split("\\").join("/");
-  let source = "";
-  for (let index = 0; index < normalized.length; index += 1) {
-    const char = normalized[index] as string;
-    if (char === "*") {
-      if (normalized[index + 1] === "*") {
-        index += 1;
-        if (normalized[index + 1] === "/") {
-          index += 1;
-          source += "(?:[^/]+/)*";
-        } else {
-          source += ".*";
-        }
-      } else {
-        source += "[^/]*";
-      }
-      continue;
-    }
-    if (char === "?") {
-      source += "[^/]";
-      continue;
-    }
-    source += /[.*+?^${}()|[\]\\]/.test(char) ? `\\${char}` : char;
-  }
-  return new RegExp(`^${source}$`);
+  skipped: number;
 }
 
 function classify(entry: Dirent, full: string, followLinks: boolean): "dir" | "file" | null {
@@ -66,20 +42,28 @@ export function searchBase(args: Record<string, unknown>, space: Workspace): str
 }
 
 /// One pass over the tree below `base`, handing every regular file to `visit`
-/// with its absolute path and its path relative to `base`. A `visit` that
-/// returns `false` stops the walk, which is how a caller enforces its own
-/// result budget; the shared `VISITED_CAP` bounds a tree that never settles.
+/// with its absolute path and its path relative to `base`. Four things never
+/// reach `visit`, and are counted in `skipped` instead: a link the policy does
+/// not follow, a hidden name, `.git`, and anything the ignore files rule out —
+/// read from the root and from every nested `.gitignore` the walk enters. A
+/// `visit` that returns `false` stops the walk, which is how a caller enforces
+/// its own result budget; the shared `VISITED_CAP` bounds a tree that never
+/// settles.
 export function walkFiles(
   base: string,
   limits: WalkLimits,
   visit: (full: string, relative: string) => boolean | void,
 ): WalkProgress {
   const stack: string[] = [base];
+  const rules: IgnoreRule[] = [];
   let visited = 0;
   let capped = false;
+  let skipped = 0;
 
   while (stack.length > 0) {
     const dir = stack.pop() as string;
+    const label = displayPath(base, dir);
+    rules.push(...readIgnore(dir, label === "." ? "" : label));
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -94,14 +78,23 @@ export function walkFiles(
       }
       const full = join(dir, entry.name);
       const kind = classify(entry, full, limits.follow_links);
+      if (kind === null) {
+        skipped += 1;
+        continue;
+      }
+      const relative = displayPath(base, full);
+      const hidden = limits.dotfiles !== true && entry.name.startsWith(".");
+      if (hidden || entry.name === ".git" || ignored(rules, relative, kind === "dir")) {
+        skipped += 1;
+        continue;
+      }
       if (kind === "dir") {
         stack.push(full);
         continue;
       }
-      if (kind !== "file") continue;
-      if (visit(full, displayPath(base, full)) === false) return { visited, capped };
+      if (visit(full, relative) === false) return { visited, capped, skipped };
     }
     if (capped) break;
   }
-  return { visited, capped };
+  return { visited, capped, skipped };
 }

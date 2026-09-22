@@ -16,7 +16,6 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -77,6 +76,8 @@ kind: "package-reference"
 
 每路输出各自按 `max_output_bytes` 封顶，分别计算，第一个放不下的块就把 `truncated` 置上。定时器在 `timeout_ms` 时杀掉进程并置 `timed_out`。取消信号也会杀掉它，哪怕信号在 spawn 返回之前就已经触发，下一行仍会把子进程杀掉。结果从进程的 close 事件里解出来，所以被杀掉的进程仍会报出平台给出的退出码或信号；一旦落定，定时器与取消监听都会摘掉。
 
+五条事实界定了这个 provider。没有沙箱，命令以宿主进程的全部权限运行。每次调用都是新进程，所以在一次调用里设的 shell 变量在下一次就没了，也没有后台命令。超过上限的输出是被丢弃而不是折叠，工具只会报告流被切断了。上限是按流算的，所以一次运行最多可以返回两倍 `max_output_bytes`。kill 就是 kill：忽略终止请求的进程不会被升级到更硬的手段。
+
 -----
 
 <a id="further-exploration"></a>
@@ -85,14 +86,3 @@ kind: "package-reference"
 - [shell](../shell/README.zh.md)：本 provider 用来作答的请求与结果形状。
 - [tool-pwsh](../tool-pwsh/README.zh.md)：调用这个能力的工具。
 - [shell 组](../README.zh.md)：三个包怎么分工。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-- **没有沙箱**：命令以宿主进程的全部权限运行。
-- **没有后台命令，也没有常驻会话**：每次调用都是新进程，所以在一次调用里设的 shell 变量到下一次就没了。
-- **输出是丢弃而不是折叠**：超过上限的字节直接不要，工具只报告这一路被截断。
-- **上限是按路算的**：stdout 与 stderr 各有 `max_output_bytes`，所以一次运行最多可能返回两倍那么多。
-- **杀就是杀**：对终止请求不予理会的进程，不会被升级成更强的手段。

@@ -16,7 +16,6 @@ Boot one eggshell kernel as a child process and talk to it from Node: ask for th
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further exploration](#further-exploration)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 
 -----
 
@@ -82,6 +81,8 @@ Both directions use the kernel's framing: a `Content-Length` header, a blank lin
 
 `kernel.plugin.started` carries `trigger` (`boot`, `config`, `source`, `manual`) together with the plugin's `cwd`, `command` and `args` as the loader resolved them, which is what lets a front end map a changed file back to the plugin that owns it. `restart` reuses the reload path in stop-then-start order: the old instance gets `shutdown{reason: "reload"}` and must leave, force-killed after its `shutdown_grace_ms`, and only then does the same spawn, initialize, validate, swap, start sequence run for that one plugin. A plugin that cannot come up stays absent and keeps failing with `-32011` until another `restart` succeeds. Subscriptions ask for `replay`, so the plugins that were already running when the host subscribed announce themselves too.
 A plugin whose required capabilities nobody serves is not a boot failure: the kernel spawns and initializes it, then holds it back in a waiting state. Its `provides` stay out of the routing table, so `invoke` on a capability it would have offered fails with `-32010`, and `kernel.plugin.blocked` carries the plugin and the capability ids it waits for. `replay` covers those waiting plugins as well. The same state shows up after a reload when a running plugin loses a provider: that plugin is stopped with `trigger: config` and started again by the reload that brings the provider back. A config row switched off with `disabled = true` is the other half of this: it is not started and not in the table, and an upper config layer overriding it to `false` brings it up. The kernel's `--check` report names both worlds as `disabled` (plugin ids) and `blocked` (plugin id to missing capability ids), and counts them as warnings, so a config that only has those still exits 0.
+Four facts bound this host. A pattern matches whole topic segments: `*` matches one segment and `**` never matches. Nothing published before a subscription is replayed, with one exception, since `subscribe` carries `replay`, so a subscription created after boot is told about every plugin already running and every plugin already waiting. A handler that throws ends its subscription, and the failure is reported nowhere else. `shutdown` always resolves, so a kernel that ignores the request leaves the caller waiting for the process to exit, and `restart` replaces exactly the plugin it is named.
+
 
 
 <a id="further-exploration"></a>
@@ -92,17 +93,6 @@ A plugin whose required capabilities nobody serves is not a boot failure: the ke
 - [Architecture](../../../docs/architecture.md#launch-path): where the host sits in the launch path.
 
 -----
-
-<a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
-
-These limits say when this host needs care. They are current constraints, not a task backlog.
-
-- **Patterns match whole topic segments**: `*` matches one segment and `**` never matches, so there is no recursive wildcard.
-- **Events published before a subscription are not replayed**: with one exception: `subscribe` carries `replay`, so a subscription created after boot is told about every plugin that is already running, and every plugin that is already waiting.
-- **A throwing handler ends its subscription silently**: `on` reports the failure nowhere else.
-- **`shutdown` always resolves**: a kernel that ignores the request leaves the caller waiting for the process to exit.
-- **`restart` replaces exactly the plugin you name**: deciding which plugins a changed file affects is the caller's job: the CLI builds that from `kernel.plugin.started` plus a static import scan of each entry, so the host itself never reads the file system.
 
 <a id="dev-note"></a>
 ## Dev Note

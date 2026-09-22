@@ -9,14 +9,13 @@ kind: "package-reference"
 
 ## 概述
 
-`hmr` 只用于开发：它监视 `roots` 里点名的目录，把变动的路径以 `dev.source.changed` 发出去。别的都不由它决定, 宿主拿这个路径去过每个插件的模块图，重启 import 了它的那些插件。没加载这个插件的运行什么也不监视，所以生产配置只要不写这一行就行。它提供一个能力 `dev.hmr@0.1.0`，唯一的方法是 `status`。
+`hmr` 只用于开发：它监视 `roots` 里点名的目录，把变动的路径以 `dev.source.changed` 发出去。别的都不由它决定, 宿主拿这个路径去过每个插件的模块图，重启 import 了它的那些插件。没加载这个插件的运行什么也不监视，所以生产配置只要不写这一行就行。它提供一个能力 `dev.hmr`，唯一的方法是 `status`。
 
 ## 目录
 
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
-- [已知限制与延期工作](#known-limitations-and-deferred-work)
 
 -----
 
@@ -76,6 +75,8 @@ roots = ["<repo>/apps", "<repo>/packages"]
 
 `roots` 为空、或指向不存在的目录时，`selfCheck` 会让 `--check` 失败，所以 `pnpm check:plugins` 能在真正跑起来之前抓到拼错的目录名。
 
+五条事实界定了这个监视器。递归监视在 Windows 与 macOS 上是原生的，在 Linux 上用轮询模拟，所以那里的深层目录树开销更大。它发布路径而不发布归属：把路径映射到导入它的插件属于 host 与它的模块图。不存在的根目录会被跳过而不是等待，下一次插件启动时重新读取。忽略集与防抖间隔固定在代码里，不可配置。被禁用的行永远不会被拉起，所以插件关闭期间 `--check` 也到不了它。
+
 -----
 
 <a id="further-exploration"></a>
@@ -84,16 +85,3 @@ roots = ["<repo>/apps", "<repo>/packages"]
 - [packages 包组](../README.zh.md)：这个包所属的插件树。
 - [maota CLI](../../apps/cli/README.zh.md#dev-hot-reload)：消费这些事件并重启插件的宿主。
 - [架构](../../docs/architecture.zh.md#launch-path)：开发运行与生产运行差在哪。
-
------
-
-<a id="known-limitations-and-deferred-work"></a>
-## 已知限制与延期工作
-
-这些限制说明这个 watcher 在什么时候需要小心。它们是当前约束，不是任务积压。
-
-- **Linux 上的递归监视是模拟出来的**：Windows 与 macOS 走原生，Linux 靠轮询，所以那边深目录更贵。
-- **它发的是路径，不是归属**：路径归哪些插件，由宿主和它的模块图算。
-- **缺失的 root 是跳过而不是等待**：下次插件启动才会再读一次，不会一直盯到它出现。
-- **忽略表和去抖间隔写死在代码里**：都不可配置。
-- **disabled 的行永远不会被拉起**：插件关着的时候，`--check` 也到不了它。
