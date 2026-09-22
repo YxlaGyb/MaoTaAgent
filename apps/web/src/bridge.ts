@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { CallError, type Channel, type InboundStream } from "@maota/plugin-kit";
 
-import type { BridgeFacts, HostEvent, SessionFile } from "./protocol.ts";
+import type { BridgeFacts, HostEvent, SessionFile, SubagentRef } from "./protocol.ts";
 
 interface LoopEvent {
   type?: string;
@@ -51,6 +51,7 @@ export function createBridge(channel: Channel): Bridge {
       call_id?: unknown;
       reason?: unknown;
       outcome?: unknown;
+      subagent?: unknown;
     };
     const request_id = String(event.id ?? "");
     if (request_id === "") return null;
@@ -62,12 +63,40 @@ export function createBridge(channel: Channel): Bridge {
         tool: String(event.tool ?? ""),
         ...(event.call_id === undefined ? {} : { call_id: String(event.call_id) }),
         ...(event.reason === undefined ? {} : { reason: String(event.reason) }),
+        ...(event.subagent === undefined ? {} : { subagent: event.subagent as SubagentRef }),
       };
     }
     if (topic === "permission.settled") {
       return { event: "permission.settled", request_id, outcome: String(event.outcome ?? "") };
     }
     return null;
+  }
+
+  /// A subagent has no turn of its own: its events belong to the turn running
+  /// its parent session, which is the only turn the page keys anything by. An
+  /// event that arrives with no such turn is dropped, and nothing breaks: the
+  /// answer itself still comes back as the result of the `task` call.
+  function forwardSubagent(topic: string, payload: unknown): HostEvent | null {
+    const event = (payload ?? {}) as Record<string, unknown>;
+    const parent = typeof event.parent_session_id === "string" ? event.parent_session_id : "";
+    const turnId = parent === "" ? null : turnIdOf(parent);
+    if (turnId === null) return null;
+    return {
+      event: `subagent.${topic.slice("agent.subagent.".length)}`,
+      turn_id: turnId,
+      subagent_id: typeof event.subagent_id === "string" ? event.subagent_id : "",
+      parent_call_id: typeof event.parent_call_id === "string" ? event.parent_call_id : "",
+      type: typeof event.type === "string" ? event.type : "",
+      description: typeof event.description === "string" ? event.description : "",
+      ...(typeof event.id === "string" ? { id: event.id } : {}),
+      ...(typeof event.tool === "string" ? { tool: event.tool } : {}),
+      ...(event.args === undefined ? {} : { args: event.args }),
+      ...(typeof event.ok === "boolean" ? { ok: event.ok } : {}),
+      ...(event.output === undefined ? {} : { output: event.output }),
+      ...(typeof event.step === "number" ? { step: event.step } : {}),
+      ...(typeof event.steps === "number" ? { steps: event.steps } : {}),
+      ...(typeof event.reason === "string" ? { reason: event.reason } : {}),
+    };
   }
 
   function cwdOf(params: Record<string, unknown>): string {
@@ -80,6 +109,11 @@ export function createBridge(channel: Channel): Bridge {
 
   function busy(sessionId: string): Turn | null {
     for (const turn of turns.values()) if (turn.session_id === sessionId) return turn;
+    return null;
+  }
+
+  function turnIdOf(sessionId: string): string | null {
+    for (const [turnId, turn] of turns) if (turn.session_id === sessionId) return turnId;
     return null;
   }
 
@@ -220,6 +254,8 @@ export function createBridge(channel: Channel): Bridge {
             id: params.id,
             cwd: typeof params.cwd === "string" ? params.cwd : "",
           });
+        case "sessions.children":
+          return await channel.call("session", "children", { id: params.id, cwd: cwdOf(params) });
         case "settings.set_key":
           return await channel.call("api", "key_set", {
             api_key: typeof params.api_key === "string" ? params.api_key : "",
@@ -255,9 +291,11 @@ export function createBridge(channel: Channel): Bridge {
     async open(): Promise<void> {
       try {
         subscription = await channel.subscribe(
-          ["permission.requested", "permission.settled"],
+          ["permission.requested", "permission.settled", "agent.subagent.*"],
           (topic, _seq, payload) => {
-            const event = forwardPermission(topic, payload);
+            const event = topic.startsWith("agent.subagent.")
+              ? forwardSubagent(topic, payload)
+              : forwardPermission(topic, payload);
             if (event !== null) emit(event);
           },
         );

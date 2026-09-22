@@ -1,6 +1,6 @@
 import { MaoButton } from "maotaui";
 
-import type { AppInfo, Approval, SessionMessage } from "../lib/rpc.ts";
+import type { AppInfo, Approval, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
 import { Icon, ICON } from "./Icon.tsx";
@@ -20,6 +20,7 @@ export function ChatView({
   thinking,
   permission,
   approvals,
+  spawned,
   onRetry,
   onKeySaved,
   onThinking,
@@ -40,6 +41,7 @@ export function ChatView({
   thinking: string;
   permission: string;
   approvals: Approval[];
+  spawned: Record<string, SessionSummary[]>;
   onRetry: () => void;
   onKeySaved: () => void;
   onThinking: (level: string) => void;
@@ -103,6 +105,8 @@ export function ChatView({
             pending={pending}
             live={live}
             approvals={approvals}
+            spawned={spawned}
+            cwd={session?.cwd ?? ""}
             onAnswer={onAnswer}
           />
           {failure === null ? null : (

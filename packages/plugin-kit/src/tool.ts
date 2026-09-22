@@ -11,7 +11,7 @@ import type { Call, Method, Provide } from "./plugin.ts";
 
 export type ParameterType = JsonSchemaType;
 
-export type HostSource = "session_cwd" | "session_id" | "call_id";
+export type HostSource = "session_cwd" | "session_id" | "call_id" | "subagent";
 
 export interface ParameterField {
   type: ParameterType;
@@ -63,7 +63,12 @@ const CAPABILITY = /^tool\.[a-z][a-z0-9_]*$/;
 
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+].+)?$/;
 
-const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id"]);
+const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id", "subagent"]);
+
+/// The host always knows where it is and which call it is running; it only
+/// knows an asking subagent when a subagent is asking, so that one source may
+/// be missing from the arguments.
+const HOST_SOURCES_OPTIONAL = new Set<string>(["subagent"]);
 
 export class ToolArgsError extends CallError {
   readonly violations: string[];
@@ -135,12 +140,14 @@ function compileParameters(parameters: Record<string, ParameterField>): Compiled
     if (!HOST_SOURCES.has(source)) {
       violations.push(`parameters.${name}.host ${JSON.stringify(source)} is not a known host source`);
     }
-    if (field.type !== "string") violations.push(`parameters.${name}.host needs type "string"`);
+    if (field.type !== "string" && field.type !== "object") {
+      violations.push(`parameters.${name}.host needs type "string" or "object"`);
+    }
     if (field.required === true) violations.push(`parameters.${name}.host is always required, drop required`);
     if (field.enum !== undefined) violations.push(`parameters.${name}.host cannot carry an enum`);
     host_args.push({ name, source });
     validation[name] = schema;
-    validationRequired.push(name);
+    if (!HOST_SOURCES_OPTIONAL.has(source)) validationRequired.push(name);
   }
   const publishedSchema = objectSchema(published, publishedRequired);
   const validationSchema = objectSchema(validation, validationRequired);

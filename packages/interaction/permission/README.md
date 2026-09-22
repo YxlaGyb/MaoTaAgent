@@ -37,9 +37,9 @@ One capability, `permission`, that a tool calls before it does something the use
 |---|---|---|
 | `policy` | `session_id`, `cwd` | `{ mode }`. A session with no file answers with the configured mode. |
 | `set_policy` | `session_id`, `cwd`, `mode` | `{ mode }`. `-32602` for a mode outside the three; setting the mode a session already has changes nothing. |
-| `request` | `session_id`, `cwd`, `tool`, `call_id?`, `reason?` | `{ outcome }`, one of `allowed-once`, `rejected`, `cancelled`, `unavailable`. |
+| `request` | `session_id`, `cwd`, `tool`, `call_id?`, `reason?`, `subagent?` | `{ outcome }`, one of `allowed-once`, `rejected`, `cancelled`, `unavailable`. |
 | `answer` | `id`, `decision` | `{ settled: true }`. `decision` is `allow` or `deny`; a late or unknown `id` is `-32602`. |
-| `pending` | `session_id?` | `{ requests }`: the questions still waiting, each with `id`, `session_id`, `tool`, `at` and the optional `call_id` and `reason`. |
+| `pending` | `session_id?` | `{ requests }`: the questions still waiting, each with `id`, `session_id`, `tool`, `at` and the optional `call_id`, `reason` and `subagent`. |
 | `register_answerer` | none | `{ answerers }`. Keyed by the caller label, so one plugin owns one entry. |
 | `unregister_answerer` | none | `{ answerers }`. |
 
@@ -47,10 +47,16 @@ One capability, `permission`, that a tool calls before it does something the use
 
 | Topic | Payload |
 |---|---|
-| `permission.requested` | `{ id, session_id, tool, call_id?, reason?, at }`. Published only when a question is actually parked. |
-| `permission.settled` | `{ id, outcome, decided_by, at }`. |
+| `permission.requested` | `{ id, session_id, tool, call_id?, reason?, subagent?, at }`. Published only when a question is actually parked. |
+| `permission.settled` | `{ id, outcome, decided_by, at, subagent? }`. |
 
 Both are best effort: a subscriber that missed one rebuilds from `pending` and the file.
+
+### A subagent's question
+
+A call a subagent made reaches the gate under the parent's identity: the parent's `session_id`, the id of the call that started the subagent as `call_id`, the tool the subagent actually called, and a `subagent` label of `{ id, type?, description? }`. Everything the gate answers with therefore lands where the delegation is: the published question carries the label, so a card can appear under the parent's `task` row and say which subagent is asking, and both the `asked` and the `decided` record keep it, so the audit reads the same way after a restart.
+
+The label is carried rather than checked, because only the caller knows which run it is in. An object without a usable `id` is refused with `-32602`, and an absent label simply means the session itself asked.
 
 ### The audit file
 
@@ -59,7 +65,7 @@ Both are best effort: a subscriber that missed one rebuilds from `pending` and t
 | `schema_version` | `1`. |
 | `session_id`, `cwd` | The session the file belongs to and the working directory it was resolved for. |
 | `mode` | The session's own choice, or `null` when it never made one and the configured fallback applies. |
-| `records` | The records, oldest first: `policy`, `asked` and `decided`. |
+| `records` | The records, oldest first: `policy`, `asked` and `decided`. An `asked` and a `decided` carry the `subagent` label when a subagent made the call, and `policy` never does. |
 
 ### Dependencies and config
 
@@ -78,7 +84,7 @@ Both are best effort: a subscriber that missed one rebuilds from `pending` and t
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | The plugin: the methods, the waiting registry, the audit appends, `selfCheck`. |
-| [`src/store.ts`](src/store.ts) | The file model: `encodeDir`, `read`, `write`, the decision table, the pairing invariant. |
+| [`src/store.ts`](src/store.ts) | The file model: `encodeDir`, `read`, `write`, the decision table, the pairing invariant and the subagent label it validates. |
 
 ### One decision table
 
@@ -87,6 +93,8 @@ Both are best effort: a subscriber that missed one rebuilds from `pending` and t
 ### A question is published before it is waited for
 
 `request` appends the `asked` record and publishes `permission.requested` first, then parks. An answerer that is already listening can therefore answer while the caller is still arriving at its wait, and an answer that arrives in that window is not lost. The parked question is registered with its own abort listener, so cancelling the call, or shutting the plugin down, settles the question as `cancelled` and writes the paired `decided` record rather than leaving a dangling ask.
+
+The label a subagent sent travels with the question rather than with the answerer, so a subscriber that arrives late still sees it in `pending`, and the record that pairs the ask with its decision keeps it without the gate having to remember which run was asking.
 
 ### The pairing invariant
 
@@ -101,7 +109,7 @@ The atomic write is a copy of the pattern in `packages/session/src/store.ts` (se
 <a id="further-exploration"></a>
 ## Further exploration
 
-- [Permission design](../../../docs/permission.md): where the gate sits and what it deliberately does not do.
+- [Permission design](../../../docs/user/permission.md): where the gate sits and what it deliberately does not do.
 - [tool-pwsh](../../shell/tool-pwsh/README.md): the tool that asks.
 - [interaction group](../README.md): how the asking and the deciding divide the work.
 
@@ -113,5 +121,6 @@ The atomic write is a copy of the pattern in `packages/session/src/store.ts` (se
 - **No rule table**: nothing here knows what a destructive command looks like. The tool that runs a command decides, and the gate only carries the question.
 - **No remembered grant**: the sole grant is `allowed-once`, so a user who approves the same command twice answers twice. A remembered rule is a policy decision this version does not ship.
 - **No arbitration**: the first answer wins, and every registered answerer may answer every question.
+- **The subagent label is carried, never verified**: any caller may name any subagent, and nothing downstream of the caller can tell a delegation from a session's own call beyond what it was told.
 - **Registrations do not survive a restart**: they live in memory, keyed by caller label, and a deployment that restarts with a question parked settles it as `cancelled`.
 - **Best-effort events**: a subscriber that missed `permission.requested` learns the question from `pending` instead, so anything built on the stream must still reconcile.

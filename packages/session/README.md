@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, and the plan the model keeps. Six methods answer a caller: `list`, `load`, `save`, `delete`, and the plan pair `todos` and `save_todos`. The document is version 2, written whole to a temporary file and renamed into place under a per-session lock. Saving the messages never drops the plan, and a version 1 document is normalized on the way in and written back as version 2.
+Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, and the plan the model keeps. Seven methods answer a caller: `list`, `load`, `save`, `delete`, `children`, and the plan pair `todos` and `save_todos`. The document is version 3, written whole to a temporary file and renamed into place under a per-session lock. Saving the messages never drops the plan, and a document written by version 1 or 2 is normalized on the way in and written back as version 3. A document may carry a parent link, which is how a subagent's session is stored: it stays in its parent's folder, out of `list`, and is reachable through `children`.
 
 ## Table of Contents
 
@@ -27,10 +27,11 @@ Stored conversations: one JSON document per session and working directory, holdi
 
 | Method | Parameters | Returns |
 |---|---|---|
-| `list` | none | `{ dir, sessions }`, sorted by `updated_at`, newest first. |
+| `list` | none | `{ dir, sessions }`, sorted by `updated_at`, newest first. A document that carries a parent is left out. |
 | `load` | `{ id, cwd }` | The document, with `dangling` worked out. A session that has never been written reads as an empty one. |
-| `save` | `{ id, cwd, title?, messages }` | The document as written. |
+| `save` | `{ id, cwd, title?, messages, parent? }` | The document as written. |
 | `delete` | `{ id, cwd }` | `{ deleted }`. |
+| `children` | `{ id, cwd }` | `{ children }`: the subagent sessions this one spawned, oldest first, each a summary of the shape `list` uses. |
 | `todos` | `{ id, cwd }` | The plan projection. |
 | `save_todos` | `{ id, cwd, todos }` | The plan projection after the write. |
 
@@ -38,7 +39,7 @@ Stored conversations: one JSON document per session and working directory, holdi
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `2`, for every document this version writes. |
+| `schema_version` | `3`, for every document this version writes. |
 | `id` | The session id. |
 | `cwd` | The working directory this session belongs to, trimmed of trailing separators. |
 | `title` | What `list` shows. A `save` that omits it keeps the title already stored. |
@@ -46,7 +47,14 @@ Stored conversations: one JSON document per session and working directory, holdi
 | `updated_at` | When it was last written, by either write path. |
 | `messages` | The transcript: the same array `agent-core` assembles and hands back. |
 | `events` | Append-only, one entry per plan write: `{ kind: "todos.write", at, todos }`. A document this version writes always carries the field, empty at first. |
+| `parent` | `null` for a session a person opened, or the link to the session that spawned this one: `{ id, cwd, call_id, type, description }`. |
 | `dangling` | Not stored: `load` sets it when the last message is a user message, which is what a turn that never finished looks like. |
+
+### The parent link
+
+A child's document sits in the parent's own folder, because a subagent is handed the parent's working directory and never writes outside it, and its `parent` records which session spawned it, in which directory, under which call, and the label that call carried. Three answers follow from it: `list` leaves linked documents out, so a sidebar and a search never see a subagent; `children` returns the ones a session started, oldest first; and every summary carries the link, so a page that reopens an old session can rebuild the entry under the right call without loading anything.
+
+A parent handed to `save` must name a session id, and anything else is refused. A malformed link inside a file reads as no link at all: a stored document is read leniently, while a value this process was handed is a bug worth refusing.
 
 ### The plan
 
@@ -79,6 +87,7 @@ Writing an empty list clears the plan and still moves the revision, so a caller 
 | `session <id> is over the N byte cap` | The document, plan included, would pass `max_bytes`. |
 | `todos must be an array` | A plan write carried something else. |
 | `invalid todos: ...` | An item is not an object, its content is blank or over 2000 characters, its status is not one of the three, or it carries a field beyond `content` and `status`. Every reason is listed in one message. |
+| `parent must name the session that spawned this one, got ...` | The link handed to `save` is not an object with a usable session id in it. |
 
 -----
 
@@ -89,8 +98,8 @@ Writing an empty list clears the plan and still moves the revision, so a caller 
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The capability: config, the six methods, and `selfCheck`. |
-| [`src/store.ts`](src/store.ts) | The document layer: paths, reading, the atomic write, and the plan read and append. |
+| [`src/index.ts`](src/index.ts) | The capability: config, the seven methods, and `selfCheck`. |
+| [`src/store.ts`](src/store.ts) | The document layer: paths, reading, the atomic write, the plan read and append, and the child lookup. |
 | [`src/plan.ts`](src/plan.ts) | The plan itself: item shapes, the ceilings, the projection and the event filter. |
 
 ### One writer at a time
@@ -103,7 +112,11 @@ Both write paths go through `serially`, keyed by the working directory and the s
 
 ### Versions
 
-`load` accepts a document whose `schema_version` is 1 by filling in an empty `events`, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after a version 1 read writes the document back as version 2, so the migration costs one write and needs no separate command. An event whose shape this version cannot trust is dropped while the rest of the document is kept.
+`load` accepts a document whose `schema_version` is 1 or 2, filling in an empty `events` and no parent, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after such a read writes the document back at version 3, so the migration costs one write and needs no separate command. An event, or a parent link, whose shape this version cannot trust is dropped while the rest of the document is kept.
+
+### A child is found, never listed
+
+`childrenOf` walks the parent's own directory and keeps the documents whose `parent.id` is the session asked about, sorted by creation and then by id, so the answer is stable when two children are written inside the same millisecond. Nothing indexes it, and a document whose link was lost becomes an ordinary session of its own, which is the honest outcome of a link that is only as good as the file it was written to.
 
 ### The ceilings
 
@@ -127,5 +140,6 @@ Both write paths go through `serially`, keyed by the working directory and the s
 - **The lock is in-process**: two hosts pointed at one `$MAOTA_HOME` can still write one session, and the last rename wins.
 - **The events grow**: every plan write appends a snapshot, and nothing prunes them, so `max_bytes` is what eventually says stop.
 - **`list` reads every document**: there is no index, and a large `sessions` tree is walked in full on every `list`.
+- **A child is invisible to `list`**: the only way to reach one is `children` of its parent, so a subagent whose parent document is gone is a session nobody lists.
 - **An unreadable document reads as a fresh session**: a corrupt file, or one from a newer schema version, comes back empty, and the next `save` would write over it.
 - **No plan history**: the projection is the last snapshot, and the events are not exposed as a list of their own.

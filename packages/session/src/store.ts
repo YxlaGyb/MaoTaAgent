@@ -7,7 +7,7 @@ import { CallError } from "@maota/plugin-kit";
 
 import { eventsOf, validateTodos, viewOf, type SessionEvent, type TodosView } from "./plan.ts";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
@@ -28,14 +28,27 @@ export interface SessionFile {
   updated_at: string;
   messages: SessionMessage[];
   events: SessionEvent[];
+  parent: SessionParent | null;
   dangling: boolean;
+}
+
+/// A subagent's link back to the turn that spawned it: the parent session, the
+/// tool call that asked for it, and the label that call showed.
+export interface SessionParent {
+  id: string;
+  cwd: string;
+  call_id: string;
+  type: string;
+  description: string;
 }
 
 export interface SessionSummary {
   id: string;
   cwd: string;
   title: string;
+  created_at: string;
   updated_at: string;
+  parent: SessionParent | null;
 }
 
 export interface Limits {
@@ -94,6 +107,32 @@ function assertId(id: unknown): string {
   return value;
 }
 
+/// A stored document is read leniently and written strictly: a malformed link
+/// inside a file reads as absent, while one this process was handed is a bug
+/// worth refusing.
+function parentOf(value: unknown): SessionParent | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const text = (name: string): string => (typeof raw[name] === "string" ? (raw[name] as string) : "");
+  if (typeof raw.id !== "string" || !SESSION_ID.test(raw.id)) return null;
+  return {
+    id: raw.id,
+    cwd: text("cwd"),
+    call_id: text("call_id"),
+    type: text("type"),
+    description: text("description"),
+  };
+}
+
+function assertParent(value: unknown): SessionParent | null {
+  if (value === undefined || value === null) return null;
+  const parent = parentOf(value);
+  if (parent === null) {
+    throw new CallError(-32602, `parent must name the session that spawned this one, got ${JSON.stringify(value)}`);
+  }
+  return parent;
+}
+
 function pathOf(root: string, id: string, cwd: string, limits: Limits): string {
   const path = join(root, encodeDir(cwd), `${id}.json`);
   if (path.length > limits.max_path) {
@@ -116,10 +155,16 @@ function readFileAt(path: string): SessionFile | null {
     const parsed = JSON.parse(text) as SessionFile & { schema_version?: unknown };
     if (typeof parsed?.id !== "string" || !Array.isArray(parsed.messages)) return null;
     const version = parsed.schema_version;
-    if (version !== undefined && version !== 1 && version !== SCHEMA_VERSION) return null;
+    if (version !== undefined && ![1, 2, SCHEMA_VERSION].includes(version)) return null;
     const events = eventsOf((parsed as { events?: unknown }).events);
     if (events === null) return null;
-    return { ...parsed, schema_version: SCHEMA_VERSION, events, dangling: false };
+    return {
+      ...parsed,
+      schema_version: SCHEMA_VERSION,
+      events,
+      parent: parentOf((parsed as { parent?: unknown }).parent),
+      dangling: false,
+    };
   } catch {
     return null;
   }
@@ -156,6 +201,7 @@ export function load(
       updated_at: now,
       messages: [],
       events: [],
+      parent: null,
       dangling: false,
     };
   }
@@ -167,6 +213,7 @@ export interface SaveInput {
   cwd: unknown;
   title?: unknown;
   messages: unknown;
+  parent?: unknown;
 }
 
 function writeDocument(path: string, dir: string, id: string, file: SessionFile, limits: Limits): void {
@@ -202,6 +249,7 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
     updated_at: now,
     messages,
     events: found?.events ?? [],
+    parent: assertParent(input.parent) ?? found?.parent ?? null,
     dangling: messages.at(-1)?.role === "user",
   };
 
@@ -278,13 +326,48 @@ export function list(root: string): SessionSummary[] {
       if (!file.endsWith(".json") || file.startsWith(".")) continue;
       const parsed = readFileAt(join(root, dir, file));
       if (!parsed) continue;
+      if (parsed.parent !== null) continue;
       found.push({
         id: String(parsed.id),
         cwd: String(parsed.cwd ?? ""),
         title: String(parsed.title ?? ""),
+        created_at: String(parsed.created_at ?? ""),
         updated_at: String(parsed.updated_at ?? ""),
+        parent: parsed.parent,
       });
     }
   }
   return found.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+}
+
+/// The subagents one session spawned, in the order they were created. They sit
+/// in the parent's own folder, because a child is handed the parent's working
+/// directory and never writes outside it.
+export function childrenOf(root: string, id: unknown, cwd: unknown): SessionSummary[] {
+  const safeId = assertId(id);
+  const workdir = typeof cwd === "string" ? cwd : "";
+  const dir = join(root, encodeDir(workdir));
+  let files: string[];
+  try {
+    files = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const found: SessionSummary[] = [];
+  for (const file of files) {
+    if (!file.endsWith(".json") || file.startsWith(".")) continue;
+    const parsed = readFileAt(join(dir, file));
+    if (parsed === null || parsed.parent === null || parsed.parent.id !== safeId) continue;
+    found.push({
+      id: String(parsed.id),
+      cwd: String(parsed.cwd ?? ""),
+      title: String(parsed.title ?? ""),
+      created_at: String(parsed.created_at ?? ""),
+      updated_at: String(parsed.updated_at ?? ""),
+      parent: parsed.parent,
+    });
+  }
+  return found.sort(
+    (left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
+  );
 }

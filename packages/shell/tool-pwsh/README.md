@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a command line and an optional timeout, calls the `shell` capability, and renders whatever that provider answered as a status, an exit code and the two output streams. It starts no process itself and knows nothing about PowerShell: the executable, the environment and the sandbox all live behind the capability. The session working directory arrives as the host argument `workdir`, every call runs alone, and a command the permission gate treats as destructive is put to the user before it runs.
+One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a command line and an optional timeout, calls the `shell` capability, and renders whatever that provider answered as a status, an exit code and the two output streams. It starts no process itself and knows nothing about PowerShell: the executable, the environment and the sandbox all live behind the capability. The session working directory arrives as the host argument `workdir`, every call runs alone, and a command the permission gate treats as destructive is put to the user before it runs. A call a subagent made carries the label that says so, so the question can name the subagent it came from.
 
 ## Table of Contents
 
@@ -32,6 +32,7 @@ One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a comman
 | `workdir` | string | Host | The session working directory. Injected, never published. |
 | `session_id` | string | Host | The session this call belongs to, so the gate can keep a policy per session. Injected, never published. |
 | `call_id` | string | Host | The id of this tool call, so an approval can be matched to it. Injected, never published. |
+| `subagent` | object | Host | The subagent that made this call: `{ id, type, description }`. Injected, never published, and absent for a call the session itself made. |
 
 ### The result
 
@@ -52,6 +53,8 @@ Concurrency is `never`: a command is not declared safe to run beside another cal
 Before it calls `shell.run`, this tool reads the session's permission policy. In `full` the command runs and nothing is asked. Otherwise a command containing one of the three shapes this tool treats as destructive (`rm `, `> /etc/`, `chmod 777`) is put to `permission/request` first, and only the answer `allowed-once` lets it run.
 
 Any other answer comes back as this tool's own result instead: `{ command, status: "approval denied", ok: false, reason }`, where the reason says which answer it got. A refusal is therefore a normal tool result the model can read, not an error.
+
+The question carries the identity the call arrived with. A call a subagent made arrives under the parent's `session_id` and `call_id` and carries a `subagent` label, so the question lands under the tool row that started the subagent and a front end can say which subagent is asking. Nothing here decides that identity: it is injected, and the model can neither set it nor leave it out.
 
 The wait is wider than a normal capability call on purpose. `approval_timeout_ms` (default 300000) is passed as that call's own `timeout_ms`, because the kernel's default would cut a question off after thirty seconds. A policy that cannot be read is read as the mode that asks, so a deployment without the gate refuses a destructive command instead of running it.
 
@@ -82,7 +85,7 @@ The wait is wider than a normal capability call on purpose. `approval_timeout_ms
 
 ### Why the session arrives as host arguments
 
-The model is not offered a working-directory parameter, so it cannot move a command out of the session's directory, and it is not offered a session or a call id either, so it cannot claim to be another session or to be answering a question it was not asked. All three are declared with a `host` source, which keeps them out of the published schema and makes them required at run time; `agent-core` fills them from the session and the call before forwarding. A call that arrives without one is a `-32602` naming the missing argument.
+The model is not offered a working-directory parameter, so it cannot move a command out of the session's directory, and it is not offered a session, a call id or a subagent label either, so it cannot claim to be another session, to be answering a question it was not asked, or to be a subagent it is not. All four are declared with a `host` source, which keeps them out of the published schema and makes them required at run time; `agent-core` fills them from the session and the call before forwarding. A call that arrives without one is a `-32602` naming the missing argument, and the one exception is the subagent label, which is simply absent for a call the session itself made.
 
 -----
 

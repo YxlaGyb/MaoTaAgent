@@ -53,7 +53,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | `type` | One of `object`, `array`, `string`, `number`, `integer`, `boolean` and `null`. |
 | `required` | Top level only. The model must send it. |
 | `description`, `enum`, `items`, `additionalProperties` | The usual hints, inside the subset below. |
-| `host` | `"session_cwd"`. The host fills it, and the model never sees it. |
+| `host` | A host source: `session_cwd`, `session_id`, `call_id` or `subagent`. The host fills it before the call, and the model never sees it. The type is `string`, or `object` for a source that hands over a value rather than a name. |
 
 ### The controlled schema subset
 
@@ -80,7 +80,7 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 
 ### One declaration, two schemas
 
-A blueprint's `parameters` compiles into two objects. The published one becomes the model-visible `input_schema`; the validation one adds every host argument as required. `describe` returns the published schema plus `host_args`, so the host knows what to inject without the model ever seeing those names. A host argument that is `required`, that is not a string, or that appears below the top level is a declaration error rather than a runtime one.
+A blueprint's `parameters` compiles into two objects. The published one becomes the model-visible `input_schema`; the validation one adds every host argument as required, except a source that is allowed to be absent. `describe` returns the published schema plus `host_args`, so the host knows what to inject without the model ever seeing those names. A host argument that is `required`, whose type is neither `string` nor `object`, or that appears below the top level is a declaration error rather than a runtime one.
 
 ### Runs after validation, never before
 
@@ -100,7 +100,7 @@ A blueprint's `parameters` compiles into two objects. The published one becomes 
 <a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
-- **One host source**: `host` accepts only `session_cwd`.
+- **The host sources are a fixed four**: `session_cwd`, `session_id`, `call_id` and `subagent`, and a tool that needs another one cannot declare it. Only `subagent` may be missing from the arguments, because a call the session itself made has no subagent to name.
 - **No tool output schema**: only the input side is described.
 - **The subset is closed**: `pattern`, `minimum`, `$ref` and the rest of JSON Schema are refused, so a tool that needs them needs a change here first.
 - **`oneOf` is shallow**: branches are checked for shape, not for exclusivity, at declaration time.

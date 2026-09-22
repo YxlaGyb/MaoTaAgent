@@ -65,9 +65,11 @@ The plugin provides `permission` at version `1.0.0` and reads three config keys:
 
 Only `ask` with at least one registered answerer publishes a question. `auto` and `full` answer `allowed-once` immediately, with `decided_by` set to `policy:auto` or `policy:full`, and publish nothing. Anything that is not `allowed-once` is a refusal, and a refusal is what the caller must act on: an absent capability, a call that threw, and an answer outside the four words all collapse to `unavailable`, so no failure path can turn into a silent yes.
 
-Two events are published, best effort: `permission.requested { id, session_id, tool, call_id?, reason?, at }` and `permission.settled { id, outcome, decided_by, at }`. They are notifications for a front end that happens to be listening. The durable file and `pending` are the truth; a lost event costs a repaint, never a decision.
+Two events are published, best effort: `permission.requested { id, session_id, tool, call_id?, reason?, subagent?, at }` and `permission.settled { id, outcome, decided_by, at, subagent? }`. They are notifications for a front end that happens to be listening. The durable file and `pending` are the truth; a lost event costs a repaint, never a decision.
 
 A request deliberately carries no tool arguments. The front end matches a question to the tool call it belongs to through `call_id`, which `agent-core` injects as a host argument from the id of the call the model asked for.
+
+One optional field does ride along: `subagent`, the `{ id, type, description }` of the subagent that made the call, and it is absent for a call the session itself made. A subagent's calls reach the gate under the parent's `session_id` and the parent's `task` call as `call_id`, so this label is the only thing that says the question came from a child and which one. It lands in the published events, in `pending`, and in both audit records, which is why a card can appear under the row that started the subagent and still be rebuilt from the file after a restart.
 
 <a id="the-audit-file"></a>
 ## The audit file
@@ -81,8 +83,8 @@ One file per session per working directory: `$MAOTA_HOME/permissions/<cwd>/<sess
   "cwd": "E:\\work",
   "mode": "ask",
   "records": [
-    { "kind": "asked", "at": "…", "id": "…", "tool": "pwsh", "call_id": "…", "reason": "…" },
-    { "kind": "decided", "at": "…", "id": "…", "outcome": "allowed-once", "decided_by": "web" }
+    { "kind": "asked", "at": "…", "id": "…", "tool": "pwsh", "call_id": "…", "reason": "…", "subagent": { "id": "sub-3f2a", "type": "explore" } },
+    { "kind": "decided", "at": "…", "id": "…", "outcome": "allowed-once", "decided_by": "web", "subagent": { "id": "sub-3f2a", "type": "explore" } }
   ]
 }
 ```
@@ -94,7 +96,7 @@ Writes follow the session store: the whole file is serialized to a temporary nam
 <a id="the-card-and-the-wire"></a>
 ## The card and the wire
 
-The web plugin is the only answerer this version ships. It registers itself at start, subscribes to the two topics, forwards them to the page as `permission.request` and `permission.settled`, and offers four RPC methods on top of the ones the page already had: `permission.get`, `permission.set`, `permission.answer` and `permission.pending`. The page renders one card per waiting question, matched to the tool call that is already streaming by `call_id`, and rebuilds its cards from `permission.pending` after a reload or a reconnect.
+The web plugin is the only answerer this version ships. It registers itself at start, subscribes to the two topics, forwards them to the page as `permission.request` and `permission.settled`, and offers four RPC methods on top of the ones the page already had: `permission.get`, `permission.set`, `permission.answer` and `permission.pending`. The page renders one card per waiting question, matched to the tool call that is already streaming by `call_id`, and rebuilds its cards from `permission.pending` after a reload or a reconnect. A question a subagent asked matches the same way, which puts its card under the parent's `task` row, and the card names the subagent that is asking.
 
 The card offers two answers and no memory: allow this one call, or deny it. There is no "always allow", because a remembered grant is a rule, and rules are what this version does not ship.
 
@@ -114,7 +116,7 @@ The CLI registers no answerer. An `ask` deployment driven from a terminal theref
 <a id="related-documentation"></a>
 ## Related documentation
 
-- [interaction package group](../packages/interaction/README.md): the gate package and how it is mounted.
-- [tool-pwsh](../packages/shell/tool-pwsh/README.md): the tool that asks.
-- [tools dispatcher](../packages/agent/tools/README.md): the funnel the gate is documented against.
-- [architecture](architecture.md): where this gate sits in the whole system.
+- [interaction package group](../../packages/interaction/README.md): the gate package and how it is mounted.
+- [tool-pwsh](../../packages/shell/tool-pwsh/README.md): the tool that asks.
+- [tools dispatcher](../../packages/agent/tools/README.md): the funnel the gate is documented against.
+- [architecture](../architecture.md): where this gate sits in the whole system.

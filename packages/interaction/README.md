@@ -31,6 +31,6 @@ The split is between asking and deciding. A tool owns the judgement that an oper
 ## Related documentation
 
 - [permission](permission/README.md): the contract of record for the gate.
-- [Permission design](../../docs/permission.md): where the gate sits, the three modes, and what it leaves out.
+- [Permission design](../../docs/user/permission.md): where the gate sits, the three modes, and what it leaves out.
 - [shell group](../shell/README.md): the tool that asks.
 - [packages group](../README.md): the plugin tree this group belongs to.

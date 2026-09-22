@@ -2,7 +2,14 @@
 import { defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import type { ShellRunResult } from "@maota/shell";
 
-import { needsApproval, reasonOf, refusalOf, requestApproval, type ApprovalTarget } from "./approval.ts";
+import {
+  needsApproval,
+  reasonOf,
+  refusalOf,
+  requestApproval,
+  type ApprovalTarget,
+  type SubagentRef,
+} from "./approval.ts";
 import { renderPwshResult } from "./result.ts";
 
 const DEFAULTS = { approval_timeout_ms: 300_000 };
@@ -49,6 +56,11 @@ const toolkit = defineTools([
         host: "call_id",
         description: "The id of this tool call, so an approval can be matched to it.",
       },
+      subagent: {
+        type: "object",
+        host: "subagent",
+        description: "The subagent asking, when a subagent rather than the session made this call.",
+      },
     },
     concurrency: "never",
     run: async (args, call) => {
@@ -56,6 +68,8 @@ const toolkit = defineTools([
       const cwd = String(args.workdir ?? "");
       const sessionId = String(args.session_id ?? "");
       const callId = typeof args.call_id === "string" && args.call_id !== "" ? args.call_id : undefined;
+      const subagent =
+        typeof args.subagent === "object" && args.subagent !== null ? (args.subagent as SubagentRef) : undefined;
       const mode = await modeOf(call, sessionId, cwd);
       if (mode !== "full" && needsApproval(command)) {
         const target: ApprovalTarget = {
@@ -64,6 +78,7 @@ const toolkit = defineTools([
           tool: "pwsh",
           ...(callId === undefined ? {} : { call_id: callId }),
           reason: reasonOf(command),
+          ...(subagent === undefined ? {} : { subagent }),
         };
         const outcome = await requestApproval(call, target, settings.approval_timeout_ms);
         if (outcome !== "allowed-once") return refusalOf(command, outcome);
@@ -122,7 +137,7 @@ export const definition: Definition = {
       problems.push(`the spec requires ${JSON.stringify(described.input_schema?.required)}`);
     }
     const hostArgs = (described.host_args ?? []).map((item) => `${item.name}:${item.source}`).join(",");
-    if (hostArgs !== "workdir:session_cwd,session_id:session_id,call_id:call_id") {
+    if (hostArgs !== "workdir:session_cwd,session_id:session_id,call_id:call_id,subagent:subagent") {
       problems.push(`the spec declares host args ${JSON.stringify(described.host_args)}`);
     }
     const policy = toolkit.methods.policy({}, { capability: "tool.pwsh" } as unknown as Call);
@@ -246,6 +261,37 @@ export const definition: Definition = {
     })();
     if (typeof refused !== "string" || !refused.includes("arguments.workdir is required")) {
       problems.push(`run without a session directory said ${JSON.stringify(refused)}`);
+    }
+
+    const carried = await (async () => {
+      let asked: Record<string, unknown> | null = null;
+      const channel = {
+        call: async (capability: string, method: string, params?: unknown): Promise<unknown> => {
+          if (capability === "permission" && method === "policy") return { mode: "ask" };
+          if (capability === "permission" && method === "request") {
+            asked = params as Record<string, unknown>;
+            return { outcome: "rejected" };
+          }
+          throw new Error(`no ${capability}/${method} here`);
+        },
+      };
+      await toolkit.methods.run(
+        {
+          command: "rm -rf /tmp/x",
+          workdir: "E:\\work",
+          session_id: "p1",
+          call_id: "c1",
+          subagent: { id: "sub-1", type: "explore", description: "look" },
+        },
+        { capability: "tool.pwsh", signal: new AbortController().signal, channel } as unknown as Call,
+      );
+      return asked as Record<string, unknown> | null;
+    })();
+    if (carried?.session_id !== "p1" || carried.call_id !== "c1") {
+      problems.push(`a subagent's question carried ${JSON.stringify(carried)}`);
+    }
+    if ((carried?.subagent as SubagentRef | undefined)?.id !== "sub-1") {
+      problems.push("the subagent label was lost before the gate");
     }
     return problems;
   },

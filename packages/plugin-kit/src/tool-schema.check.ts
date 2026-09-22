@@ -123,6 +123,7 @@ const hostedAll: ToolBlueprint = {
     cwd: { type: "string", host: "session_cwd", description: "The session working directory." },
     session_id: { type: "string", host: "session_id", description: "The session id." },
     call_id: { type: "string", host: "call_id", description: "The tool call id." },
+    subagent: { type: "object", host: "subagent", description: "The subagent asking, when one is." },
   },
 };
 const everyHost = defineTools([hostedAll]);
@@ -134,12 +135,20 @@ assert.deepEqual(everyHost.methods.describe({}, call("tool.read")), {
     { name: "cwd", source: "session_cwd" },
     { name: "session_id", source: "session_id" },
     { name: "call_id", source: "call_id" },
+    { name: "subagent", source: "subagent" },
   ],
 });
 assert.deepEqual(await everyHost.methods.run({ file_path: "a", cwd: "E:\\x", session_id: "s1", call_id: "c1" }, call("tool.read")), {
   read: "a",
   from: "E:\\x",
 });
+assert.deepEqual(
+  await everyHost.methods.run(
+    { file_path: "a", cwd: "E:\\x", session_id: "s1", call_id: "c1", subagent: { id: "sub-1", type: "explore" } },
+    call("tool.read"),
+  ),
+  { read: "a", from: "E:\\x" },
+);
 
 assert.deepEqual(hosted.methods.describe({}, call("tool.read")), {
   name: "read",
@@ -175,7 +184,7 @@ assert.throws(
 assert.throws(
   () => defineTools([{ ...reader, parameters: { cwd: { type: "integer", host: "session_cwd" } } }]),
   (error: unknown) =>
-    error instanceof JsonSchemaError && error.violations.includes('parameters.cwd.host needs type "string"'),
+    error instanceof JsonSchemaError && error.violations.includes('parameters.cwd.host needs type "string" or "object"'),
 );
 assert.throws(
   () =>

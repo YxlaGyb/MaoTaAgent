@@ -20,6 +20,17 @@ export function ApprovalCard({
         <span className="approval-title">{t("approvalTitle")}</span>
       </div>
       <div className="approval-tool">{t("approvalTool", { tool: approval.tool })}</div>
+      {approval.subagent === undefined ? null : (
+        <div className="approval-subagent">
+          {t("approvalSubagent", {
+            name:
+              approval.subagent.description === undefined || approval.subagent.description === ""
+                ? approval.subagent.id
+                : approval.subagent.description,
+            type: approval.subagent.type === undefined || approval.subagent.type === "" ? "general" : approval.subagent.type,
+          })}
+        </div>
+      )}
       {approval.reason === undefined ? null : (
         <div className="approval-reason">
           <span className="approval-label">{t("approvalReason")}</span>

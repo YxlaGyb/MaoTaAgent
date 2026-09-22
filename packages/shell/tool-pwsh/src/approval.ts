@@ -15,6 +15,15 @@ export interface ApprovalTarget {
   tool: string;
   call_id?: string;
   reason?: string;
+  subagent?: SubagentRef;
+}
+
+/// A subagent's call reaches the gate with the parent's identity and this
+/// label, so the user is told which subagent is asking for what.
+export interface SubagentRef {
+  id: string;
+  type?: string;
+  description?: string;
 }
 
 export interface PwshRefusal {

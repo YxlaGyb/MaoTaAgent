@@ -65,9 +65,11 @@ MaoTa 在用户自己的机器上执行命令、改文件，所以有一个决�
 
 只有 `ask` 且至少有一个注册应答者时才发布问题。`auto` 与 `full` 立刻答 `allowed-once`，`decided_by` 分别写 `policy:auto` 与 `policy:full`，且什么都不发布。凡不是 `allowed-once` 的都是拒绝，而拒绝就是调用方必须照着办的结果：能力缺席、调用抛错、回答的词不在四个字里，一律归到 `unavailable`，所以没有任何一条失败路径能变成默认同意。
 
-发布两个事件，尽力而为：`permission.requested { id, session_id, tool, call_id?, reason?, at }` 与 `permission.settled { id, outcome, decided_by, at }`。它们只是给正好在听的前端的通知。持久文件加 `pending` 才是真相；丢一条事件顶多重画一次，绝不会丢一个决定。
+发布两个事件，尽力而为：`permission.requested { id, session_id, tool, call_id?, reason?, subagent?, at }` 与 `permission.settled { id, outcome, decided_by, at, subagent? }`。它们只是给正好在听的前端的通知。持久文件加 `pending` 才是真相；丢一条事件顶多重画一次，绝不会丢一个决定。
 
 请求刻意不携带工具参数。前端靠 `call_id` 把问题和它所属的那次工具调用对上，这个值由 `agent-core` 按模型请求的那次调用的 id 作为 host 参数注入。
+
+有一个可选字段确实会跟着来：`subagent`，即发起这次调用的子代理的 `{ id, type, description }`；会话自己发起的调用没有它。子代理的调用是以父的 `session_id` 和父那次 `task` 调用作为 `call_id` 到达闸门的，所以这个标签是唯一说明问题出自某个子代理、以及是哪一个的东西。它落进发布的事件、`pending`，以及两条审计记录，于是卡片能出现在派出这个子代理的那一行下面，重启之后也还能从文件里重建。
 
 <a id="审计文件"></a>
 ## 审计文件
@@ -81,8 +83,8 @@ MaoTa 在用户自己的机器上执行命令、改文件，所以有一个决�
   "cwd": "E:\\work",
   "mode": "ask",
   "records": [
-    { "kind": "asked", "at": "…", "id": "…", "tool": "pwsh", "call_id": "…", "reason": "…" },
-    { "kind": "decided", "at": "…", "id": "…", "outcome": "allowed-once", "decided_by": "web" }
+    { "kind": "asked", "at": "…", "id": "…", "tool": "pwsh", "call_id": "…", "reason": "…", "subagent": { "id": "sub-3f2a", "type": "explore" } },
+    { "kind": "decided", "at": "…", "id": "…", "outcome": "allowed-once", "decided_by": "web", "subagent": { "id": "sub-3f2a", "type": "explore" } }
   ]
 }
 ```
@@ -94,7 +96,7 @@ MaoTa 在用户自己的机器上执行命令、改文件，所以有一个决�
 <a id="卡片与线路"></a>
 ## 卡片与线路
 
-这一版交付的应答者只有 web 插件。它在启动时注册自己、订阅那两个主题，把它们转成 `permission.request` 与 `permission.settled` 推给页面，并在页面原有的方法之上多提供四个 RPC：`permission.get`、`permission.set`、`permission.answer` 与 `permission.pending`。页面为每个在等的问题渲染一张卡片，按 `call_id` 对上那条已经在流式输出的工具调用，并在刷新或重连之后用 `permission.pending` 重建卡片。
+这一版交付的应答者只有 web 插件。它在启动时注册自己、订阅那两个主题，把它们转成 `permission.request` 与 `permission.settled` 推给页面，并在页面原有的方法之上多提供四个 RPC：`permission.get`、`permission.set`、`permission.answer` 与 `permission.pending`。页面为每个在等的问题渲染一张卡片，按 `call_id` 对上那条已经在流式输出的工具调用，并在刷新或重连之后用 `permission.pending` 重建卡片。子代理问的问题用同一套对法，于是卡片落在父那行 `task` 下面，并写明是哪个子代理在问。
 
 卡片只给两个回答，且不记事：允许这一次，或拒绝。没有"总是允许"，因为记住的授权就是规则，而规则正是这一版不交付的东西。
 
@@ -114,7 +116,7 @@ CLI 不注册应答者。终端驱动的 `ask` 部署因此会拒绝命中风险
 <a id="相关文档"></a>
 ## 相关文档
 
-- [interaction 包组](../packages/interaction/README.zh.md)：闸门包以及它怎么被挂载。
-- [tool-pwsh](../packages/shell/tool-pwsh/README.zh.md)：发起询问的那个工具。
-- [tools 分发器](../packages/agent/tools/README.zh.md)：闸门所针对的那个漏斗。
-- [架构](architecture.zh.md)：这道闸门在整个系统里的位置。
+- [interaction 包组](../../packages/interaction/README.zh.md)：闸门包以及它怎么被挂载。
+- [tool-pwsh](../../packages/shell/tool-pwsh/README.zh.md)：发起询问的那个工具。
+- [tools 分发器](../../packages/agent/tools/README.zh.md)：闸门所针对的那个漏斗。
+- [架构](../architecture.zh.md)：这道闸门在整个系统里的位置。

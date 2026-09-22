@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { CallError, runPlugin, type Call, type Definition, type Wiring } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Call, type Channel, type Definition, type Wiring } from "@maota/plugin-kit";
 import {
   runLoop,
   sourcedMessages,
   type ChatDelta,
   type LoopEvent,
+  type LoopState,
   type Message,
   type PostToolDecision,
   type PreToolDecision,
@@ -14,7 +15,14 @@ import {
 } from "@maota/agent-loop";
 import type { HookEvent, HookOutcome } from "@maota/hook-protocol";
 import { systemPrompt, type SkillSummary } from "./prompt.ts";
-import { SKILL_TOOL, hostValue, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "./tools.ts";
+import {
+  SKILL_TOOL,
+  hostValue,
+  injectHostArgs,
+  readToolList,
+  stripHostArgs,
+  type HostValues,
+} from "./tools.ts";
 
 export const LEVELS = ["off", "low", "medium", "high"] as const;
 export type Level = (typeof LEVELS)[number];
@@ -35,6 +43,11 @@ const DEFAULTS = {
 };
 
 let settings = { ...DEFAULTS };
+
+/// The thinking level and model of every run that is in flight, keyed by the
+/// session it is serving, so a subagent the run spawns inherits them: the loop
+/// keeps no other link back to its parent.
+const active = new Map<string, LevelSetting>();
 
 export function isLevel(value: unknown): value is Level {
   return typeof value === "string" && (LEVELS as readonly string[]).includes(value);
@@ -77,6 +90,80 @@ export function titleOf(text: unknown): string {
   if (flat === "") return "";
   const all = [...segmenter.segment(flat)].map((piece) => piece.segment);
   return all.length > 30 ? `${all.slice(0, 30).join("")}…` : flat;
+}
+
+export interface SubagentOrigin {
+  parent_session_id: string;
+  parent_call_id: string | null;
+  type: string;
+  description: string;
+}
+
+interface SubagentRef {
+  subagent_id: string;
+  parent_session_id: string;
+  parent_call_id: string | null;
+  type: string;
+  description: string;
+}
+
+/// `origin` turns a run into a subagent: a fresh conversation, spawned by the
+/// tool call it names, that keeps the identity of the parent it serves.
+function readOrigin(value: unknown): SubagentOrigin | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new CallError(-32602, `origin must be an object, got ${JSON.stringify(value)}`);
+  }
+  const raw = value as Record<string, unknown>;
+  const parent = raw.parent_session_id;
+  if (typeof parent !== "string" || parent === "") {
+    throw new CallError(
+      -32602,
+      `origin.parent_session_id must name the session that spawned this run, got ${JSON.stringify(parent)}`,
+    );
+  }
+  const text = (name: string): string | null => {
+    const found = raw[name];
+    if (found === undefined || found === null) return null;
+    if (typeof found !== "string") {
+      throw new CallError(-32602, `origin.${name} must be a string, got ${JSON.stringify(found)}`);
+    }
+    return found;
+  };
+  return {
+    parent_session_id: parent,
+    parent_call_id: text("parent_call_id"),
+    type: text("type") ?? "general",
+    description: text("description") ?? "",
+  };
+}
+
+function readSystem(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new CallError(-32602, `system must be a string, got ${JSON.stringify(value)}`);
+  return value.trim() === "" ? undefined : value;
+}
+
+function readNames(value: unknown, name: string): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new CallError(-32602, `${name} must be an array of tool names`);
+  const names = value.filter((entry): entry is string => typeof entry === "string" && entry !== "");
+  if (names.length !== value.length) throw new CallError(-32602, `${name} must hold non-empty tool names`);
+  return names;
+}
+
+function readSteps(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new CallError(-32602, `max_steps must be a positive whole number, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/// A bus event is a broadcast a subscriber may not be there to hear, and a lost
+/// one costs nothing: the run itself is the record.
+function announce(channel: Channel, topic: string, payload: unknown): void {
+  void channel.publish(topic, payload).catch(() => undefined);
 }
 
 async function classifyTool(
@@ -222,11 +309,28 @@ async function persist(
   cwd: string | null,
   messages: readonly Message[],
   title: string,
+  parent: SubagentOrigin | null,
 ): Promise<void> {
   await ctx.channel.call(
     "session",
     "save",
-    { id: sessionId, cwd: cwd ?? "", title, messages },
+    {
+      id: sessionId,
+      cwd: cwd ?? "",
+      title,
+      messages,
+      ...(parent === null
+        ? {}
+        : {
+            parent: {
+              id: parent.parent_session_id,
+              cwd: cwd ?? "",
+              call_id: parent.parent_call_id ?? "",
+              type: parent.type,
+              description: parent.description,
+            },
+          }),
+    },
     { signal: ctx.signal },
   );
 }
@@ -261,7 +365,7 @@ async function chatStream(
 }
 
 export const definition: Definition = {
-  provides: [{ capability: "agent.loop", version: "1.2.0" }],
+  provides: [{ capability: "agent.loop", version: "1.3.0" }],
   configKeys: ["max_steps", "max_parallel_tools", "system", "thinking"],
   requires: [
     { capability: "api", version: "^1" },
@@ -302,55 +406,109 @@ export const definition: Definition = {
 
       const sessionId = String(params?.session_id ?? "default");
       const cwd = typeof params?.cwd === "string" && params.cwd !== "" ? params.cwd : null;
-      const level = readLevel(params?.thinking);
-      const setting = resolveLevel(settings.thinking, level);
       const input = typeof params?.input === "string" ? params.input : "";
+      const origin = readOrigin(params?.origin);
+      const sub = origin !== null;
+      const system = readSystem(params?.system);
+      const allow = readNames(params?.tools_allow, "tools_allow");
+      const deny = readNames(params?.tools_deny, "tools_deny") ?? [];
+      const maxSteps = readSteps(params?.max_steps, settings.max_steps);
+      const identity = origin?.parent_session_id ?? sessionId;
+      const setting: LevelSetting = sub
+        ? { ...(active.get(identity) ?? { tools: true }) }
+        : resolveLevel(settings.thinking, readLevel(params?.thinking));
 
-      // Before the tools, the skills, the gate and the model: a refused prompt
-      // costs a hook call and nothing else, and it is never written down.
-      const prompt = await seam(ctx, "UserPromptSubmit", { session_id: sessionId, cwd, input }, asPreTool);
-      if (prompt?.decision === "deny") {
-        stream.push({ type: "done", steps: 0, text: prompt.reason ?? "", reason: "refused" });
-        return;
+      let prompt: PreToolDecision | null = null;
+      if (!sub) {
+        // Before the tools, the skills, the gate and the model: a refused prompt
+        // costs a hook call and nothing else, and it is never written down.
+        prompt = await seam(ctx, "UserPromptSubmit", { session_id: sessionId, cwd, input }, asPreTool);
+        if (prompt?.decision === "deny") {
+          stream.push({ type: "done", steps: 0, text: prompt.reason ?? "", reason: "refused" });
+          return;
+        }
       }
 
       const [available, skills, mode] = await Promise.all([
         listTools(ctx),
-        listSkills(ctx),
-        approvalMode(ctx, sessionId, cwd ?? ""),
+        sub ? Promise.resolve<SkillSummary[]>([]) : listSkills(ctx),
+        approvalMode(ctx, identity, cwd ?? ""),
       ]);
-      const tools = setting.tools ? available : [];
-      if (setting.tools && skills.length > 0) tools.push(SKILL_TOOL);
+      const allowed = (name: string): boolean => (allow === null || allow.includes(name)) && !deny.includes(name);
+      const pool = setting.tools ? [...available] : [];
+      if (!sub && setting.tools && skills.length > 0) pool.push(SKILL_TOOL);
+      const tools = pool.filter((tool) => allowed(tool.name));
       const modelTools = tools.map(stripHostArgs);
+      const child: SubagentRef | null =
+        origin === null
+          ? null
+          : {
+              subagent_id: sessionId,
+              parent_session_id: origin.parent_session_id,
+              parent_call_id: origin.parent_call_id,
+              type: origin.type,
+              description: origin.description,
+            };
+
+      // A subagent's calls are the parent's calls as far as the rest of the
+      // deployment is concerned: the same session, the same `task` call, and a
+      // label saying which subagent is asking.
       const host = (callId: string | null): HostValues => ({
         session_cwd: cwd,
-        session_id: sessionId,
-        call_id: callId,
+        session_id: identity,
+        call_id: origin === null ? callId : origin.parent_call_id,
+        subagent: child === null ? null : { id: child.subagent_id, type: child.type, description: child.description },
       });
       const specOf = (name: string): ToolSpec | undefined => tools.find((tool) => tool.name === name);
       const argsOf = (call: ToolCall): unknown => injectHostArgs(specOf(call.name), call.args, host(call.id));
+      const hooksFor = (invoked: ToolCall, step: number): Record<string, unknown> => ({
+        session_id: identity,
+        cwd,
+        step,
+        tool: invoked.name,
+        args: argsOf(invoked),
+        call_id: origin === null ? invoked.id : origin.parent_call_id,
+        ...(child === null
+          ? {}
+          : { subagent: { id: child.subagent_id, type: child.type, description: child.description } }),
+      });
+      // The tool surface is closed at the seam as well as in the listing, so a
+      // name the model invented is refused instead of hoped against.
+      const refused = (name: string): PreToolDecision => ({
+        decision: "deny",
+        reason: sub
+          ? `the ${name} tool is not available to this subagent`
+          : `the ${name} tool is not available in this run`,
+      });
+      const announceSub = (topic: string, fields: Record<string, unknown>): void => {
+        if (child === null) return;
+        announce(ctx.channel, topic, { ...child, ...fields });
+      };
 
-      const history = await loadHistory(ctx, sessionId, cwd);
+      const history: Message[] = sub ? [] : await loadHistory(ctx, sessionId, cwd);
       if (input !== "") history.push({ role: "user", content: input });
       const first = history.find((message) => message.role === "user" && typeof message.content === "string");
       history.push(...sourcedMessages(prompt?.context ?? []));
 
-      await persist(ctx, sessionId, cwd, history, titleOf(first?.content));
+      const title = origin !== null && origin.description !== "" ? origin.description : titleOf(first?.content);
+      await persist(ctx, sessionId, cwd, history, title, origin);
 
       const messages: Message[] = [
-        { role: "system", content: systemPrompt(settings.system, skills, cwd, mode) },
+        { role: "system", content: systemPrompt(system ?? settings.system, skills, cwd, mode) },
         ...history,
       ];
 
+      announceSub("agent.subagent.started", {});
+      if (!sub) active.set(sessionId, setting);
       const heartbeat = setInterval(() => stream.push({ type: "tick" }), 10_000);
+      let closed = false;
       try {
         const outcome = await runLoop(
           {
             tools,
-            max_steps: settings.max_steps,
+            max_steps: maxSteps,
             max_parallel: settings.max_parallel_tools,
-            chat: (step) =>
-              chatStream(ctx, step.state.messages, modelTools, setting.model, step.signal, step.delta),
+            chat: (step) => chatStream(ctx, step.state.messages, modelTools, setting.model, step.signal, step.delta),
             callTool: (invoked, step) =>
               invoked.name === SKILL_TOOL.name
                 ? ctx.channel.call(
@@ -369,52 +527,53 @@ export const definition: Definition = {
               invoked.name === SKILL_TOOL.name
                 ? Promise.resolve(true)
                 : classifyTool(ctx, specOf(invoked.name), invoked, host(invoked.id), step.signal),
-            preTool: (invoked, step) =>
-              seam(
-                ctx,
-                "PreToolUse",
-                {
-                  session_id: sessionId,
-                  cwd,
-                  step: step.step,
-                  tool: invoked.name,
-                  args: argsOf(invoked),
-                  call_id: invoked.id,
-                },
-                asPreTool,
-              ),
+            preTool: async (invoked, step) =>
+              allowed(invoked.name)
+                ? await seam(ctx, "PreToolUse", hooksFor(invoked, step.step), asPreTool)
+                : refused(invoked.name),
             postTool: (invoked, outcome, step) =>
-              seam(
-                ctx,
-                "PostToolUse",
-                {
-                  session_id: sessionId,
-                  cwd,
-                  step: step.step,
-                  tool: invoked.name,
-                  args: argsOf(invoked),
-                  call_id: invoked.id,
-                  ok: outcome.ok,
-                  output: outcome.output,
-                },
-                asPostTool,
-              ),
-            atStop: (state) =>
-              seam(
-                ctx,
-                "Stop",
-                { session_id: sessionId, cwd, steps: state.step, stop_active: state.stopSteered },
-                asStop,
-              ),
+              seam(ctx, "PostToolUse", { ...hooksFor(invoked, step.step), ok: outcome.ok, output: outcome.output }, asPostTool),
+            ...(sub
+              ? {}
+              : {
+                  atStop: (state: LoopState) =>
+                    seam(
+                      ctx,
+                      "Stop",
+                      { session_id: sessionId, cwd, steps: state.step, stop_active: state.stopSteered },
+                      asStop,
+                    ),
+                }),
           },
           messages,
           ctx.signal,
-          (event: LoopEvent) => stream.push(event),
+          (event: LoopEvent) => {
+            stream.push(event);
+            if (event.type === "step") announceSub("agent.subagent.step", { step: event.step });
+            else if (event.type === "tool_call") {
+              announceSub("agent.subagent.tool_call", { id: event.id, tool: event.tool, args: event.args });
+            } else if (event.type === "tool_result") {
+              announceSub("agent.subagent.tool_result", {
+                id: event.id,
+                tool: event.tool,
+                ok: event.ok,
+                output: event.output,
+              });
+            }
+          },
         );
-        await persist(ctx, sessionId, cwd, messages.slice(1), titleOf(first?.content));
+        await persist(ctx, sessionId, cwd, messages.slice(1), title, origin);
+        announceSub("agent.subagent.finished", {
+          steps: outcome.steps,
+          reason: outcome.reason,
+          ok: outcome.reason === "completed",
+        });
+        closed = true;
         stream.push({ type: "done", steps: outcome.steps, text: outcome.text, reason: outcome.reason });
       } finally {
         clearInterval(heartbeat);
+        if (!sub) active.delete(sessionId);
+        if (child !== null && !closed) announceSub("agent.subagent.finished", { ok: false, reason: "failed" });
       }
     },
 
@@ -481,7 +640,7 @@ export const definition: Definition = {
       problems.push("the system prompt invented an approval line with no policy");
     }
 
-    const host: HostValues = { session_cwd: "E:\\proj", session_id: "s1", call_id: "c1" };
+    const host: HostValues = { session_cwd: "E:\\proj", session_id: "s1", call_id: "c1", subagent: null };
     const pwsh: ToolSpec = {
       name: "pwsh",
       input_schema: { type: "object", properties: { command: { type: "string" } } },
@@ -501,7 +660,7 @@ export const definition: Definition = {
       problems.push("host args were injected into a tool that declares none");
     }
     if (
-      (injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null, session_id: null, call_id: null }) as {
+      (injectHostArgs(pwsh, { command: "ls" }, { session_cwd: null, session_id: null, call_id: null, subagent: null }) as {
         workdir?: unknown;
       }).workdir !== undefined
     ) {
@@ -529,6 +688,239 @@ export const definition: Definition = {
       problems.push("host_args leaked into the model visible spec");
     }
     if (stripHostArgs(pwsh).name !== "pwsh") problems.push("stripHostArgs dropped the tool name");
+
+    const subTool: ToolSpec = {
+      name: "pwsh",
+      input_schema: { type: "object", properties: { command: { type: "string" } } },
+      host_args: [
+        { name: "session_id", source: "session_id" },
+        { name: "call_id", source: "call_id" },
+        { name: "subagent", source: "subagent" },
+      ],
+    };
+    const carried = injectHostArgs(subTool, { command: "ls" }, {
+      session_cwd: "E:\\proj",
+      session_id: "p1",
+      call_id: "c1",
+      subagent: { id: "sub-3f2a", type: "explore", description: "look" },
+    } as HostValues) as { subagent?: { id?: string; type?: string } };
+    if (carried.subagent?.id !== "sub-3f2a" || carried.subagent.type !== "explore") {
+      problems.push(`the subagent identity was not injected: ${JSON.stringify(carried)}`);
+    }
+    if ((injectHostArgs(subTool, { command: "ls" }, host) as { subagent?: unknown }).subagent !== undefined) {
+      problems.push("a parent's call invented a subagent identity");
+    }
+
+    const defaults = readOrigin({ parent_session_id: "p1" });
+    if (defaults?.type !== "general" || defaults.description !== "") problems.push("origin defaults drifted");
+    if (readOrigin(undefined) !== null) problems.push("an absent origin invented a subagent");
+
+    const published: Array<{ topic: string; payload: Record<string, any> }> = [];
+    const calls: Array<{ capability: string; method: string; params: any }> = [];
+    const saves: Array<Record<string, any>> = [];
+    const listed: ToolSpec[] = [
+      { name: "read", description: "read a file" },
+      { name: "write", description: "write a file" },
+      { name: "task", description: "ask another agent" },
+    ];
+    const scripted = (content: string, tool?: string): Message => ({
+      role: "assistant",
+      content: tool === undefined ? content : null,
+      ...(tool === undefined ? {} : { tool_calls: [{ id: `t-${tool}`, function: { name: tool, arguments: "{}" } }] }),
+    });
+    const harness = (script: readonly Message[], gate?: Promise<void>) => {
+      const chat: Array<{ messages: Message[]; tools?: ToolSpec[]; model?: string }> = [];
+      const events: LoopEvent[] = [];
+      const heard: Array<{ capability: string; method: string; params: any }> = [];
+      const sent: typeof published = [];
+      const queue = [...script];
+      const channel = {
+        call: async (capability: string, method: string, params: any) => {
+          const record = { capability, method, params };
+          calls.push(record);
+          heard.push(record);
+          if (capability === "tools" && method === "list") return { tools: listed };
+          if (capability === "skill" && method === "list") return { skills: [{ name: "s", description: "d" }] };
+          if (capability === "permission" && method === "policy") return { mode: "ask" };
+          if (capability === "session" && method === "load") return { messages: [{ role: "user", content: "earlier" }] };
+          if (capability === "session" && method === "save") {
+            saves.push(params);
+            return {};
+          }
+          if (capability === "tools" && method === "classify") return { safe: true };
+          if (capability === "tools" && method === "call") return "tool output";
+          throw new Error(`unexpected call ${capability}/${method}`);
+        },
+        stream: async (_capability: string, _method: string, params: any) => {
+          chat.push(params);
+          if (gate !== undefined) await gate;
+          const message = queue.shift() ?? { role: "assistant", content: "done" };
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield { type: "message", message };
+            },
+          };
+        },
+        publish: async (topic: string, payload: unknown) => {
+          const record = { topic, payload: payload as Record<string, any> };
+          published.push(record);
+          sent.push(record);
+        },
+        log: () => {},
+      };
+      const call = {
+        channel,
+        config: {},
+        capabilities: {},
+        capability: "agent.loop",
+        method: "run",
+        caller: "tool-subagent",
+        signal: new AbortController().signal,
+        stream: { push: (event: LoopEvent) => events.push(event) },
+      } as unknown as Call;
+      return { call, chat, events, heard, sent };
+    };
+    const surfaced = (chat: Array<{ tools?: ToolSpec[] }>): string =>
+      (chat[0]?.tools ?? []).map((tool) => tool.name).join(",");
+    const run = (params: Record<string, unknown>, script: readonly Message[], gate?: Promise<void>) => {
+      const made = harness(script, gate);
+      return { ...made, done: Promise.resolve(definition.methods.run?.(params, made.call)) };
+    };
+
+    const explore = run(
+      {
+        session_id: "sub-a",
+        cwd: "E:\\proj",
+        input: "find where the loader is registered",
+        origin: { parent_session_id: "p1", parent_call_id: "c1", type: "explore", description: "look at the loader" },
+        system: "you are an explore subagent",
+        tools_allow: ["read"],
+        tools_deny: ["task"],
+        max_steps: 3,
+      },
+      [scripted("", "write"), scripted("the loader is in graph.rs")],
+    );
+    await explore.done;
+    if (explore.chat.length !== 2) problems.push(`the subagent ran ${explore.chat.length} steps, expected 2`);
+    if (surfaced(explore.chat) !== "read") problems.push(`the explore subagent listed ${surfaced(explore.chat)}`);
+    const opening = explore.chat[0]?.messages ?? [];
+    if (opening[1]?.role !== "user" || opening[1]?.content !== "find where the loader is registered") {
+      problems.push(`the subagent opened with ${JSON.stringify(opening.slice(0, 3))}`);
+    }
+    const brief = explore.chat[0]?.messages[0]?.content ?? "";
+    if (!brief.startsWith("you are an explore subagent")) {
+      problems.push("the subagent kept the deployment system prompt over its own");
+    }
+    if (!brief.includes("working directory: E:\\proj") || !brief.includes("approval: ask")) {
+      problems.push(`the subagent prompt lost its place and policy: ${JSON.stringify(brief)}`);
+    }
+    if (explore.heard.some((item) => item.capability === "session" && item.method === "load")) {
+      problems.push("the subagent read the history it was meant to start without");
+    }
+    if (explore.heard.some((item) => item.capability === "skill")) problems.push("a subagent was offered skills");
+    if (explore.heard.some((item) => item.capability === "tools" && item.method === "call")) {
+      problems.push("a tool the subagent does not have was still run");
+    }
+    const blocked = explore.events.find((event) => event.type === "tool_result") as
+      | { ok?: boolean; output?: unknown }
+      | undefined;
+    if (blocked === undefined || blocked.ok !== false || !String(blocked.output).includes("not available to this subagent")) {
+      problems.push(`a tool outside the subagent surface came out as ${JSON.stringify(blocked)}`);
+    }
+    const saved = saves.at(-1) ?? null;
+    if (saved?.parent?.id !== "p1" || saved.parent.call_id !== "c1" || saved.parent.type !== "explore") {
+      problems.push(`the subagent session was saved as ${JSON.stringify(saved?.parent)}`);
+    }
+    if (saved?.title !== "look at the loader") problems.push(`the subagent session was titled ${JSON.stringify(saved?.title)}`);
+    const topics = explore.sent.map((item) => item.topic).join(",");
+    if (
+      topics !==
+      "agent.subagent.started,agent.subagent.step,agent.subagent.tool_call,agent.subagent.tool_result," +
+        "agent.subagent.step,agent.subagent.finished"
+    ) {
+      problems.push(`the subagent published ${JSON.stringify(topics)}`);
+    }
+    const head = explore.sent[0]?.payload ?? {};
+    if (head.subagent_id !== "sub-a" || head.parent_session_id !== "p1" || head.parent_call_id !== "c1") {
+      problems.push(`the first subagent event carried ${JSON.stringify(head)}`);
+    }
+    if (explore.sent.some((item) => item.payload.description !== "look at the loader")) {
+      problems.push("a subagent event lost the description");
+    }
+
+    const general = run(
+      {
+        session_id: "sub-b",
+        cwd: "E:\\proj",
+        input: "summarise the tree",
+        origin: { parent_session_id: "p1", parent_call_id: "c2", type: "general", description: "summarise" },
+        tools_deny: ["task"],
+      },
+      [scripted("", "task"), scripted("done")],
+    );
+    await general.done;
+    if (surfaced(general.chat) !== "read,write") problems.push(`the general subagent listed ${surfaced(general.chat)}`);
+    if (general.heard.some((item) => item.capability === "tools" && item.method === "call")) {
+      problems.push("the tool that spawns subagents ran inside a subagent");
+    }
+
+    definition.setup?.({ channel: undefined, config: { thinking: { low: "m-low" } }, capabilities: {} } as unknown as Wiring);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const parent = run({ session_id: "p1", cwd: "E:\\proj", input: "hi", thinking: "low" }, [scripted("parent done")], held);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (surfaced(parent.chat) !== "read,write,task,skill") {
+      problems.push(`the parent listed ${surfaced(parent.chat)}`);
+    }
+    const inherited = run(
+      {
+        session_id: "sub-c",
+        cwd: "E:\\proj",
+        input: "child",
+        origin: { parent_session_id: "p1", parent_call_id: "c3", type: "general", description: "child" },
+      },
+      [scripted("child done")],
+    );
+    await inherited.done;
+    if (inherited.chat[0]?.model !== "m-low") {
+      problems.push(`a subagent ran on model ${JSON.stringify(inherited.chat[0]?.model)}, expected the parent's`);
+    }
+    release();
+    await parent.done;
+    if (!parent.heard.some((item) => item.capability === "session" && item.method === "load")) {
+      problems.push("the parent skipped its own history");
+    }
+    const orphan = run(
+      {
+        session_id: "sub-d",
+        cwd: "E:\\proj",
+        input: "child",
+        origin: { parent_session_id: "p1", parent_call_id: "c3", type: "general", description: "child" },
+      },
+      [scripted("child done")],
+    );
+    await orphan.done;
+    if (orphan.chat[0]?.model !== undefined) {
+      problems.push(`a subagent outlived its parent's level: ${JSON.stringify(orphan.chat[0]?.model)}`);
+    }
+
+    for (const [bad, why] of [
+      [{ session_id: "s", origin: {} }, "an origin without a parent"],
+      [{ session_id: "s", origin: { parent_session_id: "" } }, "a blank parent session"],
+      [{ session_id: "s", origin: 7 }, "a non-object origin"],
+      [{ session_id: "s", tools_allow: "read" }, "a non-array allow list"],
+      [{ session_id: "s", tools_allow: ["read", 7] }, "an allow list with a non-name"],
+      [{ session_id: "s", max_steps: 0 }, "a zero step budget"],
+      [{ session_id: "s", system: 7 }, "a non-string system prompt"],
+    ] as Array<[Record<string, unknown>, string]>) {
+      try {
+        await run(bad, []).done;
+        problems.push(`run accepted ${why}`);
+      } catch {
+      }
+    }
 
     if (hasOpinion({})) problems.push("an empty hook outcome counted as an opinion");
     if (!hasOpinion({ context: [] })) problems.push("a bare context is still an opinion");

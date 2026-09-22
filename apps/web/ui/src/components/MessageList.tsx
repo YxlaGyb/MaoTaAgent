@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useRef } from "react";
 
 import { useT } from "../lib/i18n.ts";
-import type { Approval, HostEvent, SessionMessage } from "../lib/rpc.ts";
+import type { Approval, HostEvent, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { Markdown, MessageItem, ToolRow } from "./MessageItem.tsx";
+import { SubagentCard } from "./SubagentCard.tsx";
 
 export interface LiveTool {
   tool: string;
@@ -13,13 +14,36 @@ export interface LiveTool {
   output?: unknown;
 }
 
+export type SubagentStatus = "running" | "done" | "partial" | "failed";
+
+export interface LiveSubagent {
+  id: string;
+  call_id: string;
+  type: string;
+  description: string;
+  status: SubagentStatus;
+  steps: number;
+  tools: LiveTool[];
+}
+
 export interface LiveTurn {
   turn_id: string;
   text: string;
   reasoning: string;
   step: number;
   tools: LiveTool[];
+  subagents: LiveSubagent[];
   running: boolean;
+}
+
+function statusOf(event: HostEvent): SubagentStatus {
+  if (event.ok === true) return "done";
+  if (event.reason === "max_steps") return "partial";
+  return "failed";
+}
+
+function heard(subagent: LiveSubagent, event: HostEvent): LiveSubagent {
+  return subagent.id === (event.subagent_id ?? "") ? { ...subagent, steps: event.step ?? subagent.steps } : subagent;
 }
 
 export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
@@ -34,6 +58,51 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
       return { ...turn, tools: [...turn.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] };
     case "tool_result":
       return { ...turn, tools: fillResult(turn.tools, event) };
+    case "subagent.started":
+      return {
+        ...turn,
+        subagents: [
+          ...turn.subagents,
+          {
+            id: event.subagent_id ?? "",
+            call_id: event.parent_call_id ?? "",
+            type: event.type === undefined || event.type === "" ? "general" : event.type,
+            description: event.description ?? "",
+            status: "running",
+            steps: 0,
+            tools: [],
+          },
+        ],
+      };
+    case "subagent.step":
+      return { ...turn, subagents: turn.subagents.map((subagent) => heard(subagent, event)) };
+    case "subagent.tool_call":
+      return {
+        ...turn,
+        subagents: turn.subagents.map((subagent) =>
+          subagent.id !== (event.subagent_id ?? "")
+            ? subagent
+            : { ...subagent, tools: [...subagent.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] },
+        ),
+      };
+    case "subagent.tool_result":
+      return {
+        ...turn,
+        subagents: turn.subagents.map((subagent) =>
+          subagent.id !== (event.subagent_id ?? "")
+            ? subagent
+            : { ...subagent, tools: fillResult(subagent.tools, event) },
+        ),
+      };
+    case "subagent.finished":
+      return {
+        ...turn,
+        subagents: turn.subagents.map((subagent) =>
+          subagent.id !== (event.subagent_id ?? "")
+            ? subagent
+            : { ...subagent, status: statusOf(event), steps: event.steps ?? subagent.steps },
+        ),
+      };
     default:
       return turn;
   }
@@ -53,12 +122,16 @@ export function MessageList({
   pending,
   live,
   approvals,
+  spawned,
+  cwd,
   onAnswer,
 }: {
   messages: SessionMessage[];
   pending: string | null;
   live: LiveTurn | null;
   approvals: Approval[];
+  spawned: Record<string, SessionSummary[]>;
+  cwd: string;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
 }) {
   const t = useT();
@@ -89,7 +162,7 @@ export function MessageList({
     >
       <div className="messages-column">
         {messages.map((message, index) => (
-          <MessageItem key={index} message={message} />
+          <MessageItem key={index} message={message} spawned={spawned} />
         ))}
         {pending === null ? null : <MessageItem message={{ role: "user", content: pending }} />}
         {live === null ? null : (
@@ -103,6 +176,11 @@ export function MessageList({
             {live.tools.map((tool, index) => (
               <Fragment key={index}>
                 <ToolRow tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
+                {live.subagents
+                  .filter((subagent) => subagent.call_id !== "" && subagent.call_id === tool.id)
+                  .map((subagent) => (
+                    <SubagentCard key={subagent.id} subagent={subagent} cwd={cwd} />
+                  ))}
                 {(tool.id === undefined ? [] : (byCall.get(tool.id) ?? [])).map((approval) => (
                   <ApprovalCard key={approval.id} approval={approval} onAnswer={onAnswer} />
                 ))}

@@ -83,7 +83,7 @@ hook 就是一个提供 `hook.<name>` 能力的插件，用 `describe` 说出自
 - [agent-core](../../agent/agent-core/README.zh.md)：调用 `trigger` 并把答案映射成循环决策的那座桥。
 - [agent-loop](../../agent/agent-loop/README.zh.md)：桥接进去的那几个 seam。
 - [hooks 包](README.zh.md)：这个引擎所属的组。
-- [四个 hook 点](../../../docs/hooks.zh.md)：一轮里的这四个点，以及失败策略背后的那条不变式。
+- [四个 hook 点](../../../docs/user/hooks.zh.md)：一轮里的这四个点，以及失败策略背后的那条不变式。
 
 -----
 

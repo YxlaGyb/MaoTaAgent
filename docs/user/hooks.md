@@ -31,6 +31,8 @@ The loop engine owns the three seams behind those points. It declares the decisi
 
 The prompt point has no seam of its own, because nothing in the loop applies to a prompt: `agent-core` asks the hook before it assembles messages. A refusal there writes nothing to the session and calls no model; the caller receives a closing event with `steps: 0`, the hook's reason as its text, and `refused` as its reason.
 
+A subagent reaches two of the four points and no more. Its calls fire `PreToolUse` and `PostToolUse`, carrying the parent's `session_id` and `call_id` and a `subagent` field naming the child, so a hook that reads the payload cannot tell a subagent's call from the session's own by position alone. `UserPromptSubmit` and `Stop` are the seams of a person's turn: a subagent has no prompt of its own and takes no continuation instruction, so neither fires for one.
+
 Text a hook injects becomes a user message named `hook:<name>`, so a reader of the stored session can tell it from what the person typed. Injected text is written with the session, and it is placed where it belongs in the turn: after the history and before the first step for a prompt, and immediately after the tool results of the call it is about for a tool point. A steered continuation carries the name `hook:stop`.
 
 <a id="the-dialect"></a>
@@ -38,9 +40,9 @@ Text a hook injects becomes a user message named `hook:<name>`, so a reader of t
 
 The hook side owns its own vocabulary, and it lives in one zero-dependency package so that a hook author and the engine can share it without either importing the other.
 
-- [`hook-protocol`](../packages/hooks/hook-protocol/README.md) holds the four event names, the payload each carries, `HookReply` (what one hook writes), `HookOutcome` (what several replies fold into), the `hook.*` provider contract and the merge.
-- [`hooks-native`](../packages/hooks/hooks-native/README.md) provides the `hooks` capability `agent-core` calls: it discovers the `hook.*` capabilities the kernel published, asks the ones that declared the event, merges their answers, stamps each contribution with the hook it came from, and logs a line.
-- [the hooks package group](../packages/hooks/README.md) is the pair described together.
+- [`hook-protocol`](../../packages/hooks/hook-protocol/README.md) holds the four event names, the payload each carries, `HookReply` (what one hook writes), `HookOutcome` (what several replies fold into), the `hook.*` provider contract and the merge.
+- [`hooks-native`](../../packages/hooks/hooks-native/README.md) provides the `hooks` capability `agent-core` calls: it discovers the `hook.*` capabilities the kernel published, asks the ones that declared the event, merges their answers, stamps each contribution with the hook it came from, and logs a line.
+- [the hooks package group](../../packages/hooks/README.md) is the pair described together.
 
 A hook declares the capability `hook.<name>`, answers `describe` with the events it implements, and implements one method per declared event, named after the event, taking that event's payload. That capability is the entire registration: there is no register call, no teardown, and no state to keep in step with a reload.
 
@@ -79,9 +81,9 @@ Nothing in the kernel inspects a hook: hooks are capabilities the engine routes 
 <a id="related-documentation"></a>
 ## Related documentation
 
-- [hooks package group](../packages/hooks/README.md): the two packages and how they are mounted.
-- [hook-protocol](../packages/hooks/hook-protocol/README.md): the events, payloads, provider contract and merge rules.
-- [hooks-native](../packages/hooks/hooks-native/README.md): the engine, its methods and its config.
-- [agent-loop](../packages/agent/agent-loop/README.md): the seams and the exit reasons.
+- [hooks package group](../../packages/hooks/README.md): the two packages and how they are mounted.
+- [hook-protocol](../../packages/hooks/hook-protocol/README.md): the events, payloads, provider contract and merge rules.
+- [hooks-native](../../packages/hooks/hooks-native/README.md): the engine, its methods and its config.
+- [agent-loop](../../packages/agent/agent-loop/README.md): the seams and the exit reasons.
 - [the permission gate](permission.md): the layer that decides whether an operation runs at all.
-- [architecture](architecture.md): where the hooks sit in the whole system.
+- [architecture](../architecture.md): where the hooks sit in the whole system.

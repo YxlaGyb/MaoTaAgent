@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run i18n:write <x.md>
-hooks.md: d7d7fe41c045ea9095ede5d84e4a8e783949daf9
-hooks.zh.md: 1033876415a2091722e2d1318a95263049740639
+hooks.md: 55bc3e5abddb880bbf803ad4aef32b96871be748
+hooks.zh.md: ec3cce6227ff9d2b198f86a38ff66134a5d772b7

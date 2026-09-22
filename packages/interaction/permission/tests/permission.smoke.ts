@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,8 +17,11 @@ import {
   pairingProblems,
   read,
   sessionIdOf,
+  subagentOf,
   write,
+  type AskedRecord,
   type AuditRecord,
+  type DecidedRecord,
 } from "../src/store.ts";
 
 const root = mkdtempSync(join(tmpdir(), "maota-permission-smoke-"));
@@ -34,6 +38,22 @@ try {
   assert.equal(encodeDir("E:\\work\\"), "E--work");
   assert.equal(encodeDir("/home/me/"), "-home-me");
   assert.equal(filePath(root, "s1", "E:\\work"), join(root, "E--work", "s1.json"));
+
+  assert.equal(subagentOf(undefined), undefined, "a call the session made itself names no subagent");
+  assert.equal(subagentOf(null), undefined);
+  assert.deepEqual(subagentOf({ id: "sub-1", type: "explore", description: "look at it" }), {
+    id: "sub-1",
+    type: "explore",
+    description: "look at it",
+  });
+  assert.deepEqual(subagentOf({ id: "sub-1" }), { id: "sub-1" }, "the label is optional");
+  assert.deepEqual(subagentOf({ id: "sub-1", type: "explore", description: null }), {
+    id: "sub-1",
+    type: "explore",
+  });
+  for (const bad of ["sub-1", 7, [], {}, { id: "" }, { id: "sub-1", type: 7 }]) {
+    assert.throws(() => subagentOf(bad), CallError, `${JSON.stringify(bad)} should be refused`);
+  }
 
   const empty = read(root, "s1", "E:\\work");
   assert.deepEqual(empty, {
@@ -72,6 +92,20 @@ try {
   assert.deepEqual(pairingProblems([{ ...decided, decided_by: "policy:auto" }]), []);
   assert.deepEqual(pairingProblems([asked, decided, { ...decided }]), ["asked 1 has 2 decided records"]);
 
+  const child: AuditRecord = {
+    ...asked,
+    id: "from-a-child",
+    call_id: "task-call",
+    subagent: { id: "sub-9f2a", type: "explore", description: "look at the loader" },
+  };
+  const answered: AuditRecord = { ...decided, id: "from-a-child", subagent: { id: "sub-9f2a" } };
+  write(root, { ...empty, mode: "ask", records: [child, answered] }, 10);
+  const audit = read(root, "s1", "E:\\work");
+  const [askedBack, decidedBack] = audit.records as [AskedRecord, DecidedRecord];
+  assert.deepEqual(askedBack.subagent, { id: "sub-9f2a", type: "explore", description: "look at the loader" });
+  assert.deepEqual(decidedBack.subagent, { id: "sub-9f2a" }, "the answer should name the same child");
+  assert.deepEqual(pairingProblems(audit.records), [], "a child's question still pairs with its answer");
+
   const many: AuditRecord[] = [];
   for (let index = 0; index < 4; index += 1) {
     many.push(
@@ -106,3 +140,15 @@ try {
 }
 
 console.log("permission ok: the file model, the decision table and the audit pairing");
+
+const entry = join(import.meta.dirname, "..", "src", "index.ts");
+const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" });
+const report = JSON.parse((run.stdout ?? "").trim().split("\n").at(-1) ?? "") as {
+  ok?: boolean;
+  provides?: Array<{ capability: string; version: string }>;
+  problems?: string[];
+};
+assert.equal(run.status, 0, `the permission entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
+assert.equal(report.ok, true, `the permission selfCheck reported ${JSON.stringify(report.problems)}`);
+assert.deepEqual(report.provides, [{ capability: "permission", version: "1.0.0" }]);
+console.log("permission entry ok: the audit and subagent selfCheck report");

@@ -14,11 +14,13 @@ import {
   pairingProblems,
   read,
   sessionIdOf,
+  subagentOf,
   write,
   type AuditRecord,
   type Mode,
   type Outcome,
   type PermissionFile,
+  type SubagentRef,
 } from "./store.ts";
 
 const DEFAULTS = { mode: "ask" as Mode, maxRecords: 500 };
@@ -41,6 +43,7 @@ interface Pending {
   tool: string;
   call_id?: string;
   reason?: string;
+  subagent?: SubagentRef;
   at: string;
   settle(outcome: Outcome, decidedBy: string, cause?: string): void;
 }
@@ -99,7 +102,13 @@ function announce(channel: Channel, topic: string, payload: unknown): void {
   void channel.publish(topic, payload).catch(() => undefined);
 }
 
-function askedRecord(id: string, tool: string, callId: string | undefined, reason: string | undefined): AuditRecord {
+function askedRecord(
+  id: string,
+  tool: string,
+  callId: string | undefined,
+  reason: string | undefined,
+  subagent: SubagentRef | undefined,
+): AuditRecord {
   return {
     kind: "asked",
     at: now(),
@@ -107,10 +116,18 @@ function askedRecord(id: string, tool: string, callId: string | undefined, reaso
     tool,
     ...(callId === undefined ? {} : { call_id: callId }),
     ...(reason === undefined ? {} : { reason }),
+    ...(subagent === undefined ? {} : { subagent }),
   };
 }
 
-function decidedRecord(id: string, outcome: Outcome, decidedBy: string, tool: string, cause?: string): AuditRecord {
+function decidedRecord(
+  id: string,
+  outcome: Outcome,
+  decidedBy: string,
+  tool: string,
+  cause: string | undefined,
+  subagent: SubagentRef | undefined,
+): AuditRecord {
   return {
     kind: "decided",
     at: now(),
@@ -119,6 +136,7 @@ function decidedRecord(id: string, outcome: Outcome, decidedBy: string, tool: st
     decided_by: decidedBy,
     tool,
     ...(cause === undefined ? {} : { cause }),
+    ...(subagent === undefined ? {} : { subagent }),
   };
 }
 
@@ -163,6 +181,7 @@ function listPending(params: unknown): { requests: unknown[] } {
         at: request.at,
         ...(request.call_id === undefined ? {} : { call_id: request.call_id }),
         ...(request.reason === undefined ? {} : { reason: request.reason }),
+        ...(request.subagent === undefined ? {} : { subagent: request.subagent }),
       })),
   };
 }
@@ -188,8 +207,9 @@ function park(
   tool: string,
   callId: string | undefined,
   reason: string | undefined,
+  subagent: SubagentRef | undefined,
 ): Promise<{ outcome: Outcome }> {
-  append(target, [askedRecord(id, tool, callId, reason)]);
+  append(target, [askedRecord(id, tool, callId, reason, subagent)]);
   announce(call.channel, "permission.requested", {
     id,
     session_id: target.sessionId,
@@ -197,14 +217,21 @@ function park(
     at: now(),
     ...(callId === undefined ? {} : { call_id: callId }),
     ...(reason === undefined ? {} : { reason }),
+    ...(subagent === undefined ? {} : { subagent }),
   });
   return new Promise<{ outcome: Outcome }>((resolve) => {
     function settle(outcome: Outcome, decidedBy: string, cause?: string): void {
       if (!waiting.has(id)) return;
       waiting.delete(id);
       call.signal.removeEventListener("abort", onAbort);
-      append(target, [decidedRecord(id, outcome, decidedBy, tool, cause)]);
-      announce(call.channel, "permission.settled", { id, outcome, decided_by: decidedBy, at: now() });
+      append(target, [decidedRecord(id, outcome, decidedBy, tool, cause, subagent)]);
+      announce(call.channel, "permission.settled", {
+        id,
+        outcome,
+        decided_by: decidedBy,
+        at: now(),
+        ...(subagent === undefined ? {} : { subagent }),
+      });
       resolve({ outcome });
     }
     function onAbort(): void {
@@ -218,6 +245,7 @@ function park(
       at: now(),
       ...(callId === undefined ? {} : { call_id: callId }),
       ...(reason === undefined ? {} : { reason }),
+      ...(subagent === undefined ? {} : { subagent }),
       settle,
     });
     call.signal.addEventListener("abort", onAbort, { once: true });
@@ -227,21 +255,22 @@ function park(
 
 async function request(params: unknown, call: Call): Promise<{ outcome: Outcome }> {
   const target = targetOf(params);
-  const input = (params ?? {}) as { tool?: unknown; call_id?: unknown; reason?: unknown };
+  const input = (params ?? {}) as { tool?: unknown; call_id?: unknown; reason?: unknown; subagent?: unknown };
   const tool = text(input.tool, "tool");
   const callId = optionalText(input.call_id);
   const reason = optionalText(input.reason);
+  const subagent = subagentOf(input.subagent);
   const id = randomUUID();
   const verdict = decide(effectiveMode(fileOf(target), settings.mode), answerers.size);
-  if (verdict === "ask") return await park(call, target, id, tool, callId, reason);
+  if (verdict === "ask") return await park(call, target, id, tool, callId, reason, subagent);
   if (verdict.cause === "no-answerer") {
     append(target, [
-      askedRecord(id, tool, callId, reason),
-      decidedRecord(id, verdict.outcome, verdict.decided_by, tool, verdict.cause),
+      askedRecord(id, tool, callId, reason, subagent),
+      decidedRecord(id, verdict.outcome, verdict.decided_by, tool, verdict.cause, subagent),
     ]);
     return { outcome: verdict.outcome };
   }
-  append(target, [decidedRecord(id, verdict.outcome, verdict.decided_by, tool)]);
+  append(target, [decidedRecord(id, verdict.outcome, verdict.decided_by, tool, undefined, subagent)]);
   return { outcome: verdict.outcome };
 }
 
@@ -340,6 +369,44 @@ export const definition: Definition = {
       const second = listPending({}).requests[0] as { id?: string } | undefined;
       answer({ id: second?.id, decision: "deny" }, call());
       if ((await rejecting).outcome !== "rejected") problems.push("a deny should refuse");
+
+      const labelled = request(
+        {
+          ...session,
+          tool: "pwsh",
+          call_id: "task-1",
+          subagent: { id: "sub-1", type: "explore", description: "look at the loader" },
+        },
+        call(),
+      );
+      const third = listPending({}).requests[0] as { id?: string; subagent?: { id?: string } } | undefined;
+      if (third?.subagent?.id !== "sub-1") problems.push("the parked question lost its subagent");
+      const lastAsk = published.filter((item) => item.topic === "permission.requested").at(-1)?.payload as
+        | { subagent?: { id?: string }; call_id?: string }
+        | undefined;
+      if (lastAsk?.subagent?.id !== "sub-1" || lastAsk.call_id !== "task-1") {
+        problems.push(`the published question carried ${JSON.stringify(lastAsk)}`);
+      }
+      answer({ id: third?.id, decision: "allow" }, call());
+      if ((await labelled).outcome !== "allowed-once") problems.push("a labelled question should still settle");
+      const audit = read(root, session.session_id, session.cwd).records;
+      const askedLast = audit.filter((record) => record.kind === "asked").at(-1) as
+        | { subagent?: { description?: string } }
+        | undefined;
+      const decidedLast = audit.filter((record) => record.kind === "decided").at(-1) as
+        | { subagent?: { description?: string } }
+        | undefined;
+      if (askedLast?.subagent?.description !== "look at the loader") problems.push("the audit lost the subagent");
+      if (decidedLast?.subagent?.description !== "look at the loader") {
+        problems.push("the decision lost the subagent it answered");
+      }
+      let nameless = "";
+      try {
+        await request({ ...session, tool: "pwsh", subagent: { type: "explore" } }, call());
+      } catch (error) {
+        nameless = error instanceof Error ? error.message : String(error);
+      }
+      if (!nameless.includes("subagent.id")) problems.push(`a nameless subagent said ${JSON.stringify(nameless)}`);
 
       const controller = new AbortController();
       const aborted = request({ ...session, tool: "pwsh" }, call(controller.signal));

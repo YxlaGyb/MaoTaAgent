@@ -22,6 +22,15 @@ export interface PolicyRecord {
   caller: string;
 }
 
+/// A call a subagent made carries the parent's identity and this label, so the
+/// question lands under the call that started the subagent and says who is
+/// asking.
+export interface SubagentRef {
+  id: string;
+  type?: string;
+  description?: string;
+}
+
 export interface AskedRecord {
   kind: "asked";
   at: string;
@@ -29,6 +38,7 @@ export interface AskedRecord {
   tool: string;
   call_id?: string;
   reason?: string;
+  subagent?: SubagentRef;
 }
 
 export interface DecidedRecord {
@@ -39,6 +49,7 @@ export interface DecidedRecord {
   decided_by: string;
   cause?: string;
   tool?: string;
+  subagent?: SubagentRef;
 }
 
 export type AuditRecord = PolicyRecord | AskedRecord | DecidedRecord;
@@ -69,6 +80,36 @@ export function sessionIdOf(value: unknown): string {
     throw new CallError(-32602, `session_id must match ${SESSION_ID.source}, got ${JSON.stringify(value)}`);
   }
   return id;
+}
+
+/// A subagent that cannot be named is a caller bug rather than a question, so
+/// it is refused where the caller can see why; an absent one is simply a call
+/// made by the session itself.
+export function subagentOf(value: unknown): SubagentRef | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new CallError(-32602, `subagent must be an object, got ${JSON.stringify(value)}`);
+  }
+  const raw = value as Record<string, unknown>;
+  const id = raw.id;
+  if (typeof id !== "string" || id === "") {
+    throw new CallError(-32602, `subagent.id must be a non-empty string, got ${JSON.stringify(id)}`);
+  }
+  const text = (name: string): string | undefined => {
+    const found = raw[name];
+    if (found === undefined || found === null) return undefined;
+    if (typeof found !== "string") {
+      throw new CallError(-32602, `subagent.${name} must be a string, got ${JSON.stringify(found)}`);
+    }
+    return found;
+  };
+  const type = text("type");
+  const description = text("description");
+  return {
+    id,
+    ...(type === undefined ? {} : { type }),
+    ...(description === undefined ? {} : { description }),
+  };
 }
 
 export function encodeDir(cwd: string): string {

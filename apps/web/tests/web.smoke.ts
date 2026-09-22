@@ -24,6 +24,7 @@ const PLUGINS: Array<[string, string]> = [
   ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
   ["tool-fs", "packages/fs/tool-fs/src/index.ts"],
   ["tool-fs-search", "packages/fs/tool-fs-search/src/index.ts"],
+  ["tool-subagent", "packages/subagent/tool-subagent/src/index.ts"],
   ["tools", "packages/agent/tools/src/index.ts"],
   ["skill-filesystem", "packages/skill-filesystem/src/index.ts"],
   ["skill", "packages/skill/src/index.ts"],
@@ -61,6 +62,10 @@ writeFileSync(
     "  { text = 'refused' },",
     "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
     "  { text = 'ran it anyway' },",
+    "  { tool = 'task', args = { prompt = 'read note.txt and tell me what it says', description = 'look at the note', subagent_type = 'explore' } },",
+    "  { tool = 'read', args = { file_path = 'note.txt' } },",
+    "  { text = 'the note says hi' },",
+    "  { text = 'the subagent read the note' },",
     "]",
     "",
     "[plugins.agent-core.config.thinking]",
@@ -84,6 +89,10 @@ interface Frame {
   request_id?: string;
   tool?: string;
   call_id?: string;
+  subagent_id?: string;
+  parent_call_id?: string;
+  type?: string;
+  description?: string;
   reason?: string;
   outcome?: string;
   ok?: boolean;
@@ -406,6 +415,51 @@ await check("approval: full mode runs without asking, per session", async () => 
     call("permission.set", { session_id: "smoke-full", cwd: project, mode: "yolo" }),
     (error: { code?: number }) => error.code === -32602,
     "a mode outside the three should be refused",
+  );
+});
+
+await check("subagent: the child runs, and the page hears it under the parent's turn", async () => {
+  writeFileSync(join(project, "note.txt"), "hi\n");
+  const id = await turn("smoke-sub", "delegate the reading", project);
+  const started = await waitFor((event) => event.event === "subagent.started" && event.turn_id === id);
+  assert.equal(started.parent_call_id, "call_10", "the child should hang under the parent's task call");
+  assert.equal(started.type, "explore", "the event should carry the type the call asked for");
+  assert.equal(started.description, "look at the note", "the event should carry the call's label");
+  assert.match(String(started.subagent_id), /^sub-[0-9a-f]{12}$/, "the child should name itself");
+
+  const called = await waitFor(
+    (event) => event.event === "subagent.tool_call" && event.subagent_id === started.subagent_id,
+  );
+  assert.equal(called.tool, "read", "the page should hear what the child called");
+  assert.equal(called.turn_id, id, "a subagent event belongs to the parent's turn");
+  assert.equal(called.parent_call_id, started.parent_call_id, "the child's calls stay under the task row");
+  const finished = await waitFor(
+    (event) => event.event === "subagent.finished" && event.subagent_id === started.subagent_id,
+  );
+  assert.equal(finished.turn_id, id, "the end of the child belongs to the parent's turn too");
+
+  await waitFor((event) => event.event === "turn.done" && event.turn_id === id);
+  const handoff = resultOf(id);
+  assert.equal(handoff?.ok, true, `the task call failed: ${JSON.stringify(handoff?.output)}`);
+  assert.equal(handoff?.output, "the note says hi", "only the child's last message should come back");
+  assert.equal(textOf(id), "the subagent read the note", "the parent's own answer should stand alone");
+
+  const kids = (await call("sessions.children", { id: "smoke-sub", cwd: project })) as {
+    children: Array<{ id: string; parent?: { call_id?: string } | null }>;
+  };
+  assert.deepEqual(kids.children.map((entry) => entry.id), [started.subagent_id]);
+  assert.equal(kids.children[0]?.parent?.call_id, "call_10", "a reopened page can find the child again");
+  const listed = (await call("sessions.list")).sessions as Array<{ id: string }>;
+  assert.equal(
+    listed.some((entry) => entry.id === started.subagent_id),
+    false,
+    "the sidebar should not list a subagent's session",
+  );
+  const child = await call("sessions.load", { id: started.subagent_id, cwd: project });
+  assert.deepEqual(
+    child.messages.map((message: { role: string }) => message.role),
+    ["user", "assistant", "tool", "assistant"],
+    "the child's own session should hold what it did",
   );
 });
 

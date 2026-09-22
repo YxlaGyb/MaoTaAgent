@@ -31,7 +31,7 @@ The profile config spawns `@maota/hooks-native`, built from `hooks-native/src/in
 <a id="related-documentation"></a>
 ## Related documentation
 
-- [the hook points](../../docs/hooks.md): where the four events sit in one turn, and the invariant they may only tighten.
+- [the hook points](../../docs/user/hooks.md): where the four events sit in one turn, and the invariant they may only tighten.
 - [packages/, the plugin tree](../README.md): which plugin owns which capability.
 - [agent package](../agent/README.md): the plugin whose seams these hooks hang on.
 - [Architecture](../../docs/architecture.md): the component map and the launch path.

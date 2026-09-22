@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 import { resolveConfigPath, resolveKernelBin } from "@maota/app-boot";
-import { boot, type Chunk } from "@maota/host";
+import { boot, type Chunk, type Event } from "@maota/host";
 
 import { parseArgs } from "./args.ts";
 import { restartOnSourceChange } from "./hmr.ts";
@@ -89,6 +89,12 @@ const kernel = await boot(config, {
 
 restartOnSourceChange(kernel);
 
+kernel.on(["agent.subagent.*"], (event) => {
+  const payload = event.payload as { parent_session_id?: string } | null;
+  if (payload?.parent_session_id !== session) return;
+  renderSubagent(event);
+});
+
 let closing = false;
 process.on("SIGINT", () => {
   if (closing) return;
@@ -111,6 +117,45 @@ function render(chunk: Chunk): void {
     case "done":
       if (typeof event.text === "string" && event.text !== "") process.stdout.write(`\n${event.text}`);
       process.stdout.write("\n");
+      break;
+  }
+}
+
+/// A subagent runs inside the parent's turn, so its events come off the bus
+/// rather than the parent's stream, and they print indented: the parent's own
+/// output keeps the shape it had before subagents existed.
+function renderSubagent(event: Event): void {
+  const payload = event.payload as {
+    type?: string;
+    subagent_id?: string;
+    tool?: string;
+    args?: unknown;
+    ok?: boolean;
+    output?: unknown;
+    steps?: number;
+    reason?: string;
+  };
+  const name = `${payload.type ?? "general"} ${payload.subagent_id ?? "?"}`;
+  switch (event.topic) {
+    case "agent.subagent.started":
+      console.error(`  [${name}] started`);
+      break;
+    case "agent.subagent.tool_call":
+      console.error(`  [${name}] -> ${payload.tool} ${JSON.stringify(payload.args ?? {})}`);
+      break;
+    case "agent.subagent.tool_result":
+      console.error(
+        `  [${name}] <- ${payload.tool} ${payload.ok === true ? "ok" : "failed"}: ` +
+          `${JSON.stringify(payload.output ?? null).slice(0, 200)}`,
+      );
+      break;
+    case "agent.subagent.finished":
+      console.error(
+        `  [${name}] ${payload.ok === true ? "done" : `failed (${payload.reason ?? "error"})`}, ` +
+          `${payload.steps ?? 0} steps`,
+      );
+      break;
+    default:
       break;
   }
 }

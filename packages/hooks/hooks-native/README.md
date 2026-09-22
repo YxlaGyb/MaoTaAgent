@@ -83,7 +83,7 @@ Every discovery pass and every call is logged through the channel: one line nami
 - [agent-core](../../agent/agent-core/README.md): the bridge that calls `trigger` and maps the answer onto the loop's decisions.
 - [agent-loop](../../agent/agent-loop/README.md): the seams the bridge is wired into.
 - [hooks package](README.md): the group this engine belongs to.
-- [the hook points](../../../docs/hooks.md): the four points in one turn, and the invariant behind the failure policy.
+- [the hook points](../../../docs/user/hooks.md): the four points in one turn, and the invariant behind the failure policy.
 
 -----
 

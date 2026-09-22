@@ -19,7 +19,26 @@ export interface SessionSummary {
   id: string;
   cwd: string;
   title: string;
+  created_at?: string;
   updated_at: string;
+  parent?: SessionParent | null;
+}
+
+/// A subagent's link back to the call that started it, as the session document
+/// keeps it: the parent's id and working directory, the id of the `task` call
+/// it hangs under, and the label that call carried.
+export interface SessionParent {
+  id: string;
+  cwd: string;
+  call_id: string;
+  type: string;
+  description: string;
+}
+
+export interface SubagentRef {
+  id: string;
+  type?: string;
+  description?: string;
 }
 
 export interface ToolCall {
@@ -64,6 +83,11 @@ export interface HostEvent {
   call_id?: string;
   reason?: string;
   outcome?: string;
+  subagent_id?: string;
+  parent_call_id?: string;
+  type?: string;
+  description?: string;
+  subagent?: SubagentRef;
 }
 
 export interface Approval {
@@ -73,6 +97,7 @@ export interface Approval {
   call_id?: string;
   reason?: string;
   at?: string;
+  subagent?: SubagentRef;
 }
 
 export interface BridgeFacts {

@@ -46,7 +46,7 @@ assert.deepEqual(SKILL_TOOL.input_schema, {
   required: ["name"],
 });
 
-const host: HostValues = { session_cwd: "E:\\proj", session_id: "s1", call_id: "c1" };
+const host: HostValues = { session_cwd: "E:\\proj", session_id: "s1", call_id: "c1", subagent: null };
 const pwsh: ToolSpec = {
   name: "pwsh",
   input_schema: { type: "object", properties: { command: { type: "string" } } },
@@ -57,7 +57,7 @@ assert.deepEqual(injectHostArgs(pwsh, { command: "ls", workdir: "D:\\x" }, host)
   command: "ls",
   workdir: "D:\\x",
 });
-const bare: HostValues = { session_cwd: null, session_id: null, call_id: null };
+const bare: HostValues = { session_cwd: null, session_id: null, call_id: null, subagent: null };
 assert.deepEqual(injectHostArgs(pwsh, { command: "ls" }, bare), { command: "ls" });
 assert.deepEqual(injectHostArgs(undefined, { command: "ls" }, host), { command: "ls" });
 const gate: ToolSpec = {
@@ -114,7 +114,7 @@ const report = JSON.parse(line) as {
 };
 assert.equal(run.status, 0, `the agent entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the agent selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "agent.loop", version: "1.2.0" }]);
+assert.deepEqual(report.provides, [{ capability: "agent.loop", version: "1.3.0" }]);
 assert.deepEqual(
   (report.requires ?? []).map((item) => item.capability),
   ["api", "tools", "session", "skill", "permission", "hooks"],

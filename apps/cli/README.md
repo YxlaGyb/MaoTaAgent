@@ -31,6 +31,8 @@ English | [中文](README.zh.md)
 The first positional argument decides: `serve` and `check` are subcommands and take no further arguments, while any other positional argument starts a one-shot question whose remaining arguments are joined with spaces.
 `maota check` prints whatever the kernel prints. A plugin the kernel holds back because a capability it requires has no provider, and a plugin row switched off with `disabled = true`, are both warnings: the check still exits 0, and the report names them in `disabled` and `blocked` (the kernel documents both fields in `docs/PROTOCOL.md` section 14.1).
 
+A subagent's work happens inside the turn that started it, so the CLI prints it indented rather than folding it into the turn's own output: every `agent.subagent.*` event naming the session this run drives becomes one line, such as `  [explore sub-3f2a] -> read src/a.ts`. Nothing else about the child reaches the terminal, and its answer still arrives as the result of the `task` call that started it.
+
 <a id="options"></a>
 ## Options
 

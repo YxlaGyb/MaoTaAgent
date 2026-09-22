@@ -53,7 +53,7 @@ kind: "package-reference"
 | `type` | 取 `object`、`array`、`string`、`number`、`integer`、`boolean`、`null` 之一。 |
 | `required` | 只允许出现在顶层。模型必须给。 |
 | `description`、`enum`、`items`、`additionalProperties` | 常见的那些提示，受下面这个子集限制。 |
-| `host` | `"session_cwd"`。由宿主填，模型从来看不到它。 |
+| `host` | 一个宿主来源：`session_cwd`、`session_id`、`call_id` 或 `subagent`。由宿主在调用前填入，模型从来看不到它。类型是 `string`，若来源交出的是一份值而不是一个名字则为 `object`。 |
 
 ### 受控的 schema 子集
 
@@ -80,7 +80,7 @@ kind: "package-reference"
 
 ### 一份声明，两份 schema
 
-一份声明的 `parameters` 会编译成两个对象。公开的那份成为模型可见的 `input_schema`；校验的那份把每个宿主参数都加成必填。`describe` 返回公开 schema 加 `host_args`，于是宿主知道该注入什么，而模型始终看不到这些名字。宿主参数若写成 `required`、若不是字符串、若出现在顶层以下，都是声明期错误而不是运行期错误。
+一份声明的 `parameters` 会编译成两个对象。公开的那份成为模型可见的 `input_schema`；校验的那份把每个宿主参数都加成必填，只有允许缺席的来源除外。`describe` 返回公开 schema 加 `host_args`，于是宿主知道该注入什么，而模型始终看不到这些名字。宿主参数若写成 `required`、若类型既不是 `string` 也不是 `object`、若出现在顶层以下，都是声明期错误而不是运行期错误。
 
 ### 先校验，再运行
 
@@ -100,7 +100,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
 
-- **只有一个宿主来源**：`host` 目前只接受 `session_cwd`。
+- **宿主来源固定四个**：`session_cwd`、`session_id`、`call_id` 与 `subagent`，需要别种来源的工具声明不出来。只有 `subagent` 可以从参数里缺席，因为会话自己发起的调用没有子代理可指名。
 - **没有工具输出 schema**：只描述了输入这一侧。
 - **子集是封闭的**：`pattern`、`minimum`、`$ref` 等 JSON Schema 的其余部分一律拒绝，需要它们的工具得先改这里。
 - **`oneOf` 只看浅层**：声明期只查分支形状，不判互斥。

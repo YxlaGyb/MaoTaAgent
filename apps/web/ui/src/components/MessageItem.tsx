@@ -1,8 +1,9 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
-import type { SessionMessage } from "../lib/rpc.ts";
+import type { SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import { SubagentLink } from "./SubagentCard.tsx";
 
 export function Markdown({ text }: { text: string }) {
   const html = useMemo(() => DOMPurify.sanitize(marked.parse(String(text ?? ""), { async: false })), [text]);
@@ -40,7 +41,13 @@ export function ToolRow({ tool, args, ok, output }: { tool: string; args?: unkno
   );
 }
 
-export function MessageItem({ message }: { message: SessionMessage }) {
+export function MessageItem({
+  message,
+  spawned,
+}: {
+  message: SessionMessage;
+  spawned?: Record<string, SessionSummary[]>;
+}) {
   if (message.role === "user") {
     return (
       <div className="msg msg-user">
@@ -62,7 +69,12 @@ export function MessageItem({ message }: { message: SessionMessage }) {
     <div className="msg msg-assistant">
       {message.content ? <Markdown text={message.content} /> : null}
       {calls.map((call, index) => (
-        <ToolRow key={index} tool={call.function?.name ?? "tool"} args={parseArgs(call.function?.arguments)} />
+        <Fragment key={index}>
+          <ToolRow tool={call.function?.name ?? "tool"} args={parseArgs(call.function?.arguments)} />
+          {(call.id === undefined ? [] : (spawned?.[call.id] ?? [])).map((child) => (
+            <SubagentLink key={child.id} child={child} />
+          ))}
+        </Fragment>
       ))}
     </div>
   );

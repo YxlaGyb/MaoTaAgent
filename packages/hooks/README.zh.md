@@ -31,7 +31,7 @@ profile 配置拉起的是 `@maota/hooks-native`（由 `hooks-native/src/index.t
 <a id="related-documentation"></a>
 ## 相关文档
 
-- [四个 hook 点](../../docs/hooks.zh.md)：这四个事件落在一轮里的哪个位置，以及那条只能收紧的不变式。
+- [四个 hook 点](../../docs/user/hooks.zh.md)：这四个事件落在一轮里的哪个位置，以及那条只能收紧的不变式。
 - [packages/ ，插件树](../README.zh.md)：哪个插件持有哪个能力。
 - [agent 包](../agent/README.zh.md)：这些 hook 挂上去的那三个 seam 属于哪个插件。
 - [架构](../../docs/architecture.zh.md)：组件地图与启动链路。

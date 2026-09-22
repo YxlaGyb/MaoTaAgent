@@ -37,9 +37,9 @@ kind: "package-reference"
 |---|---|---|
 | `policy` | `session_id`、`cwd` | `{ mode }`。没有文件的会话按配置的档位作答。 |
 | `set_policy` | `session_id`、`cwd`、`mode` | `{ mode }`。不属于三档的 mode 报 `-32602`；把会话设成它已有的那一档不产生任何变化。 |
-| `request` | `session_id`、`cwd`、`tool`、`call_id?`、`reason?` | `{ outcome }`，取 `allowed-once`、`rejected`、`cancelled`、`unavailable` 之一。 |
+| `request` | `session_id`、`cwd`、`tool`、`call_id?`、`reason?`、`subagent?` | `{ outcome }`，取 `allowed-once`、`rejected`、`cancelled`、`unavailable` 之一。 |
 | `answer` | `id`、`decision` | `{ settled: true }`。`decision` 取 `allow` 或 `deny`；迟到或未知的 `id` 报 `-32602`。 |
-| `pending` | `session_id?` | `{ requests }`：还在等的问题，每条带 `id`、`session_id`、`tool`、`at` 以及可选的 `call_id` 与 `reason`。 |
+| `pending` | `session_id?` | `{ requests }`：还在等的问题，每条带 `id`、`session_id`、`tool`、`at` 以及可选的 `call_id`、`reason` 与 `subagent`。 |
 | `register_answerer` | 无 | `{ answerers }`。以 caller 标签为键，所以一个插件只占一条。 |
 | `unregister_answerer` | 无 | `{ answerers }`。 |
 
@@ -47,10 +47,16 @@ kind: "package-reference"
 
 | 主题 | 载荷 |
 |---|---|
-| `permission.requested` | `{ id, session_id, tool, call_id?, reason?, at }`。只在问题真的被停下来时才发布。 |
-| `permission.settled` | `{ id, outcome, decided_by, at }`。 |
+| `permission.requested` | `{ id, session_id, tool, call_id?, reason?, subagent?, at }`。只在问题真的被停下来时才发布。 |
+| `permission.settled` | `{ id, outcome, decided_by, at, subagent? }`。 |
 
 两者都是尽力而为：漏掉一条的订阅方用 `pending` 和文件重建。
+
+### 子代理的提问
+
+子代理发起的调用是以父的身份到达闸门的：父的 `session_id`、派出这个子代理的那次调用的 id 作为 `call_id`、子代理真正调用的那个工具，以及一个 `subagent` 标签 `{ id, type?, description? }`。于是闸门答出来的一切都落在委派发生的地方：发布出去的问题带着这个标签，卡片就能出现在父会话那行 `task` 下面并写明是哪个子代理在问；`asked` 与 `decided` 两条记录也都留着它，所以重启之后审计读起来是同一回事。
+
+这个标签是被带过来的，而不是被核对的，因为只有调用方知道自己在哪次运行里。没有可用 `id` 的对象以 `-32602` 拒绝；标签缺席就只是会话自己在问。
 
 ### 审计文件
 
@@ -59,7 +65,7 @@ kind: "package-reference"
 | `schema_version` | `1`。 |
 | `session_id`、`cwd` | 这个文件属于哪个会话，以及它是按哪个工作目录解析出来的。 |
 | `mode` | 会话自己的选择；从未选过则为 `null`，此时套用配置的回退值。 |
-| `records` | 记录，从旧到新：`policy`、`asked` 与 `decided`。 |
+| `records` | 记录，从旧到新：`policy`、`asked` 与 `decided`。由子代理发起的调用，其 `asked` 与 `decided` 带 `subagent` 标签，`policy` 永远不带。 |
 
 ### 依赖与配置
 
@@ -78,7 +84,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件本体：各方法、等待注册表、审计追加、`selfCheck`。 |
-| [`src/store.ts`](src/store.ts) | 文件模型：`encodeDir`、`read`、`write`、决策表、配对不变式。 |
+| [`src/store.ts`](src/store.ts) | 文件模型：`encodeDir`、`read`、`write`、决策表、配对不变式，以及它校验的那个子代理标签。 |
 
 ### 只有一张决策表
 
@@ -87,6 +93,8 @@ kind: "package-reference"
 ### 先发布问题，再去等
 
 `request` 先追加 `asked` 记录并发布 `permission.requested`，然后才停在那里等。已经在听的应答者于是可以在调用方还没走到等待点时就回答，落在这个窗口里的回答不会丢。被停下的问题会挂上自己的中止监听，所以取消调用、或插件停机，都会把它结案为 `cancelled` 并写下配对的 `decided` 记录，而不是留下一条孤立的提问。
+
+子代理送来的标签跟着问题走，而不是跟着应答者走，所以迟到的订阅方仍能在 `pending` 里看到它，而把提问与决定配起来的那条记录也留着它，闸门不必记住是哪个运行在问。
 
 ### 配对不变式
 
@@ -101,7 +109,7 @@ kind: "package-reference"
 <a id="延伸阅读"></a>
 ## 延伸阅读
 
-- [权限设计](../../../docs/permission.zh.md)：闸门落在哪，以及它刻意不做什么。
+- [权限设计](../../../docs/user/permission.zh.md)：闸门落在哪，以及它刻意不做什么。
 - [tool-pwsh](../../shell/tool-pwsh/README.zh.md)：发起询问的那个工具。
 - [interaction 包组](../README.zh.md)：发问与决断如何分工。
 
@@ -113,5 +121,6 @@ kind: "package-reference"
 - **没有规则表**：这里没有任何东西知道什么样的命令叫破坏性。执行命令的工具自己判断，闸门只负责把问题带过去。
 - **没有记住的授权**：唯一的放行是 `allowed-once`，所以同一条命令批准两次就要回答两次。记住规则属于策略决定，这一版不交付。
 - **没有仲裁**：先到的回答生效，任何已注册的应答者都能回答任何问题。
+- **子代理标签只被带着走，从不被核对**：任何调用方都能指名任何子代理，调用方下游除了被告知的内容之外，分不出一次委派与会话自己的调用。
 - **注册活不过重启**：它们只存在内存里，以 caller 标签为键；带着一个停在那里的问题重启，会把它结案为 `cancelled`。
 - **事件是尽力而为**：漏掉 `permission.requested` 的订阅方改用 `pending` 得知问题，所以任何建立在事件流上的东西都必须回落到它。

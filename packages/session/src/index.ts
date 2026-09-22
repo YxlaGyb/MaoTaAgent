@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { runPlugin, type Definition } from "@maota/plugin-kit";
 import {
   appendTodos,
+  childrenOf,
   defaultMaxPath,
   defaultRoot,
   encodeDir,
@@ -12,6 +13,7 @@ import {
   load,
   remove,
   save,
+  SCHEMA_VERSION,
   serially,
   sameCwd,
   todosOf,
@@ -36,7 +38,7 @@ function keyOf(params: unknown): string {
 }
 
 export const definition: Definition = {
-  provides: [{ capability: "session", version: "1.1.0" }],
+  provides: [{ capability: "session", version: "1.2.0" }],
   configKeys: ["dir", "max_bytes", "max_path"],
 
   setup(wiring) {
@@ -59,14 +61,26 @@ export const definition: Definition = {
       return serially(keyOf(params), () => load(settings.root, params?.id, params?.cwd, settings.limits));
     },
 
-  save(params) {
+    save(params) {
       return serially(keyOf(params), () =>
         save(
           settings.root,
-          { id: params?.id, cwd: params?.cwd, title: params?.title, messages: params?.messages },
+          {
+            id: params?.id,
+            cwd: params?.cwd,
+            title: params?.title,
+            messages: params?.messages,
+            parent: params?.parent,
+          },
           settings.limits,
         ),
       );
+    },
+
+    children(params) {
+      return serially(keyOf(params), () => ({
+        children: childrenOf(settings.root, params?.id, params?.cwd),
+      }));
     },
 
     todos(params) {
@@ -199,7 +213,9 @@ export const definition: Definition = {
         problems.push(`the second write stamped ${String(second.updated_at)}`);
       }
       const stored = load(root, "plan", "E:\\proj", limits);
-      if (stored.schema_version !== 2) problems.push(`a written document says schema ${stored.schema_version}`);
+      if (stored.schema_version !== SCHEMA_VERSION) {
+        problems.push(`a written document says schema ${stored.schema_version}`);
+      }
       if (stored.events.length !== 2) problems.push(`the document kept ${stored.events.length} events`);
 
       save(root, { id: "plan", cwd: "E:\\proj", title: "plan", messages }, limits);
@@ -208,29 +224,64 @@ export const definition: Definition = {
         problems.push(`saving the messages dropped the plan: ${JSON.stringify(afterSave)}`);
       }
 
-      const planPath = join(root, encodeDir("E:\\proj"), "old.json");
-      writeFileSync(
-        planPath,
-        JSON.stringify({
-          schema_version: 1,
-          id: "old",
-          cwd: "E:\\proj",
-          title: "old",
-          created_at: "2025-01-01T00:00:00.000Z",
-          updated_at: "2025-01-01T00:00:00.000Z",
-          messages,
-          dangling: false,
-        }),
-      );
-      const migrated = load(root, "old", "E:\\proj", limits);
-      if (migrated.schema_version !== 2 || migrated.events.length !== 0) {
-        problems.push(`a version 1 document read as ${JSON.stringify(migrated.schema_version)}/${migrated.events.length}`);
+      const folder = join(root, encodeDir("E:\\proj"));
+      const planPath = join(folder, "old.json");
+      for (const version of [1, 2]) {
+        writeFileSync(
+          planPath,
+          JSON.stringify({
+            schema_version: version,
+            id: "old",
+            cwd: "E:\\proj",
+            title: "old",
+            created_at: "2025-01-01T00:00:00.000Z",
+            updated_at: "2025-01-01T00:00:00.000Z",
+            messages,
+            dangling: false,
+          }),
+        );
+        const migrated = load(root, "old", "E:\\proj", limits);
+        if (migrated.schema_version !== SCHEMA_VERSION || migrated.events.length !== 0) {
+          problems.push(
+            `a version ${version} document read as ${JSON.stringify(migrated.schema_version)}/${migrated.events.length}`,
+          );
+        }
+        if (migrated.parent !== null) problems.push(`a version ${version} document invented a parent`);
+        if (todosOf(root, "old", "E:\\proj", limits).revision !== 0) {
+          problems.push(`a version ${version} document invented a plan`);
+        }
+        save(root, { id: "old", cwd: "E:\\proj", messages }, limits);
+        const upgraded = JSON.parse(readFileSync(planPath, "utf8")) as { schema_version?: number; events?: unknown };
+        if (upgraded.schema_version !== SCHEMA_VERSION || !Array.isArray(upgraded.events)) {
+          problems.push(`a migrated document wrote ${JSON.stringify(upgraded.schema_version)}/${typeof upgraded.events}`);
+        }
       }
-      if (todosOf(root, "old", "E:\\proj", limits).revision !== 0) problems.push("a version 1 document invented a plan");
-      save(root, { id: "old", cwd: "E:\\proj", messages }, limits);
-      const upgraded = JSON.parse(readFileSync(planPath, "utf8")) as { schema_version?: number; events?: unknown };
-      if (upgraded.schema_version !== 2 || !Array.isArray(upgraded.events)) {
-        problems.push(`a migrated document wrote ${JSON.stringify(upgraded.schema_version)}/${typeof upgraded.events}`);
+
+      const parent = { id: "abc-parent", cwd: "E:\\proj", call_id: "call_2", type: "explore", description: "find it" };
+      save(root, { id: "child-a", cwd: "E:\\proj", title: "find it", messages, parent }, limits);
+      save(root, { id: "child-b", cwd: "E:\\proj", title: "fix it", messages, parent }, limits);
+      save(root, { id: "abc-parent", cwd: "E:\\proj", title: "parent", messages }, limits);
+      const kids = childrenOf(root, "abc-parent", "E:\\proj");
+      if (kids.map((child) => child.id).join(",") !== "child-a,child-b") {
+        problems.push(`children came back as ${kids.map((child) => child.id).join(",")}`);
+      }
+      if (kids[0]?.parent?.call_id !== "call_2" || kids[0]?.parent?.type !== "explore") {
+        problems.push(`a child lost its link: ${JSON.stringify(kids[0]?.parent)}`);
+      }
+      const visible = list(root).map((entry) => entry.id);
+      if (visible.includes("child-a") || visible.includes("child-b")) {
+        problems.push(`list showed a child session: ${visible.join(",")}`);
+      }
+      if (!visible.includes("abc-parent")) problems.push(`list hid the parent: ${visible.join(",")}`);
+      if (childrenOf(root, "child-b", "E:\\proj").length !== 0) {
+        problems.push("a child reported children of its own");
+      }
+      const relinked = save(root, { id: "child-a", cwd: "E:\\proj", messages }, limits);
+      if (relinked.parent?.id !== "abc-parent") problems.push("re-saving a child dropped its link");
+      try {
+        save(root, { id: "child-c", cwd: "E:\\proj", messages, parent: { id: "not a session" } }, limits);
+        problems.push("save accepted a malformed parent");
+      } catch {
       }
 
       for (const bad of [

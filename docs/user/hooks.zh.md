@@ -31,6 +31,8 @@ hook 是一个想在 agent 循环的某个点上说话、又不想让循环知�
 
 提示词那个点没有自己的 seam，因为循环里没有任何东西适用于一条提示词：`agent-core` 在组装消息之前去问 hook。在那里被拒时，会话里什么都不写、模型也不被调用；调用方收到一个收尾事件，`steps` 为 0，文本是 hook 给出的理由，原因是 `refused`。
 
+子代理只走到四个点里的两个。它的调用触发 `PreToolUse` 与 `PostToolUse`，载荷带父的 `session_id` 与 `call_id`，以及一个指名子代理的 `subagent` 字段，所以读载荷的 hook 单看位置分不出一次子调用与会话自己的调用。`UserPromptSubmit` 与 `Stop` 是人这一轮的接缝：子代理没有自己的提示词，也不接受继续指令，所以这两个点对它都不触发。
+
 hook 注入的文本会变成一条名为 `hook:<name>` 的 user 消息，所以读已存会话的人能把它和用户自己打的字区分开。注入的文本随会话落盘，并且落在这一轮里它该在的位置：对提示词那个点，是历史之后、第一步之前；对工具那两个点，是紧跟在它所谈的那次调用的工具结果之后。被 steer 出来的续跑带的名字是 `hook:stop`。
 
 <a id="the-dialect"></a>
@@ -38,9 +40,9 @@ hook 注入的文本会变成一条名为 `hook:<name>` 的 user 消息，所以
 
 hook 这一侧持有自己的词汇，而它住在一个零依赖的包里，于是 hook 作者和引擎都能共享它，谁也不用 import 对方。
 
-- [`hook-protocol`](../packages/hooks/hook-protocol/README.zh.md) 持有四个事件名、各自带的 payload、`HookReply`（一个 hook 写了什么）、`HookOutcome`（多份回复合成什么）、`hook.*` 提供者契约与合并规则。
-- [`hooks-native`](../packages/hooks/hooks-native/README.zh.md) 提供 `agent-core` 调用的 `hooks` 能力：它发现内核公布出来的 `hook.*` 能力、只问声明过本次事件的那些、合并它们的答案、给每份贡献盖上它来自哪个 hook，最后记一行日志。
-- [hooks 包组](../packages/hooks/README.zh.md) 是这两者合在一起的介绍。
+- [`hook-protocol`](../../packages/hooks/hook-protocol/README.zh.md) 持有四个事件名、各自带的 payload、`HookReply`（一个 hook 写了什么）、`HookOutcome`（多份回复合成什么）、`hook.*` 提供者契约与合并规则。
+- [`hooks-native`](../../packages/hooks/hooks-native/README.zh.md) 提供 `agent-core` 调用的 `hooks` 能力：它发现内核公布出来的 `hook.*` 能力、只问声明过本次事件的那些、合并它们的答案、给每份贡献盖上它来自哪个 hook，最后记一行日志。
+- [hooks 包组](../../packages/hooks/README.zh.md) 是这两者合在一起的介绍。
 
 hook 声明 `hook.<name>` 能力，用 `describe` 说出自己实现了哪些事件，并为每个声明的事件实现一个同名方法，参数就是该事件的 payload。这个能力就是全部登记手续：没有注册调用、没有拆卸流程，也没有要跟重载保持一致的状态。
 
@@ -79,9 +81,9 @@ hook 可以拒绝，但永远无法豁免任何东西。
 <a id="related-documentation"></a>
 ## 相关文档
 
-- [hooks 包组](../packages/hooks/README.zh.md)：那两个包以及它们怎么被挂载。
-- [hook-protocol](../packages/hooks/hook-protocol/README.zh.md)：四个事件、payload、提供者契约与合并规则。
-- [hooks-native](../packages/hooks/hooks-native/README.zh.md)：引擎、它的方法与它的配置。
-- [agent-loop](../packages/agent/agent-loop/README.zh.md)：那几个 seam 与退出原因。
+- [hooks 包组](../../packages/hooks/README.zh.md)：那两个包以及它们怎么被挂载。
+- [hook-protocol](../../packages/hooks/hook-protocol/README.zh.md)：四个事件、payload、提供者契约与合并规则。
+- [hooks-native](../../packages/hooks/hooks-native/README.zh.md)：引擎、它的方法与它的配置。
+- [agent-loop](../../packages/agent/agent-loop/README.zh.md)：那几个 seam 与退出原因。
 - [权限闸门](permission.zh.md)：决定一次操作到底跑不跑的那一层。
-- [架构](architecture.zh.md)：这些 hook 坐落在整个系统的哪里。
+- [架构](../architecture.zh.md)：这些 hook 坐落在整个系统的哪里。

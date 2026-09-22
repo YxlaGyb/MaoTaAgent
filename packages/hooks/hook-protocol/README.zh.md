@@ -28,11 +28,13 @@ hook 写作时用的词，也是引擎作答时用的词。它只有一个文件
 | 事件 | payload | 引擎什么时候问 |
 |---|---|---|
 | `UserPromptSubmit` | `{ session_id, cwd, input }` | 提示词到达模型之前，也还没被写下来之前。 |
-| `PreToolUse` | `{ session_id, cwd, step, tool, args, call_id }` | 一次工具调用被派发之前，也被分类之前。`args` 是这个工具将会收到的参数，主机参数已经注入。 |
+| `PreToolUse` | `{ session_id, cwd, step, tool, args, call_id, subagent? }` | 一次工具调用被派发之前，也被分类之前。`args` 是这个工具将会收到的参数，主机参数已经注入。 |
 | `PostToolUse` | 前一个事件的 payload 加上 `{ ok, output }` | 这次调用已经落定、它的结果还没写回去之前。 |
 | `Stop` | `{ session_id, cwd, steps, stop_active }` | 模型没有要求任何工具调用时，也就是一轮本来要结束的那一刻。 |
 
 一轮没有工作目录时 `cwd` 是 `null`。`call_id` 是模型给这次调用的 id，因此一份回复可以对上它谈的是哪一次调用。
+
+`subagent` 只在调用出自子代理时出现，此时它是 `{ id, type, description }`，而 `session_id` 与 `call_id` 都是它父的。于是 hook 看到的这次子调用，位置与会话自己的调用完全一样，需要区分时也分得出来。提示词那个点与结束那个点对子代理根本不触发。
 
 ### hook 用什么作答
 
@@ -100,7 +102,7 @@ hook 就是一个提供 `hook.<name>` 能力的插件，其中名字满足 `^[a-
 - [hooks-native](../hooks-native/README.zh.md)：调用这些 hook 并合并其答案的引擎。
 - [agent-core](../../agent/agent-core/README.zh.md)：把结果映射成循环决策的那座桥。
 - [hooks 包](README.zh.md)：这份方言所属的组。
-- [四个 hook 点](../../../docs/hooks.zh.md)：这四个事件落在一轮里的哪个位置。
+- [四个 hook 点](../../../docs/user/hooks.zh.md)：这四个事件落在一轮里的哪个位置。
 
 -----
 

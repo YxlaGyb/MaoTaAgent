@@ -28,11 +28,13 @@ The words a hook is written in, and the words an engine answers in. It holds one
 | Event | Payload | When the engine asks |
 |---|---|---|
 | `UserPromptSubmit` | `{ session_id, cwd, input }` | Before the prompt reaches the model, and before anything is written down. |
-| `PreToolUse` | `{ session_id, cwd, step, tool, args, call_id }` | Before a tool call is dispatched, and before it is classified. `args` are the arguments the tool would receive, host arguments included. |
+| `PreToolUse` | `{ session_id, cwd, step, tool, args, call_id, subagent? }` | Before a tool call is dispatched, and before it is classified. `args` are the arguments the tool would receive, host arguments included. |
 | `PostToolUse` | the pre-tool payload plus `{ ok, output }` | After the call settled, before its result is written back. |
 | `Stop` | `{ session_id, cwd, steps, stop_active }` | When the model asked for no tool call, which is the moment a turn would end. |
 
 `cwd` is `null` when the turn has no working directory. `call_id` is the id the model gave the call, so a reply can be matched to the call it is about.
+
+`subagent` is present only when a subagent made the call, and then it is `{ id, type, description }` and the `session_id` and `call_id` are its parent's. A hook therefore sees a child's call exactly where the session's own call would have been, and can tell the two apart if it needs to. Neither the prompt point nor the stop point fires for a subagent at all.
 
 ### What a hook answers with
 
@@ -100,7 +102,7 @@ The fan out goes in capability order so the result is reproducible, but no field
 - [hooks-native](../hooks-native/README.md): the engine that calls these hooks and folds their answers.
 - [agent-core](../../agent/agent-core/README.md): the bridge that maps an outcome onto the loop's decisions.
 - [hooks package](README.md): the group this dialect belongs to.
-- [the hook points](../../../docs/hooks.md): where the four events sit in one turn.
+- [the hook points](../../../docs/user/hooks.md): where the four events sit in one turn.
 
 -----
 

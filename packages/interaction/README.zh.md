@@ -31,6 +31,6 @@ kind: "package-group"
 ## 相关文档
 
 - [permission](permission/README.zh.md)：闸门的契约正本。
-- [权限设计](../../docs/permission.zh.md)：闸门落在哪、三档策略、以及它不做什么。
+- [权限设计](../../docs/user/permission.zh.md)：闸门落在哪、三档策略、以及它不做什么。
 - [shell 包组](../shell/README.zh.md)：发起询问的那个工具。
 - [packages 包组](../README.zh.md)：这个包组所属的插件树。

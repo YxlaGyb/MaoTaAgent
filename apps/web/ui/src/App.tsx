@@ -60,6 +60,7 @@ export function App() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
+  const [spawned, setSpawned] = useState<Record<string, SessionSummary[]>>({});
 
   const t = useT();
   const activeRef = useRef(active);
@@ -111,6 +112,24 @@ export function App() {
     }
   }, []);
 
+  /// The sub-sessions a session spawned, keyed by the call each one came from.
+  /// They are fetched rather than listed because a subagent's work is opened on
+  /// demand: the sidebar and the search never see them.
+  const loadSpawned = useCallback(async (sessionId: string, cwd: string): Promise<void> => {
+    try {
+      const reply = await call<{ children?: SessionSummary[] }>("sessions.children", { id: sessionId, cwd });
+      const keyed: Record<string, SessionSummary[]> = {};
+      for (const child of reply.children ?? []) {
+        const callId = child.parent?.call_id ?? "";
+        if (callId === "") continue;
+        keyed[callId] = [...(keyed[callId] ?? []), child];
+      }
+      setSpawned(keyed);
+    } catch {
+      setSpawned({});
+    }
+  }, []);
+
   const loadInfo = useCallback(async (): Promise<void> => {
     try {
       const next = await call<AppInfo>("app.info");
@@ -151,6 +170,7 @@ export function App() {
           tool: event.tool ?? "",
           ...(event.call_id === undefined ? {} : { call_id: event.call_id }),
           ...(event.reason === undefined ? {} : { reason: event.reason }),
+          ...(event.subagent === undefined ? {} : { subagent: event.subagent }),
         };
         setApprovals((prev) => (prev.some((item) => item.id === id) ? prev : [...prev, asked]));
         return;
@@ -170,7 +190,15 @@ export function App() {
         turns.current.set(turnId, sessionId);
         setLives((prev) => ({
           ...prev,
-          [sessionId]: { turn_id: turnId, text: "", reasoning: "", step: 0, tools: [], running: true },
+          [sessionId]: {
+            turn_id: turnId,
+            text: "",
+            reasoning: "",
+            step: 0,
+            tools: [],
+            subagents: [],
+            running: true,
+          },
         }));
         return;
       }
@@ -191,7 +219,10 @@ export function App() {
         }
         void refreshSessions();
         const current = activeRef.current;
-        if (current !== null && current.id === sessionId) void openSession(sessionId, current.cwd);
+        if (current !== null && current.id === sessionId) {
+          void openSession(sessionId, current.cwd);
+          void loadSpawned(sessionId, current.cwd);
+        }
         return;
       }
 
@@ -200,7 +231,7 @@ export function App() {
         return turn === undefined ? prev : { ...prev, [sessionId]: applyEvent(turn, event) };
       });
     },
-    [openSession, refreshSessions],
+    [loadSpawned, openSession, refreshSessions],
   );
 
   useEffect(() => {
@@ -214,23 +245,26 @@ export function App() {
         const current = activeRef.current;
         if (current !== null) {
           void openSession(current.id, current.cwd);
+          void loadSpawned(current.id, current.cwd);
           void rebuildApprovals(current.id);
         }
         void refreshSessions();
       }),
-    [handleEvent, openSession, rebuildApprovals, refreshSessions],
+    [handleEvent, loadSpawned, openSession, rebuildApprovals, refreshSessions],
   );
 
   useEffect(() => {
     if (active === null) {
       setMessages([]);
       setApprovals([]);
+      setSpawned({});
       return;
     }
     void openSession(active.id, active.cwd);
+    void loadSpawned(active.id, active.cwd);
     void loadPermission(active.id, active.cwd);
     void rebuildApprovals(active.id);
-  }, [active, loadPermission, openSession, rebuildApprovals]);
+  }, [active, loadPermission, loadSpawned, openSession, rebuildApprovals]);
 
   const send = useCallback(
     async (text: string, at: { id: string; cwd: string }): Promise<void> => {
@@ -476,6 +510,7 @@ export function App() {
           thinking={thinking}
           permission={permission}
           approvals={approvals}
+          spawned={spawned}
           onRetry={() => void loadInfo()}
           onKeySaved={() => void loadInfo()}
           onThinking={setThinking}
