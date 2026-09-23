@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { useT } from "../lib/i18n.ts";
+import { useT, type MessageKey } from "../lib/i18n.ts";
 import { call, type SessionFile, type SessionSummary } from "../lib/rpc.ts";
-import type { LiveSubagent } from "./MessageList.tsx";
+import type { LiveSubagent, SubagentStatus } from "./MessageList.tsx";
 import { MessageItem } from "./MessageItem.tsx";
 
-const STATUS = {
+const STATUS: Record<SubagentStatus, MessageKey> = {
   running: "subagentRunning",
   done: "subagentDone",
   partial: "subagentPartial",
   failed: "subagentFailed",
-} as const;
+};
 
 /// A trace line shows the first thing the call named, which for every tool in
 /// the pool is the file, the pattern or the command that says what it did.
@@ -68,7 +68,7 @@ function Head({
 }: {
   type: string;
   label: string;
-  status?: string;
+  status?: MessageKey;
   steps?: number;
   open: boolean;
   onToggle: () => void;

@@ -19,6 +19,8 @@ const DEFAULTS = {
   max_parallel_tools: 4,
   compact_after_chars: 120_000,
   compact_keep_messages: 12,
+  context_compact: true,
+  max_compactions: 1,
   max_depth: 3,
   thinking: {} as Partial<Record<Level, LevelSetting>>,
 };
@@ -90,6 +92,11 @@ export function applyConfig(wiring: Wiring): void {
       typeof wiring.config.compact_keep_messages === "number" && wiring.config.compact_keep_messages >= 0
         ? wiring.config.compact_keep_messages
         : DEFAULTS.compact_keep_messages,
+    context_compact: wiring.config.context_compact !== false,
+    max_compactions:
+      typeof wiring.config.max_compactions === "number" && wiring.config.max_compactions >= 0
+        ? wiring.config.max_compactions
+        : DEFAULTS.max_compactions,
     max_depth:
       typeof wiring.config.max_depth === "number" && wiring.config.max_depth >= 0
         ? wiring.config.max_depth

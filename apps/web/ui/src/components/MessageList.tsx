@@ -31,6 +31,9 @@ export interface LiveTurn {
   text: string;
   reasoning: string;
   step: number;
+  /// How much had been streamed when the current attempt began, so an attempt
+  /// that gets replaced can be cut back to where it started.
+  mark: { text: number; reasoning: number };
   tools: LiveTool[];
   subagents: LiveSubagent[];
   running: boolean;
@@ -53,7 +56,19 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
     case "reasoning":
       return { ...turn, reasoning: turn.reasoning + (event.text ?? "") };
     case "step":
-      return { ...turn, step: event.step ?? turn.step };
+      return {
+        ...turn,
+        step: event.step ?? turn.step,
+        mark: { text: turn.text.length, reasoning: turn.reasoning.length },
+      };
+    case "retract":
+      // One question never shows two answers: what the replaced attempt had
+      // already streamed is cut off at the point that attempt began.
+      return {
+        ...turn,
+        text: turn.text.slice(0, turn.mark.text),
+        reasoning: turn.reasoning.slice(0, turn.mark.reasoning),
+      };
     case "tool_call":
       return { ...turn, tools: [...turn.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] };
     case "tool_result":

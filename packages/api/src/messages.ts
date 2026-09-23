@@ -8,11 +8,22 @@ export interface Message {
   name?: string;
 }
 
+/// Which conversation a request is answering for. The adapter is the side that
+/// decides to replace an attempt, and a replacement it does not write down is
+/// invisible to whoever reads the document afterwards, so the coordinates it
+/// needs to write one travel with the request.
+export interface SessionRef {
+  id: string;
+  cwd: string;
+  step: number;
+}
+
 export interface ChatRequest {
   model: string;
   messages: Message[];
   tools: unknown[] | undefined;
   temperature: number | undefined;
+  session: SessionRef | undefined;
 }
 
 export interface ChatReply {
@@ -53,5 +64,19 @@ export function readChat(params: unknown, defaultModel: string): ChatRequest {
     messages: projected,
     tools: Array.isArray(input.tools) && input.tools.length > 0 ? input.tools : undefined,
     temperature: typeof input.temperature === "number" ? input.temperature : undefined,
+    session: sessionOf(input.session),
+  };
+}
+
+/// A request that names no conversation is answered the same way; what is lost
+/// is only the trail, so an unreadable reference is dropped rather than refused.
+function sessionOf(value: unknown): SessionRef | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.id !== "string" || raw.id === "") return undefined;
+  return {
+    id: raw.id,
+    cwd: typeof raw.cwd === "string" ? raw.cwd : "",
+    step: typeof raw.step === "number" && Number.isFinite(raw.step) && raw.step > 0 ? Math.floor(raw.step) : 0,
   };
 }

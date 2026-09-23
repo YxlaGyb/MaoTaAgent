@@ -23,6 +23,8 @@ export const definition: Definition = {
     "max_parallel_tools",
     "compact_after_chars",
     "compact_keep_messages",
+    "context_compact",
+    "max_compactions",
     "max_depth",
     "thinking",
   ],

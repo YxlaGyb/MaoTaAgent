@@ -103,6 +103,7 @@ Writing an empty list clears the plan and still moves the revision, so a caller 
 | [`src/index.ts`](src/index.ts) | The capability: config, the eight methods, and `selfCheck`. |
 | [`src/store.ts`](src/store.ts) | The document layer: paths, reading, the atomic write, the plan read and append, and the child lookup. |
 | [`src/plan.ts`](src/plan.ts) | The plan itself: item shapes, the ceilings, the projection and the event filter. |
+| [`src/selfcheck.ts`](src/selfcheck.ts) | The self-check over the documents, links, index, lock and folding, run against a throwaway root. |
 
 ### One writer at a time
 

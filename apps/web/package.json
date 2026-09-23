@@ -17,6 +17,7 @@
     "check": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@maota/i18n-protocol": "workspace:^",
     "@maota/plugin-kit": "workspace:^",
     "dompurify": "^3",
     "maotaui": "link:../../../MaoTaUI",

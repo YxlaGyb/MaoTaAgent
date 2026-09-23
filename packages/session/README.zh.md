@@ -103,6 +103,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 能力本体：配置、八个方法与 `selfCheck`。 |
 | [`src/store.ts`](src/store.ts) | 文档层：路径、读取、原子写入，计划的读取与追加，以及子会话的查找。 |
 | [`src/plan.ts`](src/plan.ts) | 计划本身：单项形状、上下限、投影与事件过滤。 |
+| [`src/selfcheck.ts`](src/selfcheck.ts) | 对文档、父子链接、索引、锁与折叠的自检，跑在一个用完即弃的根目录上。 |
 
 ### 一次只有一个写入者
 

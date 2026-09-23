@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - packages/*/*
+  - i18n/*
   - apps/*
 
 allowBuilds:

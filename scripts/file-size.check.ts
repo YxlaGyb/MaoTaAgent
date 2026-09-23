@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 const root = join(import.meta.dirname, "..");
 const LIMIT = 500;
 const SKIP = new Set(["node_modules", ".git", "dist", "lib", "target", "tmp"]);
-const WATCHED = ["packages", "apps", "scripts", "docs"];
+const WATCHED = ["packages", "apps", "i18n", "scripts", "docs"];
 
 function at(path: string): string {
   return relative(root, path).split("\\").join("/");

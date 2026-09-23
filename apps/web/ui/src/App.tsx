@@ -5,7 +5,8 @@ import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { DEFAULT_PROJECT } from "./components/Sidebar.tsx";
 import { SidebarPane } from "./components/SidebarPane.tsx";
-import { describe, errorText } from "./lib/errors.ts";
+import { describe, errorText, failureText } from "./lib/errors.ts";
+import { adoptCatalog } from "./lib/i18n.ts";
 import {
   call,
   subscribe,
@@ -130,6 +131,7 @@ export function App() {
   const loadInfo = useCallback(async (): Promise<void> => {
     try {
       const next = await call<AppInfo>("app.info");
+      adoptCatalog(next.i18n);
       setInfo(next);
       setKernelError(null);
     } catch (error) {
@@ -192,6 +194,7 @@ export function App() {
             text: "",
             reasoning: "",
             step: 0,
+            mark: { text: 0, reasoning: 0 },
             tools: [],
             subagents: [],
             running: true,
@@ -213,6 +216,8 @@ export function App() {
         setPending(null);
         if (event.event === "turn.error") {
           setFailure({ session: sessionId, text: errorText(event.code ?? -32603, event.message ?? "") });
+        } else if (event.failure !== undefined) {
+          setFailure({ session: sessionId, text: failureText(event.failure) });
         }
         void refreshSessions();
         const current = activeRef.current;

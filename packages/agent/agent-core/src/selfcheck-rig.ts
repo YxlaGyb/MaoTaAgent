@@ -5,8 +5,8 @@
 /// runs it starts are real `definition.methods.run` calls over a wiring that
 /// never reaches a process.
 
-import { CallError, type Call, type Definition } from "@maota/plugin-kit";
-import type { LoopEvent, Message, ToolSpec } from "@maota/agent-loop";
+import { type Call, type Definition } from "@maota/plugin-kit";
+import { kindOfCode, type LoopEvent, type Message, type ToolSpec } from "@maota/agent-loop";
 
 export interface RunResult {
   call: Call;
@@ -24,9 +24,18 @@ export interface Rig {
   history: Message[];
   catalog: unknown;
   hookAnswer: (params: any) => unknown;
+  /// How many replacements the fake adapter performs before it reports the
+  /// failure, which is the adapter's own decision and not the run's.
+  retries: number;
+  failCode: number;
   scripted(content: string, tool?: string): Message;
   surfaced(chat: Array<{ tools?: ToolSpec[] }>): string;
-  run(params: Record<string, unknown>, script: readonly Message[], gate?: Promise<void>, failChat?: boolean): RunResult;
+  run(
+    params: Record<string, unknown>,
+    script: readonly Message[],
+    gate?: Promise<void>,
+    failChat?: boolean | number,
+  ): RunResult;
 }
 
 export function createRig(definition: Definition): Rig {
@@ -47,6 +56,8 @@ export function createRig(definition: Definition): Rig {
     history: [{ role: "user", content: "earlier" }],
     catalog: { complete: true, entries: [{ name: "s", description: "d" }], text: "catalog text" },
     hookAnswer: () => ({}),
+    retries: 0,
+    failCode: -32053,
     scripted: (content, tool) => ({
       role: "assistant",
       content: tool === undefined ? content : null,
@@ -91,14 +102,43 @@ export function createRig(definition: Definition): Rig {
         },
         stream: async (_capability: string, _method: string, params: any) => {
           chat.push(params);
+          const call = chat.length;
           if (gate !== undefined) await gate;
-          if (failChat) throw new CallError(-32000, "the upstream broke");
-          const message = queue.shift() ?? { role: "assistant", content: "done" };
-          return {
-            async *[Symbol.asyncIterator]() {
+          // A number names the call that fails, and one that fails after it has
+          // already spoken is the shape a real stream has. Whether the failure
+          // is replaced is the adapter's decision, and the run learns about a
+          // replacement from the two chunks a real adapter sends rather than
+          // from a question it was asked.
+          async function* body() {
+            const broken = failChat === true || failChat === call;
+            if (!broken) {
+              const message = queue.shift() ?? { role: "assistant", content: "done" };
               yield { type: "message", message };
-            },
-          };
+              return;
+            }
+            if (failChat !== true) yield { type: "delta", text: "half an answer" };
+            const failure = {
+              message: "the upstream broke",
+              code: rig.failCode,
+              kind: kindOfCode(rig.failCode),
+            };
+            if (rig.retries === 0) {
+              yield { type: "error", failure };
+              return;
+            }
+            yield {
+              type: "retry",
+              phase: "scheduled",
+              attempt: 1,
+              delay_ms: 0,
+              failure,
+              reason: `\`${failure.kind}\` is worth another attempt`,
+            };
+            yield { type: "retry", phase: "started", attempt: 1, delay_ms: 0 };
+            const message = queue.shift() ?? { role: "assistant", content: "done" };
+            yield { type: "message", message };
+          }
+          return { [Symbol.asyncIterator]: body };
         },
         publish: async (topic: string, payload: unknown) => {
           const record = { topic, payload: payload as Record<string, any> };
@@ -110,7 +150,7 @@ export function createRig(definition: Definition): Rig {
       const call = {
         channel,
         config: {},
-        capabilities: {},
+        capabilities: { session: { plugin: "session" } },
         capability: "agent.loop",
         method: "run",
         caller: "tool-subagent",

@@ -6,6 +6,7 @@ import { runBatchShapes, runBatching } from "./batching.ts";
 import { runCompleted } from "./completed.ts";
 import { runMaxSteps } from "./max-steps.ts";
 import { runParsing } from "./parsing.ts";
+import { runRecovery } from "./recovery.ts";
 import { runRewrites } from "./rewrites.ts";
 import { runSeams } from "./seams.ts";
 
@@ -17,5 +18,6 @@ await runParsing();
 await runBatchShapes();
 await runSeams();
 await runRewrites();
+await runRecovery();
 
-console.log("agent loop ok: completed, max_steps, aborted, batching, ordering, seams, parsing, rewrites");
+console.log("agent loop ok: completed, max_steps, aborted, batching, ordering, seams, parsing, rewrites, recovery");

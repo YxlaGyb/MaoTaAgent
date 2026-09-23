@@ -306,18 +306,144 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
   }
 
   /// A model call that fails for good ends the turn as `model_error` instead of
-  /// crashing the run, and what the turn had is still saved.
+  /// crashing the run, and what the turn had is still saved. The failure itself
+  /// is reported as facts, not as prose, because a reader has to be able to
+  /// tell a rate limit from a context overflow without reading a sentence.
   {
     const broken = rig.run({ session_id: "boom", cwd: "E:\\proj", input: "hi" }, [], undefined, true);
     await broken.done;
-    const done = broken.events.at(-1) as { type?: unknown; reason?: unknown; text?: unknown } | undefined;
+    const done = broken.events.at(-1) as
+      | { type?: unknown; reason?: unknown; text?: unknown; failure?: { kind?: unknown; message?: unknown } }
+      | undefined;
     if (done?.type !== "done" || done.reason !== "model_error") {
       problems.push(`a failed model call ended as ${JSON.stringify(done)}`);
     }
-    if (String(done?.text).includes("upstream broke") !== true) {
-      problems.push(`the failure was reported as ${JSON.stringify(done?.text)}`);
+    if (done?.failure?.message !== "the upstream broke") {
+      problems.push(`the failure carried ${JSON.stringify(done?.failure)}`);
     }
+    if (typeof done?.failure?.kind !== "string" || done.failure.kind === "") {
+      problems.push(`the failure was reported without a kind: ${JSON.stringify(done?.failure)}`);
+    }
+    if (done?.text !== "") problems.push(`a failed model call still wrote ${JSON.stringify(done?.text)}`);
     if (rig.saves.at(-1)?.id !== "boom") problems.push("a failed turn was not saved");
+  }
+
+  /// A retry is not a second answer to one question: what the replaced attempt
+  /// already said is taken back, the attempt count is not charged twice, and the
+  /// turn ends on the answer the replacement produced. The replacement itself is
+  /// the adapter's decision, so it arrives as the two chunks a real adapter
+  /// sends rather than as a question the run was asked.
+  {
+    rig.retries = 1;
+    const flaky = rig.run(
+      { session_id: "flaky", cwd: "E:\proj", input: "hi" },
+      [rig.scripted("second try")],
+      undefined,
+      1,
+    );
+    await flaky.done;
+    rig.retries = 0;
+    const retracted = flaky.events.find((event) => event.type === "retract");
+    if (retracted === undefined || retracted.reason !== "transport") {
+      problems.push(`a retried attempt was taken back as ${JSON.stringify(retracted)}`);
+    }
+    if (flaky.chat.length !== 1) problems.push(`a retried turn made ${flaky.chat.length} model calls, expected 1`);
+    const seen = flaky.chat[0]?.messages ?? [];
+    if (seen.some((message) => message.name === "recovery:model")) {
+      problems.push("a plain retry steered the model it was retrying");
+    }
+    const done = flaky.events.at(-1) as { reason?: unknown; steps?: unknown; text?: unknown } | undefined;
+    if (done?.reason !== "completed" || done?.text !== "second try") {
+      problems.push(`a recovered turn ended as ${JSON.stringify(done)}`);
+    }
+    if (done?.steps !== 1) problems.push(`a recovered turn took ${String(done?.steps)} steps, expected 1`);
+  }
+
+  /// A request that no longer fits is answered by folding the older half and
+  /// asking again, with a note that says how to read what the attempt now
+  /// holds. The same request is never sent twice: the folding budget is spent
+  /// once, and a conversation with nothing foldable is given up on instead.
+  {
+    definition.setup?.({
+      channel: undefined,
+      config: { compact_keep_messages: 2 },
+      capabilities: {},
+    } as unknown as Wiring);
+    rig.failCode = -32056;
+    rig.history = [
+      { role: "user", content: "an old question" },
+      { role: "assistant", content: "an old answer" },
+      { role: "user", content: "another old question" },
+      { role: "assistant", content: "another old answer" },
+    ];
+    const overflowed = rig.run(
+      { session_id: "overflow", cwd: "E:\proj", input: "and now" },
+      [rig.scripted("done")],
+      undefined,
+      1,
+    );
+    await overflowed.done;
+    if (overflowed.chat.length !== 2) {
+      problems.push(`an overflowing turn made ${overflowed.chat.length} model calls, expected 2`);
+    }
+    const retried: readonly Message[] = overflowed.chat[1]?.messages ?? [];
+    if (!retried.some((message) => message.name === "compact" && message.content === "folded note")) {
+      problems.push(`the overflowing retry was not given the fold: ${JSON.stringify(retried)}`);
+    }
+    if (!retried.some((message) => message.name === "recovery:model" && message.content?.includes("context window"))) {
+      problems.push(`the overflowing retry was not told how to read the fold: ${JSON.stringify(retried)}`);
+    }
+    if (!overflowed.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+      problems.push("an overflowing turn never asked for a fold");
+    }
+    const retracted = overflowed.events.find((event) => event.type === "retract");
+    if (retracted === undefined || retracted.reason !== "context_window") {
+      problems.push(`an overflowing attempt was taken back as ${JSON.stringify(retracted)}`);
+    }
+    const done = overflowed.events.at(-1) as { reason?: unknown; text?: unknown } | undefined;
+    if (done?.reason !== "completed" || done?.text !== "done") {
+      problems.push(`a folded retry ended as ${JSON.stringify(done)}`);
+    }
+
+    // The folding budget belongs to the run, so a deployment that turns it off
+    // never folds: the overflow it was given is the answer it reports.
+    definition.setup?.({
+      channel: undefined,
+      config: { compact_keep_messages: 2, context_compact: false },
+      capabilities: {},
+    } as unknown as Wiring);
+    const off = rig.run(
+      { session_id: "no-compact", cwd: "E:\\proj", input: "and now" },
+      [rig.scripted("done")],
+      undefined,
+      1,
+    );
+    await off.done;
+    const refusedFold = off.events.at(-1) as { reason?: unknown; failure?: { kind?: unknown } } | undefined;
+    if (refusedFold?.reason !== "model_error" || refusedFold?.failure?.kind !== "context_window") {
+      problems.push(`a turn with folding off ended as ${JSON.stringify(refusedFold)}`);
+    }
+    if (off.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+      problems.push("a turn with folding off still asked for a fold");
+    }
+    definition.setup?.({
+      channel: undefined,
+      config: { compact_keep_messages: 2 },
+      capabilities: {},
+    } as unknown as Wiring);
+
+    rig.history = [{ role: "user", content: "nothing to fold here" }];
+    const stuck = rig.run({ session_id: "unfoldable", cwd: "E:\\proj", input: "and now" }, [], undefined, true);
+    await stuck.done;
+    const gaveUp = stuck.events.at(-1) as { reason?: unknown; failure?: { kind?: unknown } } | undefined;
+    if (gaveUp?.reason !== "model_error" || gaveUp?.failure?.kind !== "context_window") {
+      problems.push(`an unfoldable overflow ended as ${JSON.stringify(gaveUp)}`);
+    }
+    if (stuck.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+      problems.push("a conversation with nothing to fold still asked for a fold");
+    }
+    rig.failCode = -32053;
+    rig.history = [{ role: "user", content: "earlier" }];
   }
 
   /// Depth is counted, not guessed: a child of the session that is running is

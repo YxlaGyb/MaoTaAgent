@@ -13,6 +13,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@maota/api-protocol": "workspace:^",
     "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"

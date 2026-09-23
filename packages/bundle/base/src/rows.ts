@@ -7,6 +7,7 @@ export interface PluginRow {
 
 export const rows: PluginRow[] = [
   { id: "api", name: "@maota/api" },
+  { id: "i18n", name: "@maota/i18n-native" },
   { id: "pwsh-local", name: "@maota/pwsh-local" },
   { id: "permission", name: "@maota/permission" },
   { id: "tool-pwsh", name: "@maota/tool-pwsh" },

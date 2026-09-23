@@ -1,13 +1,18 @@
 import { useState } from "react";
 
-import { useLang, useT } from "../lib/i18n.ts";
+import { useT, type MessageKey } from "../lib/i18n.ts";
 import type { AppInfo } from "../lib/rpc.ts";
 import { Icon, ICON } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
-const THINKING_LABEL: Record<string, Record<string, string>> = {
-  "zh-CN": { off: "关", low: "低", medium: "中", high: "高" },
-  en: { off: "Off", low: "Low", medium: "Medium", high: "High" },
+/// A level the model may be asked to think at, named through the dictionary
+/// rather than by the level id, so a level nobody wrote words for shows its own
+/// name instead of disappearing from the menu.
+const LEVEL_KEY: Record<string, MessageKey> = {
+  off: "thinkingOff",
+  low: "thinkingLow",
+  medium: "thinkingMedium",
+  high: "thinkingHigh",
 };
 
 export function ThinkingPicker({
@@ -21,11 +26,13 @@ export function ThinkingPicker({
   onChange: (level: string) => void;
   disabled?: boolean;
 }) {
-  const lang = useLang();
   const t = useT();
   const [open, setOpen] = useState(false);
   const levels = info?.levels?.length ? info.levels : ["off", "low", "medium", "high"];
-  const name = (level: string): string => THINKING_LABEL[lang]?.[level] ?? level;
+  const name = (level: string): string => {
+    const key = LEVEL_KEY[level];
+    return key === undefined ? level : t(key);
+  };
 
   return (
     <Popover

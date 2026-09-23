@@ -2,6 +2,7 @@ import { CallError } from "@maota/plugin-kit";
 
 export const MAX_TODO_ITEMS = 256;
 export const MAX_TODO_CONTENT_CHARS = 2000;
+export const MAX_RETRY_REASON_CHARS = 400;
 
 export type TodoStatus = "pending" | "in_progress" | "completed";
 
@@ -37,10 +38,80 @@ export interface TodosSnapshotEvent {
   todos: TodoItem[];
 }
 
-export type SessionEvent = TodosEvent | TodosSnapshotEvent;
+export type RetryPhase = "scheduled" | "started" | "given_up";
+
+export const RETRY_PHASES: readonly RetryPhase[] = ["scheduled", "started", "given_up"];
+
+/// A request that failed and was replaced is durable evidence: it is written
+/// before the wait starts, so a crash during the wait still leaves the reason
+/// and the delay that were about to be spent in the document.
+export interface RetryEvent {
+  kind: "model.retry";
+  at: string;
+  phase: RetryPhase;
+  step: number;
+  attempt: number;
+  delay_ms: number;
+  failure_kind: string;
+  reason: string;
+}
+
+export type SessionEvent = TodosEvent | TodosSnapshotEvent | RetryEvent;
+
+export function isRetryEvent(event: SessionEvent): event is RetryEvent {
+  return event.kind === "model.retry";
+}
+
+export function isPlanEvent(event: SessionEvent): event is TodosEvent | TodosSnapshotEvent {
+  return event.kind !== "model.retry";
+}
 
 export function isTodoStatus(value: unknown): value is TodoStatus {
   return typeof value === "string" && (TODO_STATUSES as readonly string[]).includes(value);
+}
+
+export function isRetryPhase(value: unknown): value is RetryPhase {
+  return typeof value === "string" && (RETRY_PHASES as readonly string[]).includes(value);
+}
+
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/// The plugin reads this argument off the wire, so every field it keeps is
+/// checked here; the timestamp is the one exception, since a caller that omits
+/// it means now.
+export function retryEventOf(value: unknown): RetryEvent {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new CallError(-32602, `a retry event must be an object, got ${JSON.stringify(value)}`);
+  }
+  const raw = value as Record<string, unknown>;
+  if (!isRetryPhase(raw.phase)) {
+    throw new CallError(-32602, `a retry phase must be one of ${RETRY_PHASES.join(", ")}`);
+  }
+  if (typeof raw.failure_kind !== "string" || raw.failure_kind.trim() === "") {
+    throw new CallError(-32602, "a retry event must name the failure kind it replaces");
+  }
+  const reason = raw.reason;
+  if (typeof reason !== "string" || reason.trim() === "") {
+    throw new CallError(-32602, "a retry event must say why the attempt was replaced");
+  }
+  if (reason.length > MAX_RETRY_REASON_CHARS) {
+    throw new CallError(
+      -32602,
+      `a retry reason is ${reason.length} characters, over the ${MAX_RETRY_REASON_CHARS} character ceiling`,
+    );
+  }
+  return {
+    kind: "model.retry",
+    at: typeof raw.at === "string" && raw.at !== "" ? raw.at : new Date().toISOString(),
+    phase: raw.phase,
+    step: count(raw.step),
+    attempt: count(raw.attempt),
+    delay_ms: count(raw.delay_ms),
+    failure_kind: raw.failure_kind,
+    reason,
+  };
 }
 
 export function countsOf(todos: readonly TodoItem[]): PlanCounts {
@@ -50,10 +121,11 @@ export function countsOf(todos: readonly TodoItem[]): PlanCounts {
 }
 
 export function viewOf(events: readonly SessionEvent[]): TodosView {
-  const last = events.at(-1) ?? null;
+  const plan = events.filter(isPlanEvent);
+  const last = plan.at(-1) ?? null;
   const todos = last?.todos ?? [];
   return {
-    revision: events.length,
+    revision: plan.length,
     updated_at: last?.at ?? null,
     todos,
     counts: countsOf(todos),
@@ -102,6 +174,13 @@ export function validateTodos(todos: unknown): TodoItem[] {
 export function eventOf(value: unknown): SessionEvent | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
+  if (raw.kind === "model.retry") {
+    try {
+      return retryEventOf(raw);
+    } catch {
+      return null;
+    }
+  }
   if ((raw.kind !== "todos.write" && raw.kind !== "todos.snapshot") || typeof raw.at !== "string") return null;
   const kind: SessionEvent["kind"] = raw.kind === "todos.snapshot" ? "todos.snapshot" : "todos.write";
   try {

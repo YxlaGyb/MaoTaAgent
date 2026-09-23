@@ -5,6 +5,7 @@
   "workspaces": [
     "packages/*",
     "packages/*/*",
+    "i18n/*",
     "apps/*"
   ],
   "engines": {
@@ -23,8 +24,11 @@
     "conversation:smoke": "node scripts/tests/conversation.smoke.ts",
     "hooks-e2e:smoke": "node scripts/tests/hooks.smoke.ts",
     "agent:smoke": "node packages/agent/agent-core/tests/agent.smoke.ts",
+    "api:smoke": "node packages/api/tests/api.smoke.ts",
     "tools:smoke": "node packages/agent/tools/tests/tools.smoke.ts",
     "loop:smoke": "node packages/agent/agent-loop/tests/loop.smoke.ts",
+    "i18n:smoke": "node i18n/i18n-native/tests/i18n.smoke.ts",
+    "i18n-protocol:smoke": "node i18n/i18n-protocol/tests/i18n.smoke.ts",
     "hooks:smoke": "node packages/hooks/hooks-native/tests/hooks.smoke.ts",
     "fs:smoke": "node packages/fs/fs/tests/fs.smoke.ts",
     "tool-fs:smoke": "node packages/fs/tool-fs/tests/tool-fs.smoke.ts",
@@ -53,6 +57,8 @@
   },
   "devDependencies": {
     "@maota/agent-core": "workspace:^",
+    "@maota/i18n-native": "workspace:^",
+    "@maota/i18n-protocol": "workspace:^",
     "@maota/api": "workspace:^",
     "@maota/base": "workspace:^",
     "@maota/hmr": "workspace:^",

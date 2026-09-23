@@ -133,6 +133,7 @@ await check("half turn stays dangling on disk", async () => {
   const failed = (await waitFor((event) => event.event === "turn.done" && event.turn_id === id)) as {
     reason?: string;
     text?: string;
+    failure?: { message?: string; kind?: string };
   };
   assert.equal(
     failed.reason,
@@ -140,8 +141,17 @@ await check("half turn stays dangling on disk", async () => {
     `a backend that broke for good should end the turn as model_error, got ${JSON.stringify(failed)}`,
   );
   assert.ok(
-    String(failed.text).includes("the model call failed"),
-    `the closing text should say what broke: ${JSON.stringify(failed.text)}`,
+    String(failed.text) === "",
+    `a turn that broke says nothing of its own: the failure is reported as facts, got ${JSON.stringify(failed.text)}`,
+  );
+  assert.equal(
+    failed.failure?.kind,
+    "request",
+    `a script that ran out of steps is a request failure, not an accident to retry: ${JSON.stringify(failed.failure)}`,
+  );
+  assert.ok(
+    String(failed.failure?.message).length > 0,
+    `the failure should carry the reason it was given: ${JSON.stringify(failed.failure)}`,
   );
   const half = await call("sessions.load", { id: "smoke-half", cwd: "" });
   assert.equal(half.dangling, true, "a turn cut in half should be marked dangling");

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { CallError, runPlugin, type Channel, type Definition, type Route } from "@maota/plugin-kit";
 
 import { createBridge, type Bridge } from "./bridge.ts";
-import type { AppInfo } from "./protocol.ts";
+import type { AppInfo, HostCatalog } from "./protocol.ts";
 
 const UI = fileURLToPath(new URL("../ui/", import.meta.url));
 const DIST = fileURLToPath(new URL("../dist/", import.meta.url));
@@ -54,6 +54,7 @@ let bridge!: Bridge;
 let server!: Server;
 let dev: { middlewares: Middleware; close(): Promise<void> } | null = null;
 let capabilities: Record<string, Route> = {};
+let channel: Channel | null = null;
 
 function codeOf(error: unknown): number {
   return error instanceof CallError ? error.code : -32603;
@@ -69,6 +70,28 @@ function url(): string {
   return `http://${settings.host}:${port}`;
 }
 
+/// The words every plugin contributed, asked of the i18n store when there is
+/// one. A profile without the store still serves the interface: the app's own
+/// copy is compiled in, so the reply is null and nothing is missing that the
+/// app did not already have.
+async function catalog(): Promise<HostCatalog | null> {
+  if (channel === null || capabilities["i18n"] === undefined) return null;
+  try {
+    const reply = (await channel.call("i18n", "catalog", {})) as Partial<HostCatalog> | null;
+    if (reply === null || typeof reply !== "object") return null;
+    return {
+      locale: typeof reply.locale === "string" ? reply.locale : "",
+      languages: Array.isArray(reply.languages) ? reply.languages : [],
+      namespaces: Array.isArray(reply.namespaces) ? reply.namespaces : [],
+      catalog: reply.catalog ?? {},
+      problems: Array.isArray(reply.problems) ? reply.problems : [],
+    };
+  } catch (error) {
+    channel.log("warn", `web: could not read the i18n catalog because ${messageOf(error)}`);
+    return null;
+  }
+}
+
 async function info(): Promise<AppInfo> {
   return {
     version: VERSION,
@@ -76,6 +99,7 @@ async function info(): Promise<AppInfo> {
     listening: server.listening,
     dev: settings.dev,
     capabilities,
+    i18n: await catalog(),
     ...(await bridge.facts()),
   };
 }
@@ -265,6 +289,7 @@ export const definition: Definition = {
 
   async start(wiring) {
     capabilities = wiring.capabilities ?? {};
+    channel = wiring.channel;
     await bridge.open();
     await new Promise<void>((resolve) => {
       server.once("error", () => resolve());

@@ -1,10 +1,16 @@
 import { useState } from "react";
 
-import { useT } from "../lib/i18n.ts";
+import { useT, type MessageKey } from "../lib/i18n.ts";
 import { Icon, ICON } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
-export const PERMISSION_OPTIONS = [
+export const PERMISSION_OPTIONS: readonly {
+  value: string;
+  icon: string;
+  name: MessageKey;
+  note: MessageKey;
+  tone: string;
+}[] = [
   { value: "ask", icon: ICON.hand, name: "askApproval", note: "askNote", tone: "" },
   { value: "auto", icon: ICON.shield, name: "autoApprove", note: "autoNote", tone: "" },
   { value: "full", icon: ICON.alert, name: "fullAccess", note: "fullNote", tone: " is-danger" },

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { CallError, type Channel, type InboundStream } from "@maota/plugin-kit";
 
-import type { BridgeFacts, HostEvent, SessionFile, SubagentRef } from "./protocol.ts";
+import type { BridgeFacts, HostEvent, HostFailure, SessionFile, SubagentRef } from "./protocol.ts";
 
 interface LoopEvent {
   type?: string;
@@ -15,6 +15,7 @@ interface LoopEvent {
   output?: unknown;
   steps?: number;
   reason?: string;
+  failure?: HostFailure;
 }
 
 interface Turn {
@@ -142,6 +143,11 @@ export function createBridge(channel: Channel): Bridge {
           output: event.output,
         });
         return false;
+      case "retract":
+        // An attempt that is being replaced is announced rather than silently
+        // overwritten, so the page can take back what it already showed.
+        emit({ event: "retract", turn_id: turnId, reason: String(event.reason ?? "") });
+        return false;
       case "done":
         emit({
           event: "turn.done",
@@ -149,6 +155,7 @@ export function createBridge(channel: Channel): Bridge {
           steps: Number(event.steps ?? 0),
           text: String(event.text ?? ""),
           ...(typeof event.reason === "string" ? { reason: event.reason } : {}),
+          ...(event.failure === undefined ? {} : { failure: event.failure }),
         });
         return true;
       default:

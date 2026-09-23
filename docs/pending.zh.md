@@ -12,6 +12,7 @@ v5 那一轮重写了技能链、hook 点和权限闸门，那份计划里还有
 - [子 agent](#子-agent)
 - [待办](#待办)
 - [前端与启动](#前端与启动)
+- [恢复与翻译](#恢复与翻译)
 - [遗留](#遗留)
 
 ## shell 与 PowerShell
@@ -60,7 +61,20 @@ v5 那一轮重写了技能链、hook 点和权限闸门，那份计划里还有
 - **host**：处理函数抛错既不记日志也不退订；topic 模式里的 `*` 只匹配一段（`packages/plugin-kit/src/channel.ts`）；`shutdown` 等待没有时限（`packages/boot/host/src/index.ts`），所以内核卡住时 CLI 会一直挂着。
 - **一条要写进 README 的事实**：插件行之间的顺序不承重，所以没有任何检查。
 
+## 恢复与翻译
+
+恢复决定模型调用失败后该怎么办，翻译存储保管界面文案。两者都在建的时候就刻意少做了一些本来能做的事。
+
+- **输出上限**：能让答案变长就好的那种失败，不靠抬高上限来解决，因为 `packages/api/src/retry.ts` 没有这个键，循环也没有这条路。想要升级的部署把它写成另一个插件。
+- **换模型**：没有备用模型。`packages/api/src/index.ts` 每个档位只有一个 `model`，恢复那条路上没有任何地方能点到第二个。
+- **撤回是整段的**：重试会把整个已流出的尝试撤回起点，而不是只撤回值得替换的那一部分（`apps/web/ui/src/components/MessageList.tsx`）。
+- **CLI 只有英文**：`apps/cli/` 没有字典、也从不问存储，所以被翻译的界面只有 web UI，CLI 打出的每个字符串都是字面量（`apps/cli/src/index.ts`）。计划是把 CLI 也算作前端的。
+- **应用自己的语言选择**：web UI 把它放在 `localStorage` 的 `maota.lang` 里，而档位另有自己的 `locale`，于是浏览器和无界面运行可能对语言有分歧、而且谁都不知道（`apps/web/ui/src/lib/i18n.ts`）。
+- **`translate` 不做格式化**：它原样回答那个词，有值要填的调用方自己调 `format`（`i18n/i18n-native/src/plugin.ts`）。
+- **词是平铺字符串**：没有复数形式也没有标记，所以需要其中任一的语言会被拆成好几个键（`i18n/i18n-protocol/src/index.ts`）。
+- **一次发现只读一遍交付者**：能力表变了存储才重建，交付者自己的词变了不会（`i18n/i18n-native/src/plugin.ts`）。
+
 ## 遗留
 
 - `.tmp-maota-config`，一次用临时 `MAOTA_HOME` 跑 `maota check` 留下的，还在工作树里。
-- 根 `check` 链上有 25 条命令。上面这些的 smoke 测试在等它们要演练的代码。
+- 根 `check` 链上有 40 个步骤。上面这些的 smoke 测试在等它们要演练的代码。

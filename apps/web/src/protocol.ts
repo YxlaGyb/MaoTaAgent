@@ -1,6 +1,20 @@
+import type { Language } from "@maota/i18n-protocol";
+
 export interface RpcFailure {
   code: number;
   message: string;
+}
+
+/// The interface's words as the host built them: every language any plugin
+/// declared, every namespace it contributed, and the problems the store found
+/// while folding them together. The app's own copy is compiled in, so this is
+/// only what the plugins added.
+export interface HostCatalog {
+  locale: string;
+  languages: Language[];
+  namespaces: string[];
+  catalog: Record<string, Record<string, Record<string, string>>>;
+  problems: string[];
 }
 
 export interface AppInfo {
@@ -13,6 +27,7 @@ export interface AppInfo {
   thinking: Record<string, { model?: string; tools?: boolean }> | null;
   has_key: boolean | null;
   capabilities: Record<string, { plugin: string }>;
+  i18n: HostCatalog | null;
 }
 
 export interface SessionSummary {
@@ -75,6 +90,18 @@ export interface SessionFile {
   dangling: boolean;
 }
 
+/// A model-request failure as a front end reads it: the kind decides what the
+/// page says and whether a retry is even thinkable, and the message is what the
+/// provider said.
+export interface HostFailure {
+  message: string;
+  code: number;
+  kind: string;
+  status?: number;
+  retry_after_ms?: number;
+  request_id?: string;
+}
+
 export interface HostEvent {
   event: string;
   turn_id?: string;
@@ -98,6 +125,7 @@ export interface HostEvent {
   type?: string;
   description?: string;
   subagent?: SubagentRef;
+  failure?: HostFailure;
 }
 
 export interface Approval {

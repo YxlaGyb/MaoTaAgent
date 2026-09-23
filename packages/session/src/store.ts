@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 import { CallError } from "@maota/plugin-kit";
 
-import { validateTodos, viewOf, type TodosSnapshotEvent, type TodosView } from "./plan.ts";
+import { isPlanEvent, isRetryEvent, validateTodos, viewOf, type RetryEvent, type SessionEvent, type TodosSnapshotEvent, type TodosView } from "./plan.ts";
 import {
   SCHEMA_VERSION,
   assertId,
@@ -93,18 +93,28 @@ export interface SaveInput {
 
 /// A document keeps the events that built its plan, which without a ceiling
 /// means every write of the same plan stays in the file forever. Past the
-/// ceiling the older ones are folded into one snapshot, so the projection still
-/// reads the last list written while the document stops growing without bound.
+/// ceiling the older ones are folded into one snapshot that still projects the
+/// last list written, while the newest ones stay as they were. A retry event
+/// carries no plan, so it is never folded into the snapshot: the newest ones
+/// are kept as the trail a crash report reads.
 function foldEvents(file: SessionFile, max: number): SessionFile {
   const ceiling = Math.max(2, max);
   if (file.events.length <= ceiling) return file;
-  const last = file.events[file.events.length - 1];
+  const plan = file.events.filter(isPlanEvent);
+  const last = plan.at(-1);
   const snapshot: TodosSnapshotEvent = {
     kind: "todos.snapshot",
     at: last?.at ?? file.updated_at,
     todos: last?.todos ?? [],
   };
-  return { ...file, events: [snapshot, ...file.events.slice(file.events.length - (ceiling - 1))] };
+  return {
+    ...file,
+    events: [
+      snapshot,
+      ...plan.slice(-(ceiling - 1)),
+      ...file.events.filter(isRetryEvent).slice(-(ceiling - 1)),
+    ],
+  };
 }
 
 function writeDocument(path: string, dir: string, id: string, file: SessionFile, limits: Limits): SessionFile {
@@ -191,6 +201,34 @@ export function appendTodos(
   };
   const stored = write(root, input.id, input.cwd, written, limits);
   return viewOf(stored.events);
+}
+
+export function appendEvent(
+  root: string,
+  input: { id: unknown; cwd: unknown; event: RetryEvent },
+  limits: Limits,
+): RetryEvent {
+  const found = load(root, input.id, input.cwd, limits);
+  const written: SessionFile = {
+    ...found,
+    schema_version: SCHEMA_VERSION,
+    updated_at: input.event.at,
+    events: [...found.events, input.event],
+  };
+  write(root, input.id, input.cwd, written, limits);
+  return input.event;
+}
+
+/// The durable trail a post-mortem reads: the plan events projected as before,
+/// plus the request replacements in the order they were scheduled.
+export function eventsOf(
+  root: string,
+  id: unknown,
+  cwd: unknown,
+  limits: Limits,
+): { events: SessionEvent[]; retries: RetryEvent[]; todos: TodosView } {
+  const events = load(root, id, cwd, limits).events;
+  return { events, retries: events.filter(isRetryEvent), todos: viewOf(events) };
 }
 
 export function remove(root: string, id: unknown, cwd: unknown, limits: Limits): boolean {

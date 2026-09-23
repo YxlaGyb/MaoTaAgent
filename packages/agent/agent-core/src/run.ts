@@ -22,10 +22,10 @@ import {
 } from "@maota/agent-loop";
 import type { HookEvent } from "@maota/hook-protocol";
 import { touchedPaths } from "./catalog.ts";
-import { continueNote } from "./compact.ts";
+import { continueNote, overflowNote } from "./compact.ts";
 import { narrow, readRunControl, withoutControl, type RunControl } from "./control.ts";
 import { chatStream } from "./chat.ts";
-import { foldHistory, loadHistory, persist, titleOf } from "./history.ts";
+import { foldForOverflow, foldHistory, loadHistory, persist, titleOf } from "./history.ts";
 import { asPostTool, asPreTool, asStop, hooksOn, preToolUse, seam, triggerHook } from "./hooks.ts";
 import { active, depths, readLevel, resolveLevel, settings, type LevelSetting } from "./levels.ts";
 import { approvalMode, assemblePrompt, catalogNote, classifyTool, listTools } from "./prompt.ts";
@@ -251,6 +251,9 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   announceSub("agent.subagent.started", {});
   if (!sub) active.set(sessionId, setting);
   const heartbeat = setInterval(() => stream.push({ type: "tick" }), 10_000);
+  /// What this turn has already spent folding the conversation back into the
+  /// window, which is the one recovery a run keeps for itself.
+  let compactions = 0;
   let closed = false;
   /// What the run will say it ended with, so `SessionEnd` can be raised from
   /// the one place every ending passes through.
@@ -267,7 +270,15 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
             await record("PreModel", { ...self, step: step.step });
             flush();
             try {
-              const message = await chatStream(ctx, step.state.messages, modelTools, runModel, step.signal, step.delta);
+              const message = await chatStream(
+                ctx,
+                step.state.messages,
+                modelTools,
+                runModel,
+                step.signal,
+                step.delta,
+                { id: sessionId, cwd: cwd ?? "", step: step.step },
+              );
               await record("PostModel", { ...self, step: step.step, ok: true });
               flush();
               return message;
@@ -295,6 +306,22 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
             if (control === null) return decision;
             const applied = await applyControl(control, invoked, outcome.output);
             return { ...(decision ?? {}), output: applied };
+          },
+          onModelError: async (failure, step) => {
+            // A transient failure never reaches here: the adapter that talked to
+            // the endpoint already replaced the attempt, so what is left is the
+            // one failure only this run can answer.
+            if (failure.kind !== "context_window") return { action: "give_up" };
+            // A request that no longer fits is answered by folding the older
+            // half of it, and by nothing else. A fold that could not happen, and
+            // a budget that is already spent, are both reasons to stop rather
+            // than to send the request that just failed once more.
+            if (!settings.context_compact || compactions >= settings.max_compactions) {
+              return { action: "give_up" };
+            }
+            compactions += 1;
+            const folded = await foldForOverflow(ctx, messages, step.signal);
+            return folded ? { action: "retry", delay_ms: 0, steer: overflowNote() } : { action: "give_up" };
           },
           ...(sub
             ? {}
@@ -326,29 +353,36 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         },
       );
     } catch (error) {
-      // A model call that failed for good is not a crash of the run: what the
-      // turn already holds is saved, and the front end is told why.
+      // Only an accident reaches this: a model call that failed reports itself
+      // as an outcome, so what is left is a turn cancelled from outside or a
+      // seam that broke. Either way what the turn holds is saved and the front
+      // end is told why.
       const cancelled = ctx.signal.aborted;
       const reason = cancelled ? "aborted" : "model_error";
       ending = { steps: startedCalls(messages), reason };
+      const detail = error instanceof Error ? error.message : String(error);
       await record("Notification", {
         ...self,
-        text: `a turn ended without the model finishing: ${reason}`,
+        text: cancelled ? "this turn was cancelled" : `this turn ended against an unexpected failure: ${detail}`,
       });
       flush();
       await persist(ctx, sessionId, cwd, messages.slice(1), title, origin);
-      stream.push({
-        type: "done",
-        steps: ending.steps,
-        text: cancelled ? "" : `the model call failed: ${error instanceof Error ? error.message : String(error)}`,
-        reason,
-      });
+      stream.push({ type: "done", steps: ending.steps, text: cancelled ? "" : detail, reason });
     }
     if (outcome !== null) {
       // The ceiling is not a dead end: the turn says where it stopped, and that
       // note is stored with the rest, so the next turn continues.
       if (outcome.reason === "max_steps") messages.push(continueNote(outcome.steps));
       ending = { steps: outcome.steps, reason: outcome.reason };
+      // A model call that ended the turn is reported as the facts it carried,
+      // so a reader learns the kind rather than reading a sentence about it.
+      if (outcome.failure !== undefined) {
+        await record("Notification", {
+          ...self,
+          text: `the model call failed and was given up on: ${outcome.failure.kind}`,
+        });
+        flush();
+      }
       const stopping = subagentPayload();
       if (stopping !== null) await record("SubagentStop", stopping);
       flush();
@@ -359,7 +393,13 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         ok: outcome.reason === "completed",
       });
       closed = true;
-      stream.push({ type: "done", steps: outcome.steps, text: outcome.text, reason: outcome.reason });
+      stream.push({
+        type: "done",
+        steps: outcome.steps,
+        text: outcome.text,
+        reason: outcome.reason,
+        ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
+      });
     }
   } finally {
     clearInterval(heartbeat);

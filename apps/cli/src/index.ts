@@ -103,10 +103,24 @@ process.on("SIGINT", () => {
 });
 
 function render(chunk: Chunk): void {
-  const event = chunk.data as { type?: string; text?: string; tool?: string; args?: unknown; ok?: boolean; output?: unknown } | null;
+  const event = chunk.data as {
+    type?: string;
+    text?: string;
+    tool?: string;
+    args?: unknown;
+    ok?: boolean;
+    output?: unknown;
+    reason?: string;
+    failure?: { kind?: string; message?: string };
+  } | null;
   switch (event?.type) {
     case "text":
       process.stdout.write(String(event.text ?? ""));
+      break;
+    case "retract":
+      // What the attempt being replaced had already printed cannot be taken off
+      // the screen, so the terminal says so rather than pretending it read well.
+      process.stderr.write(`\n  <-- retrying after ${String(event.reason ?? "a failure")}\n`);
       break;
     case "tool_call":
       console.error(`  -> ${event.tool} ${JSON.stringify(event.args)}`);
@@ -114,10 +128,14 @@ function render(chunk: Chunk): void {
     case "tool_result":
       console.error(`  <- ${event.tool} ${event.ok ? "ok" : "failed"}: ${JSON.stringify(event.output ?? null).slice(0, 200)}`);
       break;
-    case "done":
+    case "done": {
       if (typeof event.text === "string" && event.text !== "") process.stdout.write(`\n${event.text}`);
       process.stdout.write("\n");
+      if (event.failure !== undefined) {
+        process.stderr.write(`  the model call failed (${event.failure.kind ?? "unknown"}): ${event.failure.message ?? ""}\n`);
+      }
       break;
+    }
   }
 }
 

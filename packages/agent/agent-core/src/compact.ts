@@ -73,3 +73,14 @@ export function continueNote(steps: number): Message {
       "Continue from here: everything above is still in force.",
   };
 }
+
+/// The one thing a context overflow changes is the conversation itself, so the
+/// next attempt is told how to read what it now holds: the note stands for what
+/// was folded, and everything after it is verbatim.
+export function overflowNote(): string {
+  return (
+    "The conversation was compacted because the request no longer fit the model's context window. " +
+    "The note stands for the messages that were folded away; everything after it is verbatim. " +
+    "Continue from here."
+  );
+}

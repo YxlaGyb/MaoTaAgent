@@ -12,6 +12,7 @@ The v5 pass rebuilt the skills chain, the hook points and the permission gate, a
 - [Subagents](#subagents)
 - [Todos](#todos)
 - [Front end and boot](#front-end-and-boot)
+- [Recovery and translation](#recovery-and-translation)
 - [Leftovers](#leftovers)
 
 ## Shell and PowerShell
@@ -60,7 +61,20 @@ The v5 pass rebuilt the skills chain, the hook points and the permission gate, a
 - **host**: a handler that throws is neither logged nor unsubscribed, a `*` in a topic pattern matches one segment only (`packages/plugin-kit/src/channel.ts`), and `shutdown` waits with no deadline (`packages/boot/host/src/index.ts`), so a wedged kernel holds the CLI up.
 - **One fact for the README**: ordering between plugin rows is not load bearing, which is why nothing checks it.
 
+## Recovery and translation
+
+Recovery decides what to do about a failed model call, and the translation store holds the interface's words. Both were built with some of what they could do left out on purpose.
+
+- **Output allowance**: a failure that a longer answer would fix is not answered by raising the allowance, because `packages/api/src/retry.ts` has no key for it and the loop no path to it. A deployment that wants escalation writes it as another plugin.
+- **Another model**: there is no fallback model. `packages/api/src/index.ts` holds one `model` per profile, and nothing in the recovery path can name a second.
+- **The retraction is whole**: a retry retracts the entire streamed attempt back to its start rather than the part worth replacing (`apps/web/ui/src/components/MessageList.tsx`).
+- **The CLI is English only**: `apps/cli/` holds no dictionary and never asks the store, so the translated interface is the web UI alone, and every string the CLI prints is a literal (`apps/cli/src/index.ts`). The plan counts the CLI as a front end.
+- **The app's own language choice**: the web UI keeps it in `localStorage` under `maota.lang` while the profile holds a `locale` of its own, so a browser and a headless run can disagree about the language and neither knows (`apps/web/ui/src/lib/i18n.ts`).
+- **`translate` does not format**: it answers the word as written, so a caller with values to fill in calls `format` itself (`i18n/i18n-native/src/plugin.ts`).
+- **Words are flat strings**: no plural forms and no markup, so a language that needs either is written as several keys (`i18n/i18n-protocol/src/index.ts`).
+- **A contributor is read once per discovery**: the store rebuilds when the capability table changes and not when a contributor's own words do (`i18n/i18n-native/src/plugin.ts`).
+
 ## Leftovers
 
 - `.tmp-maota-config`, left behind by a `maota check` run with a scratch `MAOTA_HOME`, is still in the working tree.
-- The root `check` chain holds 25 commands. The smoke tests for everything above are waiting on the code they would exercise.
+- The root `check` chain holds 40 steps. The smoke tests for everything above are waiting on the code they would exercise.

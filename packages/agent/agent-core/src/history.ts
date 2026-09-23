@@ -68,6 +68,34 @@ export async function foldHistory(
   history.splice(0, folded, compactMessage(summary, folded));
 }
 
+/// A context overflow is the one failure the conversation itself can answer, so
+/// the older half is folded with the same summarising call the ordinary fold
+/// uses. The system prompt is never part of it, and a conversation with nothing
+/// foldable is left alone, because replacing the question would answer nothing.
+export async function foldForOverflow(ctx: Call, messages: Message[], signal: AbortSignal): Promise<boolean> {
+  const head = messages[0]?.role === "system" ? 1 : 0;
+  const body = messages.slice(head);
+  const folded = foldCount(body, Math.max(1, Math.floor(settings.compact_keep_messages / 2)));
+  if (folded < 2) return false;
+  try {
+    const reply = (await ctx.channel.call(
+      "api",
+      "chat",
+      { messages: foldRequest(body.slice(0, folded)) },
+      { signal },
+    )) as { message?: { content?: unknown } } | null;
+    const content = reply?.message?.content;
+    if (typeof content !== "string" || content.trim() === "") return false;
+    messages.splice(head, folded, compactMessage(content.trim(), folded));
+    return true;
+  } catch (error) {
+    ctx.channel.log("warn", "agent: the conversation could not be folded for a context overflow", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
 export async function persist(
   ctx: Call,
   sessionId: string,

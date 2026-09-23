@@ -4,7 +4,7 @@ import { dirname, join, relative } from "node:path";
 
 const root = join(import.meta.dirname, "..");
 const SKIP = new Set(["node_modules", ".git", "dist", "lib", "target", "tmp"]);
-const WATCHED = ["packages", "apps", "scripts"];
+const WATCHED = ["packages", "apps", "i18n", "scripts"];
 const IMPORT = /(?:\bfrom\s*|\bimport\s*|\brequire\(\s*)"([^"]+)"/g;
 
 function at(path: string): string {

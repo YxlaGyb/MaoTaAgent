@@ -12,5 +12,8 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
+  "dependencies": {
+    "@maota/api-protocol": "workspace:^"
+  },
   "types": "lib/index.d.ts"
 }

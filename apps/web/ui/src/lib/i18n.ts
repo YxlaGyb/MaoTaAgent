@@ -1,253 +1,108 @@
+/// The interface's words, and which language to say them in.
+///
+/// The app's own copy lives in `locales/`, one file per language, because this
+/// file has no business holding a sentence a person reads. Words a plugin
+/// contributes arrive from the host, which asks every plugin and folds what
+/// they answer into one catalog; this file holds that catalog and searches it
+/// after its own copy, so a plugin fills a gap the app left but cannot change
+/// what the app already says.
+///
+/// The language rule itself is not written here. `@maota/i18n-protocol` owns
+/// it, so the app and the plugins that answer the host resolve "system" and a
+/// half-specified tag the same way.
+
 import { useCallback, useSyncExternalStore } from "react";
+
+import {
+  COMMON_NAMESPACE,
+  format,
+  localeChain,
+  lookup,
+  resolveLocale,
+  SYSTEM_PREFERENCE,
+  type Catalog,
+  type Language,
+  type MessageVars,
+} from "@maota/i18n-protocol";
+
+import { fallback as enFallback, locale as enLocale, messages as enMessages } from "../locales/en.ts";
+import { fallback as zhFallback, locale as zhLocale, messages as zhMessages } from "../locales/zh-CN.ts";
+
+/// The namespace this app's own words belong to. A plugin may supply words for
+/// it too, which is how a plugin adds a sentence to the interface it is drawn
+/// in.
+const NAMESPACE = "web";
 
 const KEY = "maota.lang";
 
-export const LANGS = [
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en", label: "English" },
+interface Dictionary {
+  locale: string;
+  fallback: string | null;
+  messages: Record<string, string>;
+}
+
+/// The languages the app can say anything in: exactly the dictionaries it
+/// ships. Adding a language is adding a file to this table, which is what keeps
+/// a language from being offered before it can answer a single key.
+const DICTS: readonly Dictionary[] = [
+  { locale: zhLocale, fallback: zhFallback, messages: zhMessages },
+  { locale: enLocale, fallback: enFallback, messages: enMessages },
 ];
 
-const DICT: Record<string, Record<string, string>> = {
-  "zh-CN": {
-    newChat: "新对话",
-    tasks: "定时任务",
-    plugins: "插件",
-    pluginList: "已装配的插件",
-    capability: "能力",
-    provider: "插件",
-    skills: "技能",
-    skillsOff: "没有 skill 能力, 这个会话看不见技能",
-    noSkills: "没有可用的技能",
-    skillWhenToUse: "何时使用",
-    skillSource: "来源",
-    skillProvider: "提供方",
-    skillConditional: "按路径激活",
-    skillActive: "已激活",
-    skillInactive: "未激活",
-    skillInert: "已识别未生效",
-    skillCatalog: "技能目录",
-    skillCatalogUpdated: "技能目录 (已更新)",
-    skillInsert: "插入技能引用",
-    skillSearch: "搜索技能…",
-    workspaces: "项目",
-    sessions: "会话",
-    addProject: "添加项目",
-    noWorkdir: "无项目: 会话落在 sessions/default",
-    pathPlaceholder: "绝对路径, 回车确认",
-    noSessions: "还没有对话",
-    running: "在跑",
-    settings: "设置",
-    defaultProject: "无项目",
-    pinned: "置顶",
-    archived: "已归档",
-    newSession: "新建会话",
-    more: "更多",
-    rename: "重命名",
-    removeProject: "删除项目",
-    pin: "置顶",
-    unpin: "取消置顶",
-    archive: "归档",
-    restore: "取消归档",
-    searchChats: "搜索对话",
-    quick: "快捷操作",
-    openFolder: "打开文件夹",
-    clear: "清空",
-    followSystem: "系统",
-    appearance: "外观",
-    dark: "深色",
-    light: "浅色",
-    chats: "聊天",
-    noChats: "没有匹配的对话",
-    retry: "重试",
-    inputPlaceholder: "随心所欲",
-    permission: "权限",
-    askApproval: "请求批准",
-    autoApprove: "帮我批准",
-    fullAccess: "完全访问权限",
-    permissionAsk: "应如何批准 MaoTa 的操作？",
-    askNote: "命中风险操作时先问你一次",
-    autoNote: "命中风险操作时自动批准",
-    fullNote: "不再发起审批, 命令直接执行",
-    permissionOff: "没有 permission 插件, 风险命令一律拒绝",
-    approvalTitle: "需要批准",
-    approvalTool: "{tool} 想执行一条被判定为风险的命令",
-    approvalReason: "原因",
-    approvalAllow: "允许本次",
-    approvalDeny: "拒绝",
-    approvalHint: "一次性授权, 下一次命中的命令还会再问",
-    approvalSubagent: "子代理 {name} ({type}) 在问",
-    subagentRunning: "运行中",
-    subagentDone: "已完成",
-    subagentPartial: "部分完成",
-    subagentFailed: "失败",
-    subagentSteps: "{n} 步",
-    subagentView: "查看子会话",
-    subagentHide: "收起",
-    subagentLoading: "读取中…",
-    subagentEmpty: "子会话还没有内容",
-    send: "发送",
-    stop: "停止",
-    thinking: "思考档位",
-    step: "第 {n} 步",
-    waiting: ", 等模型开口…",
-    thinkingText: "思考",
-    save: "保存",
-    saving: "保存中…",
-    general: "通用",
-    personalization: "个性化",
-    language: "语言",
-    backToApp: "返回应用",
-    searchSettings: "搜索设置…",
-    personal: "常规",
-    system: "集成",
-    about: "插件",
-    languageNote: "界面显示语言",
-    noMatch: "没有匹配的设置",
-    errKey: "API key 无效或没权限",
-    errRate: "网关限流, 稍后再试",
-    errGateway: "网关错误, 检查 base_url",
-    errBroken: "连接中断, 本轮未完成",
-    errGarbage: "网关返回了看不懂的数据",
-    errEmpty: "网关没给出回答",
-    errTimeout: "超时",
-    errCancelled: "已取消",
-    errUnavailable: "提供方不可用",
-    errUnknown: "未知错误: {code} {message}",
-  },
-  en: {
-    newChat: "New chat",
-    tasks: "Scheduled tasks",
-    plugins: "Plugins",
-    pluginList: "Wired plugins",
-    capability: "Capability",
-    provider: "Plugin",
-    skills: "Skills",
-    skillsOff: "No skill capability, so this session sees no skills",
-    noSkills: "No skills available",
-    skillWhenToUse: "When to use",
-    skillSource: "Source",
-    skillProvider: "Provider",
-    skillConditional: "Path activated",
-    skillActive: "Active",
-    skillInactive: "Inactive",
-    skillInert: "Recognised but inert",
-    skillCatalog: "Skill catalog",
-    skillCatalogUpdated: "Skill catalog (updated)",
-    skillInsert: "Insert a skill reference",
-    skillSearch: "Search skills…",
-    workspaces: "Projects",
-    sessions: "Sessions",
-    addProject: "Add project",
-    noWorkdir: "No project: sessions land in sessions/default",
-    pathPlaceholder: "Absolute path, Enter to confirm",
-    noSessions: "No chats yet",
-    running: "Running",
-    settings: "Settings",
-    defaultProject: "No project",
-    pinned: "Pinned",
-    archived: "Archived",
-    newSession: "New session",
-    more: "More",
-    rename: "Rename",
-    removeProject: "Delete project",
-    pin: "Pin",
-    unpin: "Unpin",
-    archive: "Archive",
-    restore: "Unarchive",
-    searchChats: "Search chats",
-    quick: "Quick actions",
-    openFolder: "Open folder",
-    clear: "Clear",
-    followSystem: "System",
-    appearance: "Appearance",
-    dark: "Dark",
-    light: "Light",
-    chats: "Chats",
-    noChats: "No matching chats",
-    retry: "Retry",
-    inputPlaceholder: "Whatever you want",
-    permission: "Permission",
-    askApproval: "Ask for approval",
-    autoApprove: "Approve for me",
-    fullAccess: "Full access",
-    permissionAsk: "How should MaoTa actions be approved?",
-    askNote: "Ask before a flagged risky action runs",
-    autoNote: "Approve flagged risky actions without asking",
-    fullNote: "Stop asking: commands run without approval",
-    permissionOff: "No permission plugin, so risky commands are refused",
-    approvalTitle: "Approval needed",
-    approvalTool: "The {tool} tool wants to run a command the permission gate treats as destructive",
-    approvalReason: "Reason",
-    approvalAllow: "Allow once",
-    approvalDeny: "Deny",
-    approvalHint: "A one-time grant: the next matching command asks again",
-    approvalSubagent: "Subagent {name} ({type}) is asking",
-    subagentRunning: "Running",
-    subagentDone: "Done",
-    subagentPartial: "Partial",
-    subagentFailed: "Failed",
-    subagentSteps: "{n} steps",
-    subagentView: "View sub-session",
-    subagentHide: "Hide",
-    subagentLoading: "Loading…",
-    subagentEmpty: "The sub-session is empty so far",
-    send: "Send",
-    stop: "Stop",
-    thinking: "Thinking level",
-    step: "Step {n}",
-    waiting: ", waiting for the model…",
-    thinkingText: "Thinking",
-    save: "Save",
-    saving: "Saving…",
-    general: "Common",
-    personalization: "Personalization",
-    language: "Language",
-    backToApp: "Back to app",
-    searchSettings: "Search settings…",
-    personal: "General",
-    system: "Integrations",
-    about: "Plugins",
-    languageNote: "Language used by the interface",
-    noMatch: "No matching settings",
-    errKey: "API key is invalid or not permitted",
-    errRate: "Gateway rate limit, try again later",
-    errGateway: "Gateway error, check base_url",
-    errBroken: "Connection dropped, this round did not finish",
-    errGarbage: "The gateway returned unreadable data",
-    errEmpty: "The gateway gave no answer",
-    errTimeout: "Timed out",
-    errCancelled: "Cancelled",
-    errUnavailable: "Provider unavailable",
-    errUnknown: "Unknown error: {code} {message}",
-  },
-};
+const DICT: Record<string, Record<string, string>> = Object.fromEntries(
+  DICTS.map((dictionary) => [dictionary.locale, dictionary.messages]),
+);
+
+function labelOf(dictionary: Dictionary): string {
+  return dictionary.messages["langName"] ?? dictionary.locale;
+}
+
+/// The languages the app answers in, in the order a settings control offers
+/// them.
+export const LANGUAGES: readonly Language[] = DICTS.map((dictionary) => ({
+  id: dictionary.locale,
+  label: labelOf(dictionary),
+  fallback: dictionary.fallback,
+}));
+
+export const LANGS: readonly { value: string; label: string }[] = DICTS.map((dictionary) => ({
+  value: dictionary.locale,
+  label: labelOf(dictionary),
+}));
+
+/// Every key the interface has, as the dictionaries define them. Asking for a
+/// key no dictionary carries is a compile error at the call site rather than a
+/// word replaced by its own name at runtime.
+export type MessageKey = keyof typeof zhMessages;
+
+/// The host's catalog: nothing until the app has asked for it, because no
+/// plugin's words are needed to draw the first frame.
+let remote: Catalog = {};
 
 const listeners = new Set<() => void>();
 
-const subscribe = (listener: () => void): (() => void) => {
+function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
-};
+}
 
 function read(): string {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw === "system" || (raw !== null && DICT[raw] !== undefined) ? raw : "system";
+    return raw === SYSTEM_PREFERENCE || (raw !== null && DICT[raw] !== undefined) ? raw : SYSTEM_PREFERENCE;
   } catch {
-    return "system";
+    return SYSTEM_PREFERENCE;
   }
 }
 
-function resolve(preference: string): string {
-  if (DICT[preference] !== undefined) return preference;
-  const spoken = typeof navigator === "undefined" ? "" : navigator.language.toLowerCase();
-  return spoken.startsWith("zh") ? "zh-CN" : "en";
+function spoken(): string {
+  return typeof navigator === "undefined" ? "" : navigator.language;
 }
 
 let preference = read();
-let lang = resolve(preference);
+let lang = resolveLocale(preference, LANGUAGES, spoken());
 
 export function getLang(): string {
   return lang;
@@ -258,9 +113,9 @@ export function getLangPref(): string {
 }
 
 export function setLang(next: string): void {
-  if (next !== "system" && DICT[next] === undefined) return;
+  if (next !== SYSTEM_PREFERENCE && DICT[next] === undefined) return;
   preference = next;
-  lang = resolve(next);
+  lang = resolveLocale(next, LANGUAGES, spoken());
   try {
     localStorage.setItem(KEY, next);
   } catch {
@@ -269,10 +124,46 @@ export function setLang(next: string): void {
   for (const listener of listeners) listener();
 }
 
-export function tr(lang: string, key: string, vars?: Record<string, string | number>): string {
-  let text = DICT[lang]?.[key] ?? DICT["zh-CN"]?.[key] ?? key;
-  for (const [name, value] of Object.entries(vars ?? {})) text = text.split(`{${name}}`).join(String(value));
-  return text;
+/// Take the catalog the host built from what every plugin answered. A language
+/// the app does not answer in is dropped and a malformed namespace is skipped,
+/// but the reply itself is never merged field by field: half of somebody else's
+/// vocabulary is worse than none of it.
+export function adoptCatalog(reply: unknown): void {
+  const catalog = (reply as { catalog?: unknown } | null)?.catalog;
+  if (catalog === null || typeof catalog !== "object" || Array.isArray(catalog)) return;
+  const kept: Catalog = {};
+  for (const language of LANGUAGES) {
+    const namespaces = (catalog as Catalog)[language.id];
+    if (namespaces === null || typeof namespaces !== "object" || Array.isArray(namespaces)) continue;
+    const byNamespace: Record<string, Record<string, string>> = {};
+    for (const [namespace, words] of Object.entries(namespaces)) {
+      if (words === null || typeof words !== "object" || Array.isArray(words)) continue;
+      const strings: Record<string, string> = {};
+      for (const [key, text] of Object.entries(words as Record<string, unknown>)) {
+        if (typeof text === "string") strings[key] = text;
+      }
+      byNamespace[namespace] = strings;
+    }
+    kept[language.id] = byNamespace;
+  }
+  remote = kept;
+  for (const listener of listeners) listener();
+}
+
+/// The word for a key, in the language asked for. The app's own dictionaries
+/// answer first, walking the language's fallback chain; a plugin's words answer
+/// only where the app left a gap, and the key itself is the last resort so a
+/// missing word is visible rather than silently blank.
+export function tr(lang: string, key: MessageKey, vars?: MessageVars): string {
+  for (const id of localeChain(LANGUAGES, lang)) {
+    const text = DICT[id]?.[key];
+    if (text !== undefined) return format(text, vars);
+  }
+  for (const namespace of [NAMESPACE, COMMON_NAMESPACE]) {
+    const text = lookup(remote, LANGUAGES, lang, namespace, key);
+    if (text !== key) return format(text, vars);
+  }
+  return key;
 }
 
 export function useLang(): string {
@@ -283,7 +174,7 @@ export function useLangPref(): string {
   return useSyncExternalStore(subscribe, getLangPref);
 }
 
-export function useT(): (key: string, vars?: Record<string, string | number>) => string {
+export function useT(): (key: MessageKey, vars?: MessageVars) => string {
   const lang = useLang();
-  return useCallback((key: string, vars?: Record<string, string | number>) => tr(lang, key, vars), [lang]);
+  return useCallback((key: MessageKey, vars?: MessageVars) => tr(lang, key, vars), [lang]);
 }

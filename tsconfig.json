@@ -24,6 +24,8 @@
     "*.ts",
     "packages/**/src/**/*.ts",
     "packages/**/tests/*.ts",
+    "i18n/*/src/**/*.ts",
+    "i18n/*/tests/*.ts",
     "apps/*/src/**/*.ts",
     "apps/*/tests/*.ts",
     "docs/*.check.ts",
