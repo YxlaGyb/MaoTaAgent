@@ -13,7 +13,7 @@ function text(value: unknown): string {
 }
 
 export const definition: Definition = {
-  provides: [{ capability: "hook.deny", version: "1.0.0" }],
+  provides: ["hook.deny"],
   configKeys: [],
 
   methods: {

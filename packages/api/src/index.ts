@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { CallError, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import { readChat, type ChatReply } from "./messages.ts";
 import { asOpenAITools, chat as openaiChat, streamChat, upstreamError, transportError, GATEWAY_ERROR, type Gateway } from "./openai.ts";
 import { scriptedChat, type ScriptStep } from "./scripted.ts";
@@ -156,10 +156,8 @@ async function streamed(request: ReturnType<typeof readChat>, ctx: Call): Promis
   return { backend: "openai", model: request.model };
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "api", version: VERSION }],
+  provides: ["api"],
   configKeys: ["backend", "model", "base_url", "api_key", "api_key_env", "retry_max", "retry_backoff_ms", "script"],
 
   setup(wiring) {

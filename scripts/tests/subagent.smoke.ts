@@ -7,7 +7,7 @@ import { kernel as installedKernel } from "eggshell-kernel";
 
 import { boot, type Chunk, type Event } from "@maota/host";
 
-const root = join(import.meta.dirname, "..");
+const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
   process.env.EGGSHELL_BIN ??
@@ -23,11 +23,6 @@ function plugin(id: string, pkg: string): string[] {
   ];
 }
 
-function manifestVersion(pkg: string): string {
-  const manifest = JSON.parse(readFileSync(join(root, pkg, "package.json"), "utf8")) as { version: string };
-  return manifest.version;
-}
-
 const dir = mkdtempSync(join(tmpdir(), "maota-subagent-"));
 writeFileSync(join(dir, "note.txt"), "hi\n");
 
@@ -39,6 +34,7 @@ writeFileSync(
     ...plugin("tool-fs-search", "fs/tool-fs-search"),
     ...plugin("tools", "agent/tools"),
     ...plugin("session", "session"),
+    ...plugin("system-prompt", "agent/system-prompt"),
     ...plugin("tool-subagent", "subagent/tool-subagent"),
     ...plugin("agent-core", "agent/agent-core"),
     "",
@@ -105,8 +101,6 @@ function show(label: string, events: any[]): void {
 
 const table = await kernel.capabilities();
 assert.equal(table["tool.task"]?.plugin, "tool-subagent");
-assert.equal(table["agent.loop"]?.version, manifestVersion("packages/agent/agent-core"));
-assert.equal(table["session"]?.version, manifestVersion("packages/session"));
 assert.equal(table["tool.grep"]?.plugin, "tool-fs-search");
 
 const tools = (await kernel.invoke("tools", "list", {})) as { tools: Array<{ name: string }> };

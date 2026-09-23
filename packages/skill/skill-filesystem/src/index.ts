@@ -4,7 +4,7 @@ import type { FSWatcher } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
-import { CallError, packageVersion, runPlugin, type Definition, type Wiring } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Definition, type Wiring } from "@maota/plugin-kit";
 import {
   parseFrontmatter,
   rootStamp,
@@ -111,10 +111,8 @@ function readDirs(value: unknown): string[] {
     .map((item) => item.trim());
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "skill.filesystem", version: VERSION }],
+  provides: ["skill.filesystem"],
   configKeys: ["dirs", "max_depth"],
 
   setup(wiring: Wiring) {

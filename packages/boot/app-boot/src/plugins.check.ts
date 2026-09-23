@@ -1,12 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
-import { PROFILE_TEMPLATES, entryOf, packageDir, rowsOfBundles, repoRoot } from "./index.ts";
+import { PROFILE_TEMPLATES, entryOf, rowsOfBundles, repoRoot } from "./index.ts";
+
+interface Require {
+  capability: string;
+  optional?: boolean;
+}
 
 interface Report {
-  ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
+  requires?: Require[];
   problems?: string[];
 }
 
@@ -18,35 +21,41 @@ for (const template of Object.values(PROFILE_TEMPLATES)) {
 }
 const rows = [...seen].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 
-let failed = 0;
-for (const [name, id] of rows) {
-  const entry = entryOf(name);
-  const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8", cwd: repoRoot });
+const checked = rows.map(([name, id]) => {
+  const run = spawnSync(process.execPath, [entryOf(name), "--check"], { encoding: "utf8", cwd: repoRoot });
   const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
   let report: Report = {};
   try {
     report = JSON.parse(line) as Report;
   } catch {
   }
-  const problems = report.problems ?? [];
-  const manifest = JSON.parse(readFileSync(join(packageDir(name), "package.json"), "utf8")) as { version?: string };
-  for (const item of report.provides ?? []) {
-    if (item.version !== manifest.version) {
-      problems.push(`${item.capability}: reports ${item.version} but its package.json says ${manifest.version}`);
+  const tail = (run.stderr ?? "").trim().split("\n").slice(-6).join("\n     ");
+  return { id, report, status: run.status, detail: (tail || line).slice(0, 400) };
+});
+
+/// A plugin's own report cannot see the rest of the set, so the one thing none
+/// of them can check alone is checked here: a require nothing answers.
+const offered = new Set<string>();
+for (const { report } of checked) {
+  for (const capability of report.provides ?? []) offered.add(capability);
+}
+
+let failed = 0;
+for (const { id, report, status, detail } of checked) {
+  const problems = [...(report.problems ?? [])];
+  for (const item of report.requires ?? []) {
+    if (item.optional !== true && !offered.has(item.capability)) {
+      problems.push(`requires \`${item.capability}\`, which no plugin in this set provides`);
     }
   }
-  if (run.status !== 0 || problems.length > 0) {
+  if (status !== 0 || problems.length > 0) {
     failed += 1;
     console.log(`FAIL ${id}`);
     for (const problem of problems) console.log(`     ${problem}`);
-    if (problems.length === 0) {
-      const tail = (run.stderr ?? "").trim().split("\n").slice(-6).join("\n     ");
-      console.log(`     exit ${run.status}: ${(tail || line).slice(0, 400)}`);
-    }
+    if (problems.length === 0) console.log(`     exit ${status}: ${detail}`);
     continue;
   }
-  const provides = (report.provides ?? []).map((item) => `${item.capability}@${item.version}`).join(" ");
-  console.log(`ok   ${id.padEnd(26)} ${provides}`);
+  console.log(`ok   ${id.padEnd(26)} ${(report.provides ?? []).join(" ")}`);
 }
-console.log(`${rows.length} plugins checked, ${failed} failed`);
+console.log(`${checked.length} plugins checked, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

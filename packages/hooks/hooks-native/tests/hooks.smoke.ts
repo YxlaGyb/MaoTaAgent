@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { packageVersion, type Channel, type Route } from "@maota/plugin-kit";
+import { type Channel, type Route } from "@maota/plugin-kit";
 import {
   HOOK_EVENTS,
   clipContext,
@@ -43,11 +43,11 @@ function fake(handlers: Record<string, (method: string, payload: unknown) => unk
 }
 
 const table = {
-  "hook.alpha": { plugin: "alpha", version: "1.0.0" },
-  "hook.beta": { plugin: "beta", version: "1.0.0" },
-  "hook.": { plugin: "nameless", version: "1.0.0" },
-  hooks: { plugin: "hooks", version: "1.0.0" },
-  tools: { plugin: "tools", version: "1.0.0" },
+  "hook.alpha": { plugin: "alpha" },
+  "hook.beta": { plugin: "beta" },
+  "hook.": { plugin: "nameless" },
+  hooks: { plugin: "hooks" },
+  tools: { plugin: "tools" },
 } as unknown as Record<string, Route>;
 
 const signal = new AbortController().signal;
@@ -287,12 +287,12 @@ const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" }
 const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
 const report = JSON.parse(line) as {
   ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
   problems?: string[];
 };
 assert.equal(run.status, 0, `the hooks entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the hooks selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "hooks", version: packageVersion(import.meta.url) }]);
+assert.deepEqual(report.provides, ["hooks"]);
 
 import { definition } from "../src/index.ts";
 /// A command hook is a process, not a plugin, and it is what a skill brings

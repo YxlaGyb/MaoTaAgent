@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { pendingFileLocks, workspace, type Workspace } from "@maota/fs";
-import { defineTools, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 
 import { editFile } from "./edit.ts";
 import { readFile } from "./read.ts";
@@ -30,12 +30,9 @@ function spaceOf(args: Record<string, unknown>): Workspace {
   return workspace(args.cwd, settings.spill_dir);
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.read",
-    version: VERSION,
     description: "Read a UTF-8 text file with line numbers; use offset and limit on a long file.",
     parameters: {
       file_path: {
@@ -58,7 +55,6 @@ const toolkit = defineTools([
   },
   {
     capability: "tool.write",
-    version: VERSION,
     description: "Write a whole UTF-8 text file, creating the parent directories.",
     parameters: {
       file_path: {
@@ -80,7 +76,6 @@ const toolkit = defineTools([
   },
   {
     capability: "tool.edit",
-    version: VERSION,
     description: "Edit one UTF-8 text file by replacing literal text once, or everywhere with replace_all.",
     parameters: {
       file_path: { type: "string", required: true, description: "File to edit, inside the working directory." },
@@ -119,7 +114,7 @@ export const definition: Definition = {
 
   async selfCheck() {
     const problems: string[] = [];
-    const capabilities = toolkit.provides.map((item) => item.capability);
+    const capabilities = toolkit.provides;
     if (capabilities.join(",") !== "tool.read,tool.write,tool.edit") {
       problems.push(`the toolkit provides ${capabilities.join(", ")}`);
     }

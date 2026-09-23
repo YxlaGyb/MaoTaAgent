@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { defineTools, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import type { ShellRunResult } from "@maota/shell";
 
 import {
@@ -39,12 +39,9 @@ async function modeOf(call: Call, sessionId: string, cwd: string): Promise<strin
   }
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.pwsh",
-    version: VERSION,
     description:
       "Run a PowerShell command in the working directory and return its exit code, stdout and stderr. " +
       "A command the permission gate treats as destructive needs approval before it runs.",
@@ -103,8 +100,8 @@ const toolkit = defineTools([
 export const definition: Definition = {
   provides: toolkit.provides,
   requires: [
-    { capability: "shell", version: "^1" },
-    { capability: "permission", version: "^1", optional: true },
+    { capability: "shell" },
+    { capability: "permission", optional: true },
   ],
   configKeys: ["approval_timeout_ms"],
 
@@ -122,7 +119,7 @@ export const definition: Definition = {
     }
     if (needsApproval("Get-ChildItem")) problems.push("an ordinary command was called destructive");
 
-    const capabilities = toolkit.provides.map((item) => item.capability);
+    const capabilities = toolkit.provides;
     if (capabilities.join(",") !== "tool.pwsh") problems.push(`the toolkit provides ${capabilities.join(", ")}`);
     const described = toolkit.methods.describe({}, { capability: "tool.pwsh" } as unknown as Call) as {
       name?: string;

@@ -89,7 +89,6 @@ assert.deepEqual(validateParameters({ type: "array" }, []), []);
 
 const echo: ToolBlueprint = {
   capability: "tool.echo",
-  version: "1.0.0",
   description: "Echo one value back.",
   parameters: { value: { type: "string", required: true, description: "The value." } },
   concurrency: "always",
@@ -98,7 +97,6 @@ const echo: ToolBlueprint = {
 
 const writer: ToolBlueprint = {
   capability: "tool.write",
-  version: "1.0.0",
   description: "Write one value.",
   parameters: { value: { type: "string", required: true }, dry_run: { type: "boolean" } },
   concurrency: { safe: (args) => args.dry_run === true },
@@ -108,7 +106,6 @@ const writer: ToolBlueprint = {
 
 const reader: ToolBlueprint = {
   capability: "tool.read",
-  version: "1.0.0",
   description: "Read one file.",
   parameters: {
     file_path: { type: "string", required: true },
@@ -227,10 +224,7 @@ assert.throws(
 
 const kit = defineTools([echo, writer]);
 
-assert.deepEqual(kit.provides, [
-  { capability: "tool.echo", version: "1.0.0" },
-  { capability: "tool.write", version: "1.0.0" },
-]);
+assert.deepEqual(kit.provides, ["tool.echo", "tool.write"]);
 
 assert.deepEqual(kit.methods.describe({}, call("tool.echo")), {
   name: "echo",
@@ -280,7 +274,6 @@ assert.ok(missing instanceof CallError);
 assert.equal(missing.code, -32602);
 
 assert.throws(() => defineTools([{ ...echo, capability: "echo" }]), /must look like tool\.<name>/);
-assert.throws(() => defineTools([{ ...echo, version: "1.0" }]), /is not a full semver/);
 assert.throws(() => defineTools([echo, echo]), /declared twice/);
 assert.throws(
   () =>

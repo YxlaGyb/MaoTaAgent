@@ -21,6 +21,7 @@ export const rows: PluginRow[] = [
   { id: "tools", name: "@maota/tools" },
   { id: "session", name: "@maota/session" },
   { id: "hooks", name: "@maota/hooks-native" },
+  { id: "system-prompt", name: "@maota/system-prompt" },
   { id: "agent-core", name: "@maota/agent-core" },
   { id: "hmr", name: "@maota/hmr", disabled: true },
 ];

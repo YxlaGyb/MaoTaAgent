@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError, packageVersion, runPlugin, type Call, type Channel, type Definition } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Call, type Channel, type Definition } from "@maota/plugin-kit";
 
 import {
-  MODES,
   decide,
   effectiveMode,
   isMode,
@@ -16,236 +15,37 @@ import {
   readRules,
   sessionIdOf,
   subagentOf,
-  write,
-  type AuditRecord,
-  type GrantRecord,
-  type Mode,
   type Outcome,
-  type PermissionFile,
   type Rule,
-  type SubagentRef,
 } from "./store.ts";
-
-const DEFAULTS = { mode: "ask" as Mode, maxRecords: 500, remember: false };
-
-interface Settings {
-  root: string;
-  mode: Mode;
-  maxRecords: number;
-  remember: boolean;
-  rules: Rule[];
-}
-
-interface Target {
-  sessionId: string;
-  cwd: string;
-}
-
-interface Pending {
-  id: string;
-  session_id: string;
-  cwd: string;
-  tool: string;
-  call_id?: string;
-  reason?: string;
-  subagent?: SubagentRef;
-  at: string;
-  settle(outcome: Outcome, decidedBy: string, cause?: string): void;
-}
-
-function defaultRoot(): string {
-  const home = process.env.MAOTA_HOME;
-  return join(home !== undefined && home.trim() !== "" ? home : join(homedir(), ".maota"), "permissions");
-}
-
-let settings: Settings = {
-  root: defaultRoot(),
-  mode: DEFAULTS.mode,
-  maxRecords: DEFAULTS.maxRecords,
-  remember: DEFAULTS.remember,
-  rules: [],
-};
-
-/// One entry per plugin that answers questions, keyed by its caller label, so a
-/// restarted front end replaces its own registration instead of adding another.
-const answerers = new Set<string>();
-const waiting = new Map<string, Pending>();
+import {
+  DEFAULTS,
+  configure,
+  defaultRoot,
+  fileOf,
+  forget,
+  grant,
+  policy,
+  setPolicy,
+  settings,
+  targetOf,
+  text,
+  optionalText,
+  type Target,
+} from "./policy.ts";
+import { append, askedRecord, decidedRecord } from "./records.ts";
+import {
+  answer,
+  answererCount,
+  cancelAll,
+  listPending,
+  park,
+  registerAnswerer,
+  unregisterAnswerer,
+} from "./pending.ts";
 
 function positive(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function now(): string {
-  return new Date().toISOString();
-}
-
-function text(value: unknown, name: string): string {
-  const found = String(value ?? "");
-  if (found === "") throw new CallError(-32602, `${name} must be a non-empty string`);
-  return found;
-}
-
-function optionalText(value: unknown): string | undefined {
-  return typeof value === "string" && value !== "" ? value : undefined;
-}
-
-function targetOf(params: unknown): Target {
-  const input = (params ?? {}) as { session_id?: unknown; cwd?: unknown };
-  return { sessionId: sessionIdOf(input.session_id), cwd: typeof input.cwd === "string" ? input.cwd : "" };
-}
-
-function answererId(call: Call): string {
-  return call.caller === "" ? "answerer" : call.caller;
-}
-
-function fileOf(target: Target): PermissionFile {
-  return read(settings.root, target.sessionId, target.cwd);
-}
-
-function append(target: Target, records: AuditRecord[]): void {
-  const file = fileOf(target);
-  write(settings.root, { ...file, records: [...file.records, ...records] }, settings.maxRecords);
-}
-
-/// Events are notifications a subscriber may not be there to hear, and a lost
-/// one must never turn into a failed decision: the file is the record.
-function announce(channel: Channel, topic: string, payload: unknown): void {
-  void channel.publish(topic, payload).catch(() => undefined);
-}
-
-function askedRecord(
-  id: string,
-  tool: string,
-  callId: string | undefined,
-  reason: string | undefined,
-  subagent: SubagentRef | undefined,
-): AuditRecord {
-  return {
-    kind: "asked",
-    at: now(),
-    id,
-    tool,
-    ...(callId === undefined ? {} : { call_id: callId }),
-    ...(reason === undefined ? {} : { reason }),
-    ...(subagent === undefined ? {} : { subagent }),
-  };
-}
-
-function decidedRecord(
-  id: string,
-  outcome: Outcome,
-  decidedBy: string,
-  tool: string,
-  cause: string | undefined,
-  subagent: SubagentRef | undefined,
-): AuditRecord {
-  return {
-    kind: "decided",
-    at: now(),
-    id,
-    outcome,
-    decided_by: decidedBy,
-    tool,
-    ...(cause === undefined ? {} : { cause }),
-    ...(subagent === undefined ? {} : { subagent }),
-  };
-}
-
-function policy(params: unknown): { mode: Mode; grants: string[] } {
-  const target = targetOf(params);
-  const file = fileOf(target);
-  return { mode: effectiveMode(file, settings.mode), grants: file.grants };
-}
-
-function setPolicy(params: unknown, call: Call): { mode: Mode } {
-  const target = targetOf(params);
-  const wanted = (params ?? {}) as { mode?: unknown };
-  if (!isMode(wanted.mode)) {
-    throw new CallError(-32602, `mode must be one of ${MODES.join(", ")}, got ${JSON.stringify(wanted.mode)}`);
-  }
-  const file = fileOf(target);
-  if (effectiveMode(file, settings.mode) === wanted.mode) return { mode: wanted.mode };
-  const record: AuditRecord = { kind: "policy", at: now(), mode: wanted.mode, caller: call.caller };
-  write(settings.root, { ...file, mode: wanted.mode, records: [...file.records, record] }, settings.maxRecords);
-  return { mode: wanted.mode };
-}
-
-function registerAnswerer(_params: unknown, call: Call): { answerers: number } {
-  answerers.add(answererId(call));
-  return { answerers: answerers.size };
-}
-
-function unregisterAnswerer(_params: unknown, call: Call): { answerers: number } {
-  answerers.delete(answererId(call));
-  return { answerers: answerers.size };
-}
-
-function listPending(params: unknown): { requests: unknown[] } {
-  const found = (params ?? {}) as { session_id?: unknown };
-  const only = optionalText(found.session_id);
-  return {
-    requests: [...waiting.values()]
-      .filter((request) => only === undefined || request.session_id === only)
-      .map((request) => ({
-        id: request.id,
-        session_id: request.session_id,
-        tool: request.tool,
-        at: request.at,
-        ...(request.call_id === undefined ? {} : { call_id: request.call_id }),
-        ...(request.reason === undefined ? {} : { reason: request.reason }),
-        ...(request.subagent === undefined ? {} : { subagent: request.subagent }),
-      })),
-  };
-}
-
-function answer(params: unknown, call: Call): { settled: boolean } {
-  const input = (params ?? {}) as { id?: unknown; decision?: unknown; remember?: unknown };
-  const id = text(input.id, "id");
-  if (input.decision !== "allow" && input.decision !== "deny") {
-    throw new CallError(-32602, `decision must be "allow" or "deny", got ${JSON.stringify(input.decision)}`);
-  }
-  const found = waiting.get(id);
-  if (found === undefined) throw new CallError(-32602, `no pending request ${JSON.stringify(id)}`);
-  // An allowance can be meant for this call or for every later call of the same
-  // tool, and a deployment may make the second the default.
-  const remember = input.remember === true || (input.remember === undefined && settings.remember);
-  if (input.decision === "allow" && remember) {
-    grant({ sessionId: found.session_id, cwd: found.cwd }, found.tool, answererId(call));
-  }
-  found.settle(input.decision === "allow" ? "allowed-once" : "rejected", answererId(call));
-  return { settled: true };
-}
-
-/// A remembered answer is a grant, and a grant is written where the decision it
-/// replaced is written: the file is the record of why a tool stopped asking.
-function grant(target: Target, tool: string, caller: string): void {
-  const file = fileOf(target);
-  if (file.grants.includes(tool)) return;
-  const record: GrantRecord = { kind: "grant", at: now(), tool, caller };
-  write(settings.root, { ...file, grants: [...file.grants, tool], records: [...file.records, record] }, settings.maxRecords);
-}
-
-function forget(params: unknown, call: Call): { grants: string[] } {
-  const target = targetOf(params);
-  const input = (params ?? {}) as { tool?: unknown };
-  const only = optionalText(input.tool);
-  const file = fileOf(target);
-  const kept = only === undefined ? [] : file.grants.filter((item) => item !== only);
-  const revoked = file.grants.filter((item) => !kept.includes(item));
-  if (revoked.length === 0) return { grants: file.grants };
-  const records: GrantRecord[] = revoked.map((tool) => ({
-    kind: "grant",
-    at: now(),
-    tool,
-    caller: answererId(call),
-    revoked: true,
-  }));
-  const next = write(
-    settings.root,
-    { ...file, grants: kept, records: [...file.records, ...records] },
-    settings.maxRecords,
-  );
-  return { grants: next.grants };
 }
 
 /// A call id is claimed by whoever is asking, so it is checked against the
@@ -273,61 +73,6 @@ async function callIdKnown(ctx: Call, target: Target, callId: string): Promise<b
   }
 }
 
-/// Publish the question before waiting for it, so an answerer already listening
-/// can answer while the caller is still parked.
-function park(
-  call: Call,
-  target: Target,
-  id: string,
-  tool: string,
-  callId: string | undefined,
-  reason: string | undefined,
-  subagent: SubagentRef | undefined,
-): Promise<{ outcome: Outcome }> {
-  append(target, [askedRecord(id, tool, callId, reason, subagent)]);
-  announce(call.channel, "permission.requested", {
-    id,
-    session_id: target.sessionId,
-    tool,
-    at: now(),
-    ...(callId === undefined ? {} : { call_id: callId }),
-    ...(reason === undefined ? {} : { reason }),
-    ...(subagent === undefined ? {} : { subagent }),
-  });
-  return new Promise<{ outcome: Outcome }>((resolve) => {
-    function settle(outcome: Outcome, decidedBy: string, cause?: string): void {
-      if (!waiting.has(id)) return;
-      waiting.delete(id);
-      call.signal.removeEventListener("abort", onAbort);
-      append(target, [decidedRecord(id, outcome, decidedBy, tool, cause, subagent)]);
-      announce(call.channel, "permission.settled", {
-        id,
-        outcome,
-        decided_by: decidedBy,
-        at: now(),
-        ...(subagent === undefined ? {} : { subagent }),
-      });
-      resolve({ outcome });
-    }
-    function onAbort(): void {
-      settle("cancelled", "none", "aborted");
-    }
-    waiting.set(id, {
-      id,
-      session_id: target.sessionId,
-      cwd: target.cwd,
-      tool,
-      at: now(),
-      ...(callId === undefined ? {} : { call_id: callId }),
-      ...(reason === undefined ? {} : { reason }),
-      ...(subagent === undefined ? {} : { subagent }),
-      settle,
-    });
-    call.signal.addEventListener("abort", onAbort, { once: true });
-    if (call.signal.aborted) onAbort();
-  });
-}
-
 async function request(params: unknown, call: Call): Promise<{ outcome: Outcome }> {
   const target = targetOf(params);
   const input = (params ?? {}) as { tool?: unknown; call_id?: unknown; reason?: unknown; subagent?: unknown };
@@ -347,7 +92,7 @@ async function request(params: unknown, call: Call): Promise<{ outcome: Outcome 
     }
   }
   const file = fileOf(target);
-  const verdict = decide(effectiveMode(file, settings.mode), answerers.size, tool, settings.rules, file.grants);
+  const verdict = decide(effectiveMode(file, settings.mode), answererCount(), tool, settings.rules, file.grants);
   if (verdict === "ask") return await park(call, target, id, tool, callId, reason, subagent);
   if (verdict.cause === "no-answerer") {
     append(target, [
@@ -360,21 +105,19 @@ async function request(params: unknown, call: Call): Promise<{ outcome: Outcome 
   return { outcome: verdict.outcome };
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "permission", version: VERSION }],
+  provides: ["permission"],
   configKeys: ["mode", "dir", "max_records", "rules", "remember"],
 
   setup(wiring) {
     const configured = wiring.config.dir;
-    settings = {
+    configure({
       root: typeof configured === "string" && configured.trim() !== "" ? configured : defaultRoot(),
       mode: isMode(wiring.config.mode) ? wiring.config.mode : DEFAULTS.mode,
       maxRecords: positive(wiring.config.max_records, DEFAULTS.maxRecords),
       remember: wiring.config.remember === true,
       rules: readRules(wiring.config.rules),
-    };
+    });
   },
 
   methods: {
@@ -389,7 +132,7 @@ export const definition: Definition = {
   },
 
   close() {
-    for (const found of [...waiting.values()]) found.settle("cancelled", "kernel", "closed");
+    cancelAll("kernel", "closed");
   },
 
   async selfCheck() {
@@ -416,7 +159,7 @@ export const definition: Definition = {
         stream: undefined,
       }) as unknown as Call;
     const asked = (): number => published.filter((item) => item.topic === "permission.requested").length;
-    settings = { root, mode: "ask", maxRecords: 6, remember: false, rules: [] };
+    configure({ root, mode: "ask", maxRecords: 6, remember: false, rules: [] });
     const session = { session_id: "check", cwd: "E:\\work" };
     try {
       const full = decide("full", 0, "pwsh", [], []);
@@ -481,13 +224,13 @@ export const definition: Definition = {
         ({
           channel: reader,
           config: {},
-          capabilities: { session: { plugin: "session", version: "1.4.0" } },
+          capabilities: { session: { plugin: "session" } },
           capability: "permission",
           method: "request",
           caller: "web",
           signal: new AbortController().signal,
         }) as unknown as Call;
-      settings = { ...settings, rules: [{ match: "pwsh", action: "deny" }] };
+      configure({ ...settings, rules: [{ match: "pwsh", action: "deny" }] });
       const mine = await request({ ...session, tool: "pwsh", call_id: "call_9" }, withSession());
       if (mine.outcome !== "rejected") {
         problems.push(`a session's own in-flight call id was checked and decided ${JSON.stringify(mine)}`);
@@ -509,7 +252,7 @@ export const definition: Definition = {
       if (!forged.includes("call_9") || !forged.includes("is not a call in this session")) {
         problems.push(`a subagent's invented call id said ${JSON.stringify(forged)}`);
       }
-      settings = { ...settings, rules: [] };
+      configure({ ...settings, rules: [] });
 
       const wire = { session_id: "check", cwd: "E:\\work" };
       grant({ sessionId: wire.session_id, cwd: wire.cwd }, "pwsh", "web");
@@ -622,7 +365,7 @@ export const definition: Definition = {
     } catch (error) {
       problems.push(`selfCheck threw: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      settings = previous;
+      configure(previous);
       rmSync(root, { recursive: true, force: true });
     }
     return problems;

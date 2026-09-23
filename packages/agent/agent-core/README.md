@@ -125,11 +125,21 @@ A child run reaches every one of those points but two: `UserPromptSubmit` and `S
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The definition: config, `requires`, `run`, `info`, the hook bridge and `selfCheck` |
+| [`src/index.ts`](src/index.ts) | The definition: `provides`, `configKeys`, `requires`, and the `run`, `info` and `selfCheck` methods, each delegating to the module that owns it |
 | [`src/catalog.ts`](src/catalog.ts) | The skill catalog note: when to append one and how it is compared with the last |
+| [`src/chat.ts`](src/chat.ts) | The streaming model call: the parameters it is given and the reply it resolves to |
 | [`src/compact.ts`](src/compact.ts) | Folding a long history into one note, and the note a step ceiling leaves behind |
 | [`src/control.ts`](src/control.ts) | `readRunControl` and `narrow`: the `control` block a tool result may carry |
-| [`src/prompt.ts`](src/prompt.ts) | `systemPrompt`: the base prompt and the working directory |
+| [`src/history.ts`](src/history.ts) | The session title, and loading, folding and saving the turn around it |
+| [`src/hooks.ts`](src/hooks.ts) | The hook bridge: which seams are live, the decision shapes, and the tool and approval seams |
+| [`src/levels.ts`](src/levels.ts) | The four levels, the thinking config they read, and the run tables beside them |
+| [`src/prompt.ts`](src/prompt.ts) | Tool classification, the tool list, the approval mode and the assembled system prompt |
+| [`src/run.ts`](src/run.ts) | One turn: the gates it passes, the loop callbacks, the accounting and the announcements |
+| [`src/selfcheck-agent.ts`](src/selfcheck-agent.ts) | The self-checks over delegation, the catalog, bad arguments and the hook map |
+| [`src/selfcheck-loop.ts`](src/selfcheck-loop.ts) | The self-checks over the engine, ordering, control, forks, folding, ceilings and depth |
+| [`src/selfcheck-rig.ts`](src/selfcheck-rig.ts) | The rig the self-checks share: a scripted channel and the calls built on it |
+| [`src/selfcheck.ts`](src/selfcheck.ts) | The self-check driver, and the checks over the primitives |
+| [`src/subagent.ts`](src/subagent.ts) | What a child turn is told, the readers for it, and running a body as a child turn |
 | [`src/tools.ts`](src/tools.ts) | `readToolList`, `stripHostArgs` and `injectHostArgs` with the host sources |
 
 ### One turn

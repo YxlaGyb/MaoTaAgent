@@ -7,7 +7,7 @@ import {
   type JsonSchemaScalar,
   type JsonSchemaType,
 } from "./json-schema.ts";
-import type { Call, Method, Provide } from "./plugin.ts";
+import type { Call, Method } from "./plugin.ts";
 
 export type ParameterType = JsonSchemaType;
 
@@ -32,7 +32,6 @@ export type Concurrency = "always" | "never" | { safe(args: Record<string, unkno
 
 export interface ToolBlueprint {
   capability: string;
-  version: string;
   description: string;
   parameters: Record<string, ParameterField>;
   concurrency: Concurrency;
@@ -57,13 +56,11 @@ export interface ToolDescription {
 export type ToolMethodName = "describe" | "policy" | "run" | "classify";
 
 export interface ToolKit {
-  provides: Provide[];
+  provides: string[];
   methods: Record<ToolMethodName, Method>;
 }
 
 const CAPABILITY = /^tool\.[a-z][a-z0-9_]*$/;
-
-const SEMVER = /^\d+\.\d+\.\d+(?:[-+].+)?$/;
 
 const HOST_SOURCES = new Set<string>(["session_cwd", "session_id", "call_id", "subagent", "session_touched"]);
 
@@ -218,14 +215,11 @@ interface PreparedTool {
 
 export function defineTools(blueprints: readonly ToolBlueprint[]): ToolKit {
   const prepared = new Map<string, PreparedTool>();
-  const provides: Provide[] = [];
+  const provides: string[] = [];
   for (const blueprint of blueprints) {
     const problems: string[] = [];
     if (!CAPABILITY.test(blueprint.capability)) {
       problems.push(`capability ${JSON.stringify(blueprint.capability)} must look like tool.<name>`);
-    }
-    if (!SEMVER.test(blueprint.version)) {
-      problems.push(`${blueprint.capability} version ${JSON.stringify(blueprint.version)} is not a full semver`);
     }
     if (blueprint.description.trim() === "") problems.push(`${blueprint.capability} needs a description`);
     const budget = blueprint.maxResultChars;
@@ -254,7 +248,7 @@ export function defineTools(blueprints: readonly ToolBlueprint[]): ToolKit {
         ...(budget === undefined ? {} : { max_result_chars: budget }),
       },
     });
-    provides.push({ capability: blueprint.capability, version: blueprint.version });
+    provides.push(blueprint.capability);
   }
 
   const lookup = (call: Call): PreparedTool => {

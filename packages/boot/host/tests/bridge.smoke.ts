@@ -34,11 +34,11 @@ writeFileSync(
   `
 [plugins.provider]
 command = '${fixture}'
-args = ["--provides", "demo.text=1.0.0", "--chunks", "3"]
+args = ["--provides", "demo.text", "--chunks", "3"]
 
 [plugins.doomed]
 command = '${fixture}'
-args = ["--provides", "demo.other=1.0.0", "--exit-on-invoke"]
+args = ["--provides", "demo.other", "--exit-on-invoke"]
 `,
 );
 
@@ -50,7 +50,6 @@ const kernel = await boot(config, {
 
 const table = await kernel.capabilities();
 assert.equal(table["demo.text"]?.plugin, "provider", "the capability table should list demo.text");
-assert.equal(table["demo.text"]?.version, "1.0.0");
 
 const echoed = (await kernel.invoke("demo.text", "echo", { hi: 1 })) as { got: { hi: number } };
 assert.equal(echoed.got.hi, 1);

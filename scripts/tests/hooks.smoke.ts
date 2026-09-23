@@ -7,7 +7,7 @@ import { kernel as installedKernel } from "eggshell-kernel";
 
 import { boot, type Chunk } from "@maota/host";
 
-const root = join(import.meta.dirname, "..");
+const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
   process.env.EGGSHELL_BIN ??
@@ -44,10 +44,11 @@ writeFileSync(
     ...plugin("tool-fs", packageEntry("fs/tool-fs")),
     ...plugin("tool-fs-search", packageEntry("fs/tool-fs-search")),
     ...plugin("tools", packageEntry("agent/tools")),
-    ...plugin("skill", packageEntry("skill")),
+    ...plugin("skill", packageEntry("skill/skill")),
     ...plugin("session", packageEntry("session")),
+    ...plugin("system-prompt", packageEntry("agent/system-prompt")),
     ...plugin("hooks", packageEntry("hooks/hooks-native")),
-    ...plugin("hook-deny", join(root, "tests", "fixtures", "hook-deny", "src", "index.ts")),
+    ...plugin("hook-deny", join(root, "scripts", "tests", "fixtures", "hook-deny", "src", "index.ts")),
     ...plugin("agent", packageEntry("agent/agent-core")),
     "[plugins.api.config]",
     'backend = "scripted"',

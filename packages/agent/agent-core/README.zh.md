@@ -125,11 +125,21 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 定义：配置、`requires`、`run`、`info`、hook 桥与 `selfCheck` |
+| [`src/index.ts`](src/index.ts) | 定义：`provides`、`configKeys`、`requires`，以及 `run`、`info`、`selfCheck` 三个方法，各自委派给拥有它的模块 |
 | [`src/catalog.ts`](src/catalog.ts) | 技能目录注记：什么时候追加一条，以及它如何与上一条比较 |
+| [`src/chat.ts`](src/chat.ts) | 流式的模型调用：给它的参数，以及它最终解出的回复 |
 | [`src/compact.ts`](src/compact.ts) | 把长历史折成一条注记，以及步数上限留下的那条注记 |
 | [`src/control.ts`](src/control.ts) | `readRunControl` 与 `narrow`：工具结果可能带的 `control` 块 |
-| [`src/prompt.ts`](src/prompt.ts) | `systemPrompt`：基础提示词与工作目录 |
+| [`src/history.ts`](src/history.ts) | 会话标题，以及围绕它装载、折叠、写回这一轮 |
+| [`src/hooks.ts`](src/hooks.ts) | hook 桥：哪些缝是活的、决策的形状，以及工具与批准这两处缝 |
+| [`src/levels.ts`](src/levels.ts) | 四档级别、它们读的思考配置，以及旁边的运行期表 |
+| [`src/prompt.ts`](src/prompt.ts) | 工具分类、工具清单、批准模式，以及装配出的系统提示词 |
+| [`src/run.ts`](src/run.ts) | 一轮：经过的几道闸门、循环回调、记账与对外公告 |
+| [`src/selfcheck-agent.ts`](src/selfcheck-agent.ts) | 对委派、目录、坏参数与 hook 映射的自检 |
+| [`src/selfcheck-loop.ts`](src/selfcheck-loop.ts) | 对引擎、顺序、control、fork、折叠、上限与深度的自检 |
+| [`src/selfcheck-rig.ts`](src/selfcheck-rig.ts) | 各份自检共用的装置：一个脚本化的 channel 与架在它上面的调用 |
+| [`src/selfcheck.ts`](src/selfcheck.ts) | 自检的驱动，以及对各原语的自检 |
+| [`src/subagent.ts`](src/subagent.ts) | 子回合被告知什么、读它的那几个函数，以及把一个 body 当子回合跑 |
 | [`src/tools.ts`](src/tools.ts) | `readToolList`、`stripHostArgs`，以及支持各宿主来源的 `injectHostArgs` |
 
 ### 一轮的过程

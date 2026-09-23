@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError, packageVersion } from "@maota/plugin-kit";
+import { CallError } from "@maota/plugin-kit";
 
 import {
   DEFAULT_MAX_EVENTS,
@@ -95,11 +95,11 @@ const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" }
 const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
 const report = JSON.parse(line) as {
   ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
   problems?: string[];
 };
 assert.equal(run.status, 0, `the session entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the session selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "session", version: packageVersion(import.meta.url) }]);
+assert.deepEqual(report.provides, ["session"]);
 
 console.log("session ok: the parent link, the listed children, their order, the version 2 migration, the entry report");

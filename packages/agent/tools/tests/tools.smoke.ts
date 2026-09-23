@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { packageVersion, type Call, type Channel, type Route } from "@maota/plugin-kit";
+import { type Call, type Channel, type Route } from "@maota/plugin-kit";
 
 import { definition } from "../src/index.ts";
 
@@ -72,7 +72,7 @@ function context(found: Harness, method: string): Call {
 
 const dir = mkdtempSync(join(tmpdir(), "maota-tools-"));
 const spillDir = join(dir, "spill");
-const table: Record<string, Route> = { "tool.echo": { plugin: "echo", version: "1.0.0" }, api: { plugin: "api", version: "1.0.0" } };
+const table: Record<string, Route> = { "tool.echo": { plugin: "echo" }, api: { plugin: "api" } };
 
 let policy: unknown = { concurrency: "always" };
 let result: unknown = "done";
@@ -92,7 +92,7 @@ const wiring = { channel: found.channel, config: { spill_dir: spillDir, preview_
 setup(wiring);
 await start(wiring);
 
-assert.equal(definition.provides[0]?.version, packageVersion(import.meta.url));
+assert.deepEqual(definition.provides, ["tools"]);
 assert.deepEqual(found.listeners.length, 1);
 
 const listed = (await list({}, context(found, "list"))) as { tools: Array<{ name: string }> };
@@ -105,7 +105,7 @@ assert.deepEqual(
 /// A tool that cannot describe itself is left out with a warning rather than
 /// failing the whole list.
 found.listeners[0]?.("kernel.capabilities.changed", 1, {
-  capabilities: { "tool.bad": { plugin: "bad", version: "1.0.0" }, "tool.echo": table["tool.echo"] },
+  capabilities: { "tool.bad": { plugin: "bad" }, "tool.echo": table["tool.echo"] },
 });
 const afterChange = (await list({}, context(found, "list"))) as { tools: Array<{ name: string }> };
 assert.deepEqual(afterChange.tools.map((tool) => tool.name), ["echo"], "list did not follow the new table");

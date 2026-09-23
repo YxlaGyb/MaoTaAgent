@@ -12,5 +12,8 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
+  "devDependencies": {
+    "eggshell-kernel": "link:../../../../eggshellmod/npm"
+  },
   "types": "lib/index.d.ts"
 }

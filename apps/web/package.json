@@ -25,10 +25,12 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@maota/host": "workspace:^",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
+    "eggshell-kernel": "link:../../../eggshellmod/npm",
     "typescript": "^7.0.2",
     "vite": "^7"
   },

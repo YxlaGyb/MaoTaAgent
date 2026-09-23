@@ -2,7 +2,6 @@
 import {
   CallError,
   isPluginEntry,
-  packageVersion,
   runPlugin,
   type Call,
   type Channel,
@@ -80,10 +79,8 @@ async function discover(channel: Channel, capabilities: Record<string, Route>): 
   providers = await describeProviders(channel, capabilities, life.signal, settings.strict);
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "hooks", version: VERSION }],
+  provides: ["hooks"],
   configKeys: ["max_context_chars", "command_hooks", "parallel", "strict"],
 
   setup(wiring) {
@@ -187,9 +184,9 @@ export const definition: Definition = {
     const notes: string[] = [];
     const signal = new AbortController().signal;
     const table = {
-      "hook.alpha": { plugin: "alpha", version: "1.0.0" },
-      "hook.beta": { plugin: "beta", version: "1.0.0" },
-      tools: { plugin: "tools", version: "1.0.0" },
+      "hook.alpha": { plugin: "alpha" },
+      "hook.beta": { plugin: "beta" },
+      tools: { plugin: "tools" },
     } as unknown as Record<string, Route>;
 
     const watchers: Array<(topic: string, seq: number, payload: unknown) => void> = [];
@@ -291,7 +288,7 @@ export const definition: Definition = {
     }
     if (notes.length === 0) problems.push("nothing was logged while hooks were skipped");
 
-    const changed = { "hook.gamma": { plugin: "gamma", version: "1.0.0" } } as unknown as Record<string, Route>;
+    const changed = { "hook.gamma": { plugin: "gamma" } } as unknown as Record<string, Route>;
     const rebuilt = await describeProviders(fake({ "hook.gamma": () => ({ events: ["Stop"] }) }), changed, signal, false);
     if (rebuilt.map((item) => item.capability).join(",") !== "hook.gamma") {
       problems.push("a changed capability table did not rebuild the provider list");

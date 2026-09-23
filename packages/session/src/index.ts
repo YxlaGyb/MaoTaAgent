@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { packageVersion, runPlugin, type Definition } from "@maota/plugin-kit";
+import { runPlugin, type Definition } from "@maota/plugin-kit";
 import {
   appendTodos,
   childrenOf,
@@ -41,10 +41,8 @@ function keyOf(params: unknown): string {
   return `session:${encodeDir(typeof input.cwd === "string" ? input.cwd : "")}:${String(input.id ?? "")}`;
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "session", version: VERSION }],
+  provides: ["session"],
   configKeys: ["dir", "max_bytes", "max_path", "max_events"],
 
   setup(wiring) {

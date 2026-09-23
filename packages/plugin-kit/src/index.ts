@@ -4,8 +4,8 @@ export { CallError, Channel, matchesTopic } from "./channel.ts";
 export type { CallOptions, ChannelHooks, EventHandler, InboundStream, Route } from "./channel.ts";
 export { assertSupportedJsonSchema, JsonSchemaError, validateJsonSchemaValue } from "./json-schema.ts";
 export type { JsonSchemaNode, JsonSchemaScalar, JsonSchemaType } from "./json-schema.ts";
-export { isPluginEntry, packageVersion, ProviderStream, runPlugin, serve } from "./plugin.ts";
-export type { Call, Definition, Method, Provide, Require, Wiring } from "./plugin.ts";
+export { isPluginEntry, PROTOCOL_VERSION, ProviderStream, runPlugin, serve } from "./plugin.ts";
+export type { Call, Definition, Method, Require, Wiring } from "./plugin.ts";
 export { defineTools, ToolArgsError, validateParameters } from "./tool.ts";
 export type {
   Concurrency,

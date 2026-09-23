@@ -17,7 +17,8 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `packages/hooks` | 十二个 hook 点：持有那十二个事件的方言包，以及发现 hook 插件、合并它们答案的引擎。 | [十二个 hook 点](user/hooks.zh.md) |
 | `packages/todo` | 模型持有的计划：它写下任务清单用的工具，以及清单所住的会话文档。 | [README](../packages/todo/tool-todo/README.zh.md) |
 | `packages/subagent` | 委派：把一件子任务交给一个自带上下文的代理的那个 `task` 工具。 | [子代理](user/subagent.zh.md) |
-| `packages/*` | 内核插件：api、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tool-todo、tool-subagent、skill-filesystem、skill-bundled、skill、tool-skill、tools、session、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
+| `packages/agent/system-prompt` | 提示词：部署方把段落与变量组装进去的那个注册表，以及循环每轮读一次的组装。 | [系统提示词](user/system-prompt.zh.md) |
+| `packages/*` | 内核插件：api、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tool-todo、tool-subagent、skill-filesystem、skill-bundled、skill、tool-skill、tools、session、system-prompt、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
 | `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
 
@@ -56,6 +57,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 - [shell 包组](../packages/shell/README.zh.md)
 - [interaction 包组](../packages/interaction/README.zh.md)
 - [权限闸门](user/permission.zh.md)
+- [系统提示词](user/system-prompt.zh.md)
 - [十二个 hook 点](user/hooks.zh.md)
 - [子代理](user/subagent.zh.md)
 - [bundle 包组](../packages/bundle/README.zh.md)

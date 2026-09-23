@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ChatView } from "./components/ChatView.tsx";
+import { MainPane } from "./components/MainPane.tsx";
 import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
-import { PluginsView } from "./components/PluginsView.tsx";
-import { SearchPalette } from "./components/SearchPalette.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
-import { SkillsView } from "./components/SkillsView.tsx";
-import { DEFAULT_PROJECT, projectLabel, Sidebar } from "./components/Sidebar.tsx";
+import { DEFAULT_PROJECT } from "./components/Sidebar.tsx";
+import { SidebarPane } from "./components/SidebarPane.tsx";
 import { describe, errorText } from "./lib/errors.ts";
-import { useT } from "./lib/i18n.ts";
 import {
   call,
   subscribe,
@@ -63,7 +60,6 @@ export function App() {
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
   const [spawned, setSpawned] = useState<Record<string, SessionSummary[]>>({});
 
-  const t = useT();
   const activeRef = useRef(active);
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
@@ -389,46 +385,6 @@ export function App() {
     return [{ id: active.id, cwd: active.cwd, title: "", updated_at: new Date().toISOString() }, ...sessions];
   }, [active, sessions]);
 
-  const groups = useMemo(() => {
-    const cwds = new Set<string>([DEFAULT_PROJECT, project, ...projects]);
-    for (const session of allSessions) cwds.add(session.cwd === "" ? DEFAULT_PROJECT : session.cwd);
-    return [...cwds]
-      .filter((cwd) => !removed.includes(cwd))
-      .map((cwd) => ({
-        cwd,
-        sessions: allSessions
-          .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === cwd)
-          .filter((session) => !archived.includes(session.id))
-          .sort(
-            (left, right) =>
-              Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
-              right.updated_at.localeCompare(left.updated_at),
-          ),
-      }))
-      .sort((left, right) => {
-        if (left.cwd === DEFAULT_PROJECT) return -1;
-        if (right.cwd === DEFAULT_PROJECT) return 1;
-        const leftName = projectLabel(left.cwd, "", names[left.cwd] ?? "");
-        const rightName = projectLabel(right.cwd, "", names[right.cwd] ?? "");
-        return leftName.localeCompare(rightName);
-      });
-  }, [allSessions, archived, names, pinned, project, projects, removed]);
-
-  const pinnedRows = useMemo(
-    () => allSessions.filter((session) => pinned.includes(session.id) && !archived.includes(session.id)),
-    [allSessions, archived, pinned],
-  );
-
-  const archivedRows = useMemo(
-    () => allSessions.filter((session) => archived.includes(session.id)),
-    [allSessions, archived],
-  );
-
-  const searchable = useMemo(
-    () => allSessions.filter((session) => !archived.includes(session.id)),
-    [allSessions, archived],
-  );
-
   const renameProject = (cwd: string, name: string): void => {
     setNames((prev) => {
       const next = { ...prev };
@@ -467,17 +423,17 @@ export function App() {
     );
   }
 
-  const title = allSessions.find((item) => item.id === active?.id)?.title || t("newChat");
-
   return (
     <div className="app">
-      <Sidebar
-        groups={groups}
-        pinned={pinnedRows}
-        archived={archivedRows}
-        names={names}
-        project={project}
+      <SidebarPane
+        sessions={allSessions}
         activeId={active?.id ?? null}
+        projects={projects}
+        names={names}
+        pinned={pinned}
+        archived={archived}
+        removed={removed}
+        project={project}
         running={Object.keys(lives)}
         onNew={newChat}
         onProject={setProject}
@@ -496,53 +452,36 @@ export function App() {
         onSkills={() => setPage("skills")}
         onSearch={() => setPalette(true)}
       />
-      {page === "plugins" ? (
-        <PluginsView info={info} />
-      ) : page === "skills" ? (
-        <SkillsView cwd={project} />
-      ) : (
-        <ChatView
-          info={info}
-          kernelError={kernelError}
-          session={active}
-          title={title}
-          messages={messages}
-          pending={pending}
-          live={active === null ? null : (lives[active.id] ?? null)}
-          failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
-          hasKey={info?.has_key ?? null}
-          thinking={thinking}
-          permission={permission}
-          approvals={approvals}
-          spawned={spawned}
-          onRetry={() => void loadInfo()}
-          onKeySaved={() => void loadInfo()}
-          onThinking={setThinking}
-          onPermission={(mode) => void changePermission(mode)}
-          onAnswer={(id, decision) => void answer(id, decision)}
-          onSend={submit}
-          onCancel={() => void cancel()}
-        />
-      )}
-      {palette ? (
-        <SearchPalette
-          sessions={searchable}
-          names={names}
-          onNew={() => {
-            setPalette(false);
-            newChat(project);
-          }}
-          onAddProject={() => {
-            setPalette(false);
-            void pickProject();
-          }}
-          onPick={(session) => {
-            setPalette(false);
-            open(session);
-          }}
-          onClose={() => setPalette(false)}
-        />
-      ) : null}
+      <MainPane
+        page={page}
+        info={info}
+        kernelError={kernelError}
+        project={project}
+        sessions={allSessions}
+        archived={archived}
+        names={names}
+        active={active}
+        lives={lives}
+        messages={messages}
+        pending={pending}
+        failure={failure}
+        thinking={thinking}
+        permission={permission}
+        approvals={approvals}
+        spawned={spawned}
+        palette={palette}
+        onPalette={setPalette}
+        onNew={newChat}
+        onPickProject={() => void pickProject()}
+        onOpen={open}
+        onRetry={() => void loadInfo()}
+        onKeySaved={() => void loadInfo()}
+        onThinking={setThinking}
+        onPermission={(mode) => void changePermission(mode)}
+        onAnswer={(id, decision) => void answer(id, decision)}
+        onSend={submit}
+        onCancel={() => void cancel()}
+      />
     </div>
   );
 }

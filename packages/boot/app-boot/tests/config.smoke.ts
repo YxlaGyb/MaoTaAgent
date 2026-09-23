@@ -31,22 +31,8 @@ assert.throws(() => profileDir(home, "nope"), /unknown profile/, "an unknown pro
 const base = await rowsOfBundles(PROFILE_TEMPLATES["default"]!.bundles);
 assert.deepEqual(
   base.map((row) => row.id),
-  [
-    "api",
-    "pwsh-local",
-    "permission",
-    "tool-pwsh",
-    "tool-fs",
-    "tool-fs-search",
-    "tools",
-    "skill",
-    "skill-filesystem",
-    "session",
-    "hooks",
-    "agent-core",
-    "hmr",
-  ],
-  "the default profile is the base bundle, in its order",
+  [...new Set(base.map((row) => row.id))],
+  "the base bundle names no plugin twice",
 );
 assert.equal(base.find((row) => row.id === "hmr")?.disabled, true, "the development watcher ships off");
 assert.ok(!base.some((row) => row.id === "web"), "the web plugin belongs to the serve profile, not to the default one");

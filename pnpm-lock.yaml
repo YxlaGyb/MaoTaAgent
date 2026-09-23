@@ -15,24 +15,12 @@ importers:
       '@maota/agent-core':
         specifier: workspace:^
         version: link:packages/agent/agent-core
-      '@maota/agent-loop':
-        specifier: workspace:^
-        version: link:packages/agent/agent-loop
       '@maota/api':
         specifier: workspace:^
         version: link:packages/api
-      '@maota/app-boot':
-        specifier: workspace:^
-        version: link:packages/boot/app-boot
       '@maota/base':
         specifier: workspace:^
         version: link:packages/bundle/base
-      '@maota/cli':
-        specifier: workspace:^
-        version: link:apps/cli
-      '@maota/fs':
-        specifier: workspace:^
-        version: link:packages/fs/fs
       '@maota/hmr':
         specifier: workspace:^
         version: link:packages/boot/hmr
@@ -57,9 +45,6 @@ importers:
       '@maota/session':
         specifier: workspace:^
         version: link:packages/session
-      '@maota/shell':
-        specifier: workspace:^
-        version: link:packages/shell/shell
       '@maota/skill':
         specifier: workspace:^
         version: link:packages/skill/skill
@@ -69,6 +54,9 @@ importers:
       '@maota/skill-filesystem':
         specifier: workspace:^
         version: link:packages/skill/skill-filesystem
+      '@maota/system-prompt':
+        specifier: workspace:^
+        version: link:packages/agent/system-prompt
       '@maota/tool-fs':
         specifier: workspace:^
         version: link:packages/fs/tool-fs
@@ -136,6 +124,9 @@ importers:
         specifier: ^19
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@maota/host':
+        specifier: workspace:^
+        version: link:../../packages/boot/host
       '@types/node':
         specifier: ^22
         version: 22.20.2
@@ -148,6 +139,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5
         version: 5.2.0(vite@7.3.6(@types/node@22.20.2))
+      eggshell-kernel:
+        specifier: link:../../../eggshellmod/npm
+        version: link:../../../eggshellmod/npm
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -169,6 +163,12 @@ importers:
 
   packages/agent/agent-loop: {}
 
+  packages/agent/system-prompt:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
   packages/agent/tools:
     dependencies:
       '@maota/plugin-kit':
@@ -181,7 +181,11 @@ importers:
         specifier: workspace:^
         version: link:../plugin-kit
 
-  packages/boot/app-boot: {}
+  packages/boot/app-boot:
+    dependencies:
+      eggshell-kernel:
+        specifier: link:../../../../eggshellmod/npm
+        version: link:../../../../eggshellmod/npm
 
   packages/boot/hmr:
     dependencies:
@@ -189,7 +193,11 @@ importers:
         specifier: workspace:^
         version: link:../../plugin-kit
 
-  packages/boot/host: {}
+  packages/boot/host:
+    devDependencies:
+      eggshell-kernel:
+        specifier: link:../../../../eggshellmod/npm
+        version: link:../../../../eggshellmod/npm
 
   packages/bundle/base: {}
 

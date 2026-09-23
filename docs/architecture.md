@@ -17,7 +17,8 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/hooks` | The hook points: the dialect package that owns the twelve events, and the engine that discovers hook plugins and merges what they answer. | [the hook points](user/hooks.md) |
 | `packages/todo` | The plan the model keeps: the tool it writes its task list with, and the session document the list lives in. | [README](../packages/todo/tool-todo/README.md) |
 | `packages/subagent` | The delegation: the `task` tool that hands one sub-task to an agent with a context of its own. | [subagents](user/subagent.md) |
-| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
+| `packages/agent/system-prompt` | The prompt: the registry a deployment assembles sections and variables into, and the assembly the loop reads once per turn. | [the system prompt](user/system-prompt.md) |
+| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, system-prompt, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 
@@ -56,6 +57,7 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - [shell package group](../packages/shell/README.md)
 - [interaction package group](../packages/interaction/README.md)
 - [the permission gate](user/permission.md)
+- [the system prompt](user/system-prompt.md)
 - [the hook points](user/hooks.md)
 - [the subagents](user/subagent.md)
 - [bundle package group](../packages/bundle/README.md)

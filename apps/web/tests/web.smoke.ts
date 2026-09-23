@@ -1,214 +1,28 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { kernel as installed } from "eggshell-kernel";
-
-import { boot } from "@maota/host";
-
-const SHORT = "the short answer.";
-const LONG = "lorem-ipsum-".repeat(1400);
-
-const root = join(import.meta.dirname, "..", "..", "..");
-const bin =
-  process.argv[2] ??
-  process.env.EGGSHELL_BIN ??
-  installed ??
-  join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
-
-const PLUGINS: Array<[string, string]> = [
-  ["api", "packages/api/src/index.ts"],
-  ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
-  ["permission", "packages/interaction/permission/src/index.ts"],
-  ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
-  ["tool-fs", "packages/fs/tool-fs/src/index.ts"],
-  ["tool-fs-search", "packages/fs/tool-fs-search/src/index.ts"],
-  ["tool-subagent", "packages/subagent/tool-subagent/src/index.ts"],
-  ["tools", "packages/agent/tools/src/index.ts"],
-  ["skill-filesystem", "packages/skill/skill-filesystem/src/index.ts"],
-  ["skill-bundled", "packages/skill/skill-bundled/src/index.ts"],
-  ["skill", "packages/skill/skill/src/index.ts"],
-  ["tool-skill", "packages/skill/tool-skill/src/index.ts"],
-  ["session", "packages/session/src/index.ts"],
-  ["agent-core", "packages/agent/agent-core/src/index.ts"],
-  ["web", "apps/web/src/index.ts"],
-];
-
-const home = mkdtempSync(join(tmpdir(), "maota-web-"));
-const config = join(home, "eggshell.local.toml");
-
-writeFileSync(
-  join(home, "eggshell.toml"),
-  PLUGINS.map(
-    ([id, main]) => `[plugins.${id}]\ncommand = '${process.execPath}'\nargs = ['${join(root, main)}']\n`,
-  ).join("\n"),
-);
-
-writeFileSync(
-  config,
-  [
-    'extends = ["eggshell.toml"]',
-    "",
-    "[plugins.api.config]",
-    'backend = "scripted"',
-    'model = "smoke-chat"',
-    "script = [",
-    `  { text = '${SHORT}' },`,
-    `  { text = '${LONG}' },`,
-    "  { },",
-    "  { text = 'first workdir turn' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'ran it' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'refused' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'ran it anyway' },",
-    "  { tool = 'task', args = { prompt = 'read note.txt and tell me what it says', description = 'look at the note', subagent_type = 'explore' } },",
-    "  { tool = 'read', args = { file_path = 'note.txt' } },",
-    "  { text = 'the note says hi' },",
-    "  { text = 'the subagent read the note' },",
-    "]",
-    "",
-    "[plugins.agent-core.config.thinking]",
-    'off = "smoke-chat"',
-    'medium = { model = "smoke-reasoner", tools = false }',
-    "",
-    "[plugins.web.config]",
-    "port = 0",
-    "dev = false",
-    "",
-  ].join("\n"),
-);
-
-interface Frame {
-  event?: string;
-  turn_id?: string;
-  session_id?: string;
-  text?: string;
-  code?: number;
-  message?: string;
-  request_id?: string;
-  tool?: string;
-  call_id?: string;
-  subagent_id?: string;
-  parent_call_id?: string;
-  type?: string;
-  description?: string;
-  reason?: string;
-  outcome?: string;
-  ok?: boolean;
-  output?: any;
-}
-
-const logs: string[] = [];
-const kernel = await boot(config, {
-  bin,
-  env: { ...process.env, MAOTA_HOME: home },
-  onLog: (line) => logs.push(`${String(line.level ?? "?")} ${String(line.message ?? JSON.stringify(line))}`),
-});
-
-const info = (await kernel.invoke("web", "info")) as {
-  url: string;
-  version: string;
-  dev: boolean;
-  sessions_dir: string | null;
-  levels: string[];
-  thinking: Record<string, { model?: string; tools?: boolean }> | null;
-};
-const base = info.url;
-
-const events: Frame[] = [];
-const watchers: Array<(event: Frame) => void> = [];
-let finished = false;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function call(method: string, params: unknown = {}): Promise<any> {
-  const response = await fetch(`${base}/rpc`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ method, params }),
-  });
-  const payload = (await response.json()) as { result?: any; error?: { code: number; message: string } };
-  if (payload.error) throw Object.assign(new Error(payload.error.message), { code: payload.error.code });
-  return payload.result;
-}
-
-async function listen(): Promise<void> {
-  const response = await fetch(`${base}/events`);
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) return;
-    buffer += decoder.decode(value, { stream: true });
-    for (;;) {
-      const end = buffer.indexOf("\n\n");
-      if (end < 0) break;
-      const frame = buffer.slice(0, end);
-      buffer = buffer.slice(end + 2);
-      for (const line of frame.split("\n")) {
-        if (!line.startsWith("data: ")) continue;
-        const event = JSON.parse(line.slice(6)) as Frame;
-        events.push(event);
-        for (const watch of [...watchers]) watch(event);
-      }
-    }
-  }
-}
-
-function waitFor(match: (event: Frame) => boolean, timeout = 30_000): Promise<Frame> {
-  return new Promise((resolve, reject) => {
-    const seen = events.find(match);
-    if (seen) {
-      resolve(seen);
-      return;
-    }
-    const watch = (event: Frame): void => {
-      if (!match(event)) return;
-      clearTimeout(timer);
-      watchers.splice(watchers.indexOf(watch), 1);
-      resolve(event);
-    };
-    const timer = setTimeout(() => {
-      watchers.splice(watchers.indexOf(watch), 1);
-      reject(
-        new Error(
-          `no matching event after ${timeout}ms; seen: ${JSON.stringify(events.slice(-8))}; ` +
-            `plugin log: ${logs.slice(-5).join(" | ")}`,
-        ),
-      );
-    }, timeout);
-    watchers.push(watch);
-  });
-}
-
-function textOf(turnId: string): string {
-  return events
-    .filter((event) => event.event === "text" && event.turn_id === turnId)
-    .map((event) => event.text ?? "")
-    .join("");
-}
-
-/// The harness writes the skill catalog into the history itself, so a check
-/// about what a person said has to look past it.
-function isCatalog(message: unknown): boolean {
-  const source = (message as { source?: { kind?: unknown } } | null)?.source;
-  return source?.kind === "skill-catalog";
-}
-
-async function turn(session: string, input: string, cwd = "", thinking = "off"): Promise<string> {
-  return (await call("chat.send", { session_id: session, cwd, input, thinking })).turn_id as string;
-}
-
-let passed = 0;
-async function check(name: string, run: () => Promise<void>): Promise<void> {
-  await run();
-  passed += 1;
-  console.log(`  ok  ${name}`);
-}
+import {
+  base,
+  call,
+  check,
+  events,
+  finish,
+  home,
+  info,
+  isCatalog,
+  kernel,
+  LONG,
+  passedCount,
+  root,
+  SHORT,
+  sleep,
+  startStream,
+  textOf,
+  turn,
+  waitFor,
+  type Frame,
+} from "./harness.ts";
 
 console.log(`web smoke: ${base}\n`);
 
@@ -278,9 +92,7 @@ await check("api key from the page", async () => {
   assert.equal(readFileSync(join(home, "api_key"), "utf8").trim(), "sk-smoke", "the key should be on disk");
 });
 
-void listen().catch((error: unknown) => {
-  if (!finished) console.error(`event stream broke: ${String(error)}`);
-});
+startStream();
 await sleep(200);
 
 await check("streaming turn", async () => {
@@ -530,7 +342,7 @@ await check("subagent: the child runs, and the page hears it under the parent's 
   );
 });
 
-finished = true;
+finish();
 const code = await kernel.shutdown("ui_quit");
 if (process.platform !== "win32") assert.equal(code, 0, `the kernel should exit cleanly, got ${code}`);
 
@@ -543,4 +355,4 @@ await assert.rejects(
   "the web plugin should stop answering once the kernel is gone",
 );
 
-console.log(`\nweb smoke: ${passed} checks passed`);
+console.log(`\nweb smoke: ${passedCount()} checks passed`);

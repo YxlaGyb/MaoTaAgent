@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { workspace } from "@maota/fs";
-import { defineTools, packageVersion, patternToRegExp, runPlugin, type Definition } from "@maota/plugin-kit";
+import { defineTools, patternToRegExp, runPlugin, type Definition } from "@maota/plugin-kit";
 
 import { globFiles } from "./glob.ts";
 import { grepFiles } from "./grep.ts";
@@ -30,12 +30,9 @@ function wantsDotfiles(value: unknown): boolean {
   return typeof value === "string" && /(^|[/\\])\./.test(value);
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.glob",
-    version: VERSION,
     description:
       "Find files by path pattern, such as **/*.ts, below the working directory. A leading ! negates the pattern " +
       "and {a,b} offers alternatives. Files ruled out by a .gitignore, and hidden names the pattern does not name " +
@@ -59,7 +56,6 @@ const toolkit = defineTools([
   },
   {
     capability: "tool.grep",
-    version: VERSION,
     description:
       "Search file contents with a regular expression, below the working directory; each match comes back as the file " +
       "path, the line number and the matching line, grouped by file and ordered by path and line.",
@@ -101,7 +97,7 @@ export const definition: Definition = {
 
   async selfCheck() {
     const problems: string[] = [];
-    const capabilities = toolkit.provides.map((item) => item.capability);
+    const capabilities = toolkit.provides;
     if (capabilities.join(",") !== "tool.glob,tool.grep") {
       problems.push(`the toolkit provides ${capabilities.join(", ")}`);
     }

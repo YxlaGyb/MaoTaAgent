@@ -2,7 +2,6 @@ import { frameReader, writeFrame } from "./frame.ts";
 
 export interface Route {
   plugin: string;
-  version: string;
 }
 
 export class CallError extends Error {

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CallError, packageVersion } from "@maota/plugin-kit";
+import { CallError } from "@maota/plugin-kit";
 
 import {
   MODES,
@@ -186,10 +186,10 @@ const entry = join(import.meta.dirname, "..", "src", "index.ts");
 const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" });
 const report = JSON.parse((run.stdout ?? "").trim().split("\n").at(-1) ?? "") as {
   ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
   problems?: string[];
 };
 assert.equal(run.status, 0, `the permission entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the permission selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "permission", version: packageVersion(import.meta.url) }]);
+assert.deepEqual(report.provides, ["permission"]);
 console.log("permission entry ok: the audit and subagent selfCheck report");

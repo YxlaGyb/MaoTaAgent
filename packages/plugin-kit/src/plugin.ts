@@ -1,16 +1,14 @@
-import { readFileSync, realpathSync, writeSync } from "node:fs";
+import { realpathSync, writeSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { Channel, CallError, type Route } from "./channel.ts";
 
-export interface Provide {
-  capability: string;
-  version: string;
-}
+/// The other half of this number is `PROTOCOL_VERSION` in the kernel's
+/// `crates/protocol`; a mismatch fails startup with -32015.
+export const PROTOCOL_VERSION = 2;
 
 export interface Require {
   capability: string;
-  version: string;
   optional?: boolean;
 }
 
@@ -31,7 +29,7 @@ export interface Call extends Wiring {
 export type Method = (params: any, call: Call) => Promise<unknown> | unknown;
 
 export interface Definition {
-  provides: Provide[];
+  provides: string[];
   requires?: Require[];
   configKeys?: readonly string[];
   setup?(wiring: Wiring): void | Promise<void>;
@@ -137,7 +135,7 @@ async function handle(
       wiring.config = { ...(params?.config ?? {}) };
       warnUnknownConfig(definition, params, wiring);
       await definition.setup?.(wiring);
-      reply({ protocol: 1, provides: definition.provides, requires: definition.requires ?? [] });
+      reply({ protocol: PROTOCOL_VERSION, provides: definition.provides, requires: definition.requires ?? [] });
       return;
     }
     case "start": {
@@ -237,32 +235,13 @@ function real(path: string): string | null {
   }
 }
 
-/// A plugin's version is the version of the package it ships as, read from the
-/// manifest beside it: one release is numbered in one place, and a definition
-/// that typed its own would drift the first time the package was bumped
-/// without the source following.
-export function packageVersion(moduleUrl: string): string {
-  const manifest = JSON.parse(readFileSync(new URL("../package.json", moduleUrl), "utf8")) as { version?: unknown };
-  const version = manifest.version;
-  if (typeof version !== "string" || version.trim() === "") {
-    throw new Error(`no version in the package.json beside ${moduleUrl}`);
-  }
-  return version;
-}
-
 async function check(definition: Definition): Promise<void> {
   const problems: string[] = [];
   if (definition.provides.length === 0) problems.push("provides is empty");
-  for (const item of definition.provides) {
-    if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/.test(item.version)) {
-      problems.push(`${item.capability}: "${item.version}" is not a full semver`);
+  for (const capability of definition.provides) {
+    if (!/^[a-z][a-z0-9._-]*$/.test(capability)) {
+      problems.push(`capability "${capability}" should be a lowercase id`);
     }
-    if (!/^[a-z][a-z0-9._-]*$/.test(item.capability)) {
-      problems.push(`capability "${item.capability}" should be a lowercase id`);
-    }
-  }
-  for (const item of definition.requires ?? []) {
-    if (item.version.trim() === "") problems.push(`requires ${item.capability}: empty range`);
   }
   if (definition.configKeys === undefined) {
     problems.push("configKeys is not declared: list the config keys initialize reads ([] if none)");

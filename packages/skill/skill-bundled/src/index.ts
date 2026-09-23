@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CallError, packageVersion, runPlugin, type Definition } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Definition } from "@maota/plugin-kit";
 import { parseFrontmatter, scanSkillRoot, type SkillCandidate } from "@maota/skill";
 
 /// The shipped skills rank below every local root, so a project that ships its
@@ -14,10 +14,8 @@ function skillsDir(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "..", "skills");
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "skill.bundled", version: VERSION }],
+  provides: ["skill.bundled"],
   configKeys: [],
 
   methods: {

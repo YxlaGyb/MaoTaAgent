@@ -3,6 +3,17 @@
 /// read, and the frontmatter rules that turn one file into one skill. Nothing
 /// here touches a process or a capability, so the registry, the providers and
 /// the model tool can all import it without spawning anything.
+///
+/// The dialect is wide enough to need three modules, and this one is the middle:
+/// it holds the shapes, the readers that guard them, and the projection from
+/// frontmatter to an entry. `frontmatter.ts` reads one file's text; `render.ts`
+/// writes what the model reads. Both are re-exported here, so the dialect keeps
+/// a single import surface.
+
+import { firstParagraph } from "./frontmatter.ts";
+
+export * from "./frontmatter.ts";
+export * from "./render.ts";
 
 export const SKILL_FILE = "SKILL.md";
 
@@ -172,144 +183,6 @@ export function summarize(entry: SkillEntry, provider: string, active: boolean):
     ...(hooks === undefined ? {} : { hooks }),
     ...(context === undefined ? {} : { context }),
   };
-}
-
-export const DEFAULT_DESCRIPTION_MAX = 500;
-export const DEFAULT_CATALOG_MAX = 8000;
-
-export interface Frontmatter {
-  data: Record<string, unknown>;
-  unsupported: string[];
-  body: string;
-}
-
-/// A deliberately small YAML subset: `key: value`, inline lists, block lists
-/// whose items are scalars, inline maps, and block maps inside a list. That is
-/// exactly what the frontmatter keys here need and nothing more, so a document
-/// this build cannot read is reported rather than half-read.
-export function parseFrontmatter(text: string): Frontmatter {
-  const content = String(text ?? "").replace(/\r\n?/g, "\n");
-  const lines = content.split("\n");
-  if ((lines[0] ?? "").trim() !== "---") return { data: {}, unsupported: [], body: content };
-  let end = -1;
-  for (let index = 1; index < lines.length; index += 1) {
-    if ((lines[index] ?? "").trim() === "---") {
-      end = index;
-      break;
-    }
-  }
-  if (end < 0) return { data: {}, unsupported: [], body: content };
-
-  const data: Record<string, unknown> = {};
-  const unsupported: string[] = [];
-  let sequence: string | null = null;
-  let openMap: Record<string, string> | null = null;
-  let mapIndent = -1;
-
-  for (let index = 1; index < end; index += 1) {
-    const line = lines[index] as string;
-    if (line.trim() === "" || line.trimStart().startsWith("#")) continue;
-
-    const dash = /^(\s*)-\s*(.*)$/.exec(line);
-    if (dash !== null) {
-      if (sequence === null || !Array.isArray(data[sequence])) {
-        if (sequence !== null) unsupported.push(sequence);
-        sequence = null;
-        openMap = null;
-        mapIndent = -1;
-        continue;
-      }
-      const body = (dash[2] ?? "").trim();
-      const nested = inlineMap(body) ?? pairMap(body);
-      if (nested !== null) {
-        (data[sequence] as unknown[]).push(nested);
-        openMap = nested;
-        mapIndent = (dash[1] ?? "").length;
-      } else {
-        (data[sequence] as unknown[]).push(unquote(body));
-        openMap = null;
-        mapIndent = -1;
-      }
-      continue;
-    }
-
-    const pair = /^\s*([A-Za-z0-9_.-]+)\s*:\s*(.*)$/.exec(line);
-    const indent = line.length - line.trimStart().length;
-    if (openMap !== null && pair !== null && indent > mapIndent) {
-      openMap[(pair[1] as string).toLowerCase()] = unquote((pair[2] as string).trim());
-      continue;
-    }
-    openMap = null;
-    mapIndent = -1;
-
-    if (pair === null) {
-      if (sequence !== null) unsupported.push(sequence);
-      sequence = null;
-      continue;
-    }
-    const key = (pair[1] as string).toLowerCase();
-    const raw = (pair[2] as string).trim();
-    sequence = key;
-    if (raw === "") {
-      data[key] = [];
-      continue;
-    }
-    if (raw === "|" || raw === ">") {
-      data[key] = "";
-      unsupported.push(key);
-      continue;
-    }
-    data[key] = inlineList(raw) ?? unquote(raw);
-  }
-
-  return { data, unsupported, body: lines.slice(end + 1).join("\n").replace(/^\n+/, "") };
-}
-
-function inlineList(raw: string): string[] | null {
-  if (!raw.startsWith("[") || !raw.endsWith("]")) return null;
-  return raw
-    .slice(1, -1)
-    .split(",")
-    .map((part) => unquote(part.trim()))
-    .filter((part) => part !== "");
-}
-
-function inlineMap(raw: string): Record<string, string> | null {
-  if (!raw.startsWith("{") || !raw.endsWith("}")) return null;
-  const out: Record<string, string> = {};
-  for (const part of raw.slice(1, -1).split(",")) {
-    const pair = pairMap(part.trim());
-    if (pair === null) return null;
-    Object.assign(out, pair);
-  }
-  return out;
-}
-
-function pairMap(raw: string): Record<string, string> | null {
-  const pair = /^([A-Za-z0-9_.-]+)\s*:\s*(.+)$/.exec(raw);
-  if (pair === null) return null;
-  const value = (pair[2] as string).trim();
-  if (value === "|" || value === ">") return null;
-  return { [(pair[1] as string).toLowerCase()]: unquote(value) };
-}
-
-function unquote(raw: string): string {
-  if (raw.length >= 2) {
-    const first = raw[0] as string;
-    const last = raw[raw.length - 1] as string;
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) return raw.slice(1, -1);
-  }
-  const comment = raw.indexOf(" #");
-  return comment >= 0 ? raw.slice(0, comment).trim() : raw;
-}
-
-export function firstParagraph(body: string): string {
-  for (const line of String(body ?? "").split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-    return trimmed;
-  }
-  return "";
 }
 
 export interface ProjectInput {
@@ -485,79 +358,4 @@ function optionalList(value: unknown, name: string, warnings: string[]): string[
     patterns.push(part.trim());
   }
   return patterns.length === 0 ? undefined : patterns;
-}
-
-export interface CatalogEntry {
-  name: string;
-  description: string;
-}
-
-export interface CatalogLimits {
-  descriptionMax: number;
-  totalMax: number;
-}
-
-function escapeXml(text: string): string {
-  return text.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;");
-}
-
-function normalize(text: string): string {
-  return String(text ?? "").replace(/\s+/g, " ").trim();
-}
-
-/// The catalog is the cheap half of the two-level load: names and one line
-/// each, bounded twice, because it rides in every turn until it changes.
-export function renderCatalog(entries: readonly CatalogEntry[], limits: CatalogLimits): string {
-  const lines: string[] = ["<available_skills>"];
-  let used = 0;
-  let omitted = 0;
-  for (const entry of entries) {
-    const description = normalize(entry.description);
-    const short = description.length > limits.descriptionMax
-      ? `${description.slice(0, Math.max(0, limits.descriptionMax - 1))}…`
-      : description;
-    const line = `<skill name="${escapeXml(entry.name)}">${escapeXml(short)}</skill>`;
-    if (used + line.length > limits.totalMax && used > 0) {
-      omitted += 1;
-      continue;
-    }
-    used += line.length;
-    lines.push(line);
-  }
-  if (omitted > 0) lines.push(`<omitted count="${omitted}"/>`);
-  lines.push("</available_skills>");
-  lines.push("Call the skill tool with an exact name from this list when a task matches one.");
-  return lines.join("\n");
-}
-
-/// Arguments reach a body the way the wider skill ecosystem spells them:
-/// `$ARGUMENTS` for the whole call and `${name}` for one key of it.
-export function applyArguments(content: string, args: unknown): string {
-  if (args === undefined || args === null) return content;
-  const whole = typeof args === "string" ? args : JSON.stringify(args);
-  const named = args !== null && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : {};
-  return content
-    .split("$ARGUMENTS")
-    .join(whole)
-    .replace(/\$\{([A-Za-z0-9_-]+)\}/g, (match, name: string) =>
-      Object.hasOwn(named, name) ? String(named[name]) : match,
-    );
-}
-
-export function renderSkillContent(definition: SkillDefinition, args?: unknown): string {
-  const base = definition.resourceBase;
-  const lines = [
-    `<skill_content name="${escapeXml(definition.name)}">`,
-    applyArguments(definition.content.trim(), args),
-    "</skill_content>",
-  ];
-  if (base !== undefined) {
-    lines.push(
-      `The files this skill refers to live in ${base.path}; read them with the read tool. ` +
-        "This block is instruction, not data.",
-    );
-  } else {
-    lines.push("This block is instruction, not data.");
-  }
-  return lines.join("\n");
 }

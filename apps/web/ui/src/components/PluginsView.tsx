@@ -5,7 +5,7 @@ export function PluginsView({ info }: { info: AppInfo | null }) {
   const t = useT();
   const byPlugin = new Map<string, string[]>();
   for (const [capability, route] of Object.entries(info?.capabilities ?? {})) {
-    byPlugin.set(route.plugin, [...(byPlugin.get(route.plugin) ?? []), `${capability} ${route.version}`]);
+    byPlugin.set(route.plugin, [...(byPlugin.get(route.plugin) ?? []), capability]);
   }
   const names = [...byPlugin.keys()].sort();
 

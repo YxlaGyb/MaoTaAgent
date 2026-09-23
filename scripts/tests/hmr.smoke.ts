@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { kernel as kernelBin } from "eggshell-kernel";
 
-import { restartOnSourceChange } from "../apps/cli/src/hmr.ts";
+import { restartOnSourceChange } from "../../apps/cli/src/hmr.ts";
 import { boot, type Event } from "@maota/host";
 
 const [eggshellArg] = process.argv.slice(2);
 const eggshell = eggshellArg ?? kernelBin;
-if (!eggshell) throw new Error("usage: node tests/hmr.smoke.ts [eggshell]");
+if (!eggshell) throw new Error("usage: node scripts/tests/hmr.smoke.ts [eggshell]");
 
-const root = join(import.meta.dirname, "..");
+const root = join(import.meta.dirname, "..", "..");
 const slashes = (path: string) => path.replaceAll("\\", "/");
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -32,7 +32,7 @@ function pluginSource(capability: string, imports: string[]): string {
     ...imports.map((specifier) => `import "${specifier}";`),
     "",
     "export const definition: Definition = {",
-    `  provides: [{ capability: "${capability}", version: "1.0.0" }],`,
+    `  provides: ["${capability}"],`,
     "  configKeys: [],",
     "  methods: { ping() { return 1; } },",
     "};",

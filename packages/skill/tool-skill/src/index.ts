@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CallError, defineTools, packageVersion, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
+import { CallError, defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import {
   isSkillName,
   readControl,
@@ -93,12 +93,9 @@ function closed(name: string): CallError {
   );
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.skill",
-    version: VERSION,
     description:
       "Load one or more skills by their exact names, in the order given: it returns their instructions " +
       "and the directory their references, scripts and assets live in.",

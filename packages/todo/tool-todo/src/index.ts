@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import {
   defineTools,
-  packageVersion,
   runPlugin,
   type Call,
   type Definition,
@@ -29,12 +28,9 @@ function positive(value: unknown, fallback: number): number {
 
 const limitsOf = (): PlanLimits => ({ max_items: settings.max_items, max_content_chars: settings.max_content_chars });
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.todo_write",
-    version: VERSION,
     description:
       "Create and manage the task list for this session. Call it with the whole list, in order, every time: the " +
       "list replaces the one before it, so write the full plan back rather than describing a change. Keep the steps " +
@@ -74,7 +70,7 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "session", version: "^1" }],
+  requires: [{ capability: "session" }],
   configKeys: ["max_items", "max_content_chars", "verify_nudge", "verify_min_items"],
 
   setup(wiring) {
@@ -92,7 +88,7 @@ export const definition: Definition = {
     const problems: string[] = [];
     const call = { capability: "tool.todo_write" } as unknown as Call;
 
-    const capabilities = toolkit.provides.map((item) => item.capability);
+    const capabilities = toolkit.provides;
     if (capabilities.join(",") !== "tool.todo_write") problems.push(`the toolkit provides ${capabilities.join(", ")}`);
     const described = toolkit.methods.describe({}, call) as {
       name?: string;

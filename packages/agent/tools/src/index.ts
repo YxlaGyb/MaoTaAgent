@@ -7,7 +7,6 @@ import { join } from "node:path";
 import {
   CallError,
   isPluginEntry,
-  packageVersion,
   runPlugin,
   type Call,
   type Channel,
@@ -116,10 +115,8 @@ async function policyOf(tool: ToolRoute, ctx: Call): Promise<ToolPolicy | null> 
   }
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "tools", version: VERSION }],
+  provides: ["tools"],
   configKeys: ["max_result_chars", "preview_chars", "spill_dir", "spill_max_age_ms", "spill_max_bytes"],
 
   setup(wiring) {
@@ -206,9 +203,9 @@ export const definition: Definition = {
   async selfCheck() {
     const problems: string[] = [];
     const found = discover({
-      "tool.pwsh": { plugin: "pwsh-local", version: "1.0.0" },
-      api: { plugin: "api", version: "1.0.0" },
-      "tool.read": { plugin: "tool-fs", version: "1.0.0" },
+      "tool.pwsh": { plugin: "pwsh-local" },
+      api: { plugin: "api" },
+      "tool.read": { plugin: "tool-fs" },
     });
     if (found.size !== 2) problems.push(`discover picked ${found.size} tools, expected 2`);
     if (!found.has("pwsh")) problems.push("discover lost tool.pwsh");
@@ -227,7 +224,7 @@ export const definition: Definition = {
 
     const pool = tools;
     const logging = { log: (): void => {} } as unknown as Channel;
-    adopt({ "tool.pwsh": { plugin: "pwsh-local", version: "1.0.0" } }, logging);
+    adopt({ "tool.pwsh": { plugin: "pwsh-local" } }, logging);
     if (tools.size !== 1 || !tools.has("pwsh")) problems.push("adopt did not rebuild the pool");
     adopt({}, logging);
     if (tools.size !== 0) problems.push("adopt kept a tool the table had dropped");

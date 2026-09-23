@@ -3,25 +3,9 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 import type { Message, ToolSpec } from "@maota/agent-loop";
-import { packageVersion } from "@maota/plugin-kit";
 
 import { catalogNote, lastCatalogEntries, sameCatalog, touchedPaths } from "../src/catalog.ts";
-import { approvalText, systemPrompt } from "../src/prompt.ts";
 import { hostValue, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "../src/tools.ts";
-
-assert.equal(systemPrompt("  base  ", null), "base");
-assert.equal(systemPrompt("", ""), "");
-const cwdOnly = systemPrompt("", "E:\\proj");
-assert.equal(cwdOnly.trim(), "working directory: E:\\proj");
-assert.equal(cwdOnly.trimStart().includes(" "), true, "the working directory line should keep its own text");
-assert.equal(systemPrompt("base", "E:\\proj", "ask"), `base\n\nworking directory: E:\\proj\n\n${approvalText("ask")}`);
-assert.equal(systemPrompt("base", null, null), "base");
-assert.equal(systemPrompt("base", null, "nonsense"), "base");
-assert.equal(systemPrompt("base", "E:\\proj").includes("skill"), false, "the prompt should not carry a skill list");
-assert.equal(approvalText("ask")?.includes("do not retry"), true);
-assert.equal(approvalText("auto")?.includes("without asking"), true);
-assert.equal(approvalText("full")?.includes("without asking"), true);
-assert.equal(approvalText(undefined), null);
 
 assert.deepEqual(readToolList(undefined), []);
 assert.deepEqual(readToolList({ tools: "nope" }), []);
@@ -171,16 +155,16 @@ const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" }
 const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
 const report = JSON.parse(line) as {
   ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
   requires?: Array<{ capability: string }>;
   problems?: string[];
 };
 assert.equal(run.status, 0, `the agent entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the agent selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "agent.loop", version: packageVersion(import.meta.url) }]);
+assert.deepEqual(report.provides, ["agent.loop"]);
 assert.deepEqual(
   (report.requires ?? []).map((item) => item.capability),
-  ["api", "tools", "session", "skill", "permission", "hooks"],
+  ["api", "tools", "session", "system-prompt", "skill", "permission", "hooks"],
 );
 
-console.log("agent ok: systemPrompt, tool specs, host args, the entry --check report");
+console.log("agent ok: the prompt assembly, tool specs, host args, the entry --check report");

@@ -91,7 +91,7 @@ export function SettingsView({
           name: plugin,
           note: Object.entries(info?.capabilities ?? {})
             .filter(([, route]) => route.plugin === plugin)
-            .map(([capability, route]) => `${capability} ${route.version}`)
+            .map(([capability]) => capability)
             .join(" · "),
         })),
     },

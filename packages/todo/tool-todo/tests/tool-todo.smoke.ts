@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import { packageVersion } from "@maota/plugin-kit";
-
 import {
   acknowledgement,
   checkTodos,
@@ -104,11 +102,11 @@ const run = spawnSync(process.execPath, [entry, "--check"], { encoding: "utf8" }
 const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
 const report = JSON.parse(line) as {
   ok?: boolean;
-  provides?: Array<{ capability: string; version: string }>;
+  provides?: string[];
   problems?: string[];
 };
 assert.equal(run.status, 0, `the tool entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the tool selfCheck reported ${JSON.stringify(report.problems)}`);
-assert.deepEqual(report.provides, [{ capability: "tool.todo_write", version: packageVersion(import.meta.url) }]);
+assert.deepEqual(report.provides, ["tool.todo_write"]);
 
 console.log("tool-todo ok: the item shape, the ceilings, the acknowledgement, the nudge and the entry --check report");

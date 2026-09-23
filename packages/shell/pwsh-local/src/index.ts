@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CallError, packageVersion, runPlugin, type Definition } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Definition } from "@maota/plugin-kit";
 
 import { runPwsh } from "./pwsh.ts";
 
@@ -20,10 +20,8 @@ function positive(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 export const definition: Definition = {
-  provides: [{ capability: "shell", version: VERSION }],
+  provides: ["shell"],
   configKeys: ["timeout_ms", "max_output_bytes", "cwd"],
 
   setup(wiring) {

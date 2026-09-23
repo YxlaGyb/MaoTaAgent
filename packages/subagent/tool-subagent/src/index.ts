@@ -2,7 +2,6 @@
 import {
   CallError,
   defineTools,
-  packageVersion,
   runPlugin,
   type Call,
   type Definition,
@@ -133,12 +132,9 @@ async function runChild(call: Call, run: ChildRun): Promise<{ text: unknown; rea
   return { text: done.text, reason };
 }
 
-const VERSION = packageVersion(import.meta.url);
-
 const toolkit = defineTools([
   {
     capability: "tool.task",
-    version: VERSION,
     description:
       "Hand one self-contained piece of work to a subagent. It gets a fresh context of its own, works on the " +
       "task with its own tools, and answers with one final message; nothing else of what it did comes back, so " +
@@ -204,7 +200,7 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "agent.loop", version: "^1.3" }],
+  requires: [{ capability: "agent.loop" }],
   configKeys: [
     "max_concurrent",
     "child_max_steps",
@@ -231,7 +227,7 @@ export const definition: Definition = {
     const problems: string[] = [];
     const call = { capability: "tool.task" } as unknown as Call;
 
-    const capabilities = toolkit.provides.map((item) => item.capability);
+    const capabilities = toolkit.provides;
     if (capabilities.join(",") !== "tool.task") problems.push(`the toolkit provides ${capabilities.join(", ")}`);
     const described = toolkit.methods.describe({}, call) as {
       name?: string;

@@ -7,7 +7,7 @@ import { kernel as installedKernel } from "eggshell-kernel";
 
 import { boot, type Chunk } from "@maota/host";
 
-const root = join(import.meta.dirname, "..");
+const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
   process.env.EGGSHELL_BIN ??
@@ -39,9 +39,11 @@ writeFileSync(
     ...plugin("tool-fs", "fs/tool-fs"),
     ...plugin("tool-fs-search", "fs/tool-fs-search"),
     ...plugin("tools", "agent/tools"),
-    ...plugin("skill-filesystem", "skill-filesystem"),
-    ...plugin("skill", "skill"),
+    ...plugin("skill-filesystem", "skill/skill-filesystem"),
+    ...plugin("skill", "skill/skill"),
+    ...plugin("tool-skill", "skill/tool-skill"),
     ...plugin("session", "session"),
+    ...plugin("system-prompt", "agent/system-prompt"),
     ...plugin("agent", "agent/agent-core"),
     "",
   ].join("\n"),
@@ -97,7 +99,7 @@ function show(label: string, events: any[]): void {
 }
 
 const table = await kernel.capabilities();
-for (const [capability, route] of Object.entries(table)) console.log(`  ${capability} = ${route.plugin} (${route.version})`);
+for (const [capability, route] of Object.entries(table)) console.log(`  ${capability} = ${route.plugin}`);
 assert.equal(table["agent.loop"]?.plugin, "agent");
 assert.equal(table["shell"]?.plugin, "pwsh-local");
 assert.equal(table["tool.pwsh"]?.plugin, "tool-pwsh");
@@ -107,7 +109,11 @@ assert.equal(table["tool.glob"]?.plugin, "tool-fs-search");
 const tools = (await kernel.invoke("tools", "list", {})) as { tools: Array<{ name: string }> };
 assert.deepEqual(
   tools.tools.map((tool) => tool.name),
-  ["edit", "glob", "pwsh", "read", "write"],
+  Object.keys(table)
+    .filter((capability) => capability.startsWith("tool."))
+    .map((capability) => capability.slice("tool.".length))
+    .sort(),
+  "the agent sees every tool.* capability the mounted plugins provide, in name order",
 );
 const skills = (await kernel.invoke("skill", "list", {})) as { skills: Array<{ name: string }> };
 assert.deepEqual(

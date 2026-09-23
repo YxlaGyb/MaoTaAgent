@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CallError, packageVersion, runPlugin, type Channel, type Definition } from "@maota/plugin-kit";
+import { CallError, runPlugin, type Channel, type Definition, type Route } from "@maota/plugin-kit";
 
 import { createBridge, type Bridge } from "./bridge.ts";
 import type { AppInfo } from "./protocol.ts";
@@ -13,8 +13,11 @@ import type { AppInfo } from "./protocol.ts";
 const UI = fileURLToPath(new URL("../ui/", import.meta.url));
 const DIST = fileURLToPath(new URL("../dist/", import.meta.url));
 const VITE_CONFIG = fileURLToPath(new URL("../vite.config.ts", import.meta.url));
-const VERSION = packageVersion(import.meta.url);
 
+/// The web app's own build number, for the about panel: it says which app this
+/// is, not which capability it implements.
+const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: unknown };
+const VERSION = typeof manifest.version === "string" ? manifest.version : "";
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -50,7 +53,7 @@ let settings = settingsFrom({}, process.env.NODE_ENV);
 let bridge!: Bridge;
 let server!: Server;
 let dev: { middlewares: Middleware; close(): Promise<void> } | null = null;
-let capabilities: Record<string, { plugin: string; version: string }> = {};
+let capabilities: Record<string, Route> = {};
 
 function codeOf(error: unknown): number {
   return error instanceof CallError ? error.code : -32603;
@@ -229,11 +232,11 @@ function write(response: ServerResponse, status: number, contentType: string, bo
 }
 
 export const definition: Definition = {
-  provides: [{ capability: "web", version: VERSION }],
+  provides: ["web"],
   requires: [
-    { capability: "session", version: "^1" },
-    { capability: "agent.loop", version: "^1" },
-    { capability: "permission", version: "^1", optional: true },
+    { capability: "session" },
+    { capability: "agent.loop" },
+    { capability: "permission", optional: true },
   ],
   configKeys: ["port", "host", "dev", "open"],
 
