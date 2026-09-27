@@ -1,7 +1,24 @@
-import { lstatSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { CallError } from "@maota/plugin-kit";
+
+export function maotaHome(): string {
+  const configured = process.env.MAOTA_HOME;
+  return configured !== undefined && configured.trim() !== "" ? configured : join(homedir(), ".maota");
+}
+
+export function projectRoot(cwd: string): string {
+  const start = resolve(cwd);
+  let current = start;
+  for (;;) {
+    if (existsSync(join(current, ".git"))) return current;
+    const parent = dirname(current);
+    if (parent === current) return start;
+    current = parent;
+  }
+}
 
 export interface Workspace {
   root: string;

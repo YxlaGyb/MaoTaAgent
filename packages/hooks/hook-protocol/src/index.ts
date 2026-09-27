@@ -150,6 +150,22 @@ export interface HookContribution {
   reply: HookReply;
 }
 
+const CONTEXT_THREATS: Array<[string, RegExp]> = [
+  ["instruction override", /ignore\s+(?:all\s+)?(?:previous|above|prior)\s+instructions/i],
+  ["system prompt override", /system\s+prompt\s+override/i],
+  ["hidden instruction", /<!--[\s\S]{0,200}(?:ignore|instruction|system)[\s\S]{0,200}-->/i],
+  ["credential exfiltration", /(?:api[_-]?key|password|secret|token)[^\n]{0,80}(?:curl|wget|fetch|http)/i],
+  ["credential file access", /(?:cat|type|get-content)\s+[^\n]{0,120}(?:\.env|credentials|id_rsa|\.npmrc)/i],
+  ["invisible control character", /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E]/],
+];
+
+export function scanContextText(text: string): string[] {
+  return CONTEXT_THREATS.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+}
+
+export function blockedContextText(reasons: readonly string[]): string {
+  return `[BLOCKED: context contained potential prompt injection or credential exfiltration (${reasons.join(", ")})]`;
+}
 export function clipContext(text: string, maxChars: number): string {
   const trimmed = text.trim();
   if (maxChars <= 0) return "";

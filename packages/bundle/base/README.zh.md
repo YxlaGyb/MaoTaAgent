@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的十七个插件、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的二十一个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
 kind: "package-reference"
 ---
 
@@ -49,7 +49,10 @@ import { rows } from "@maota/base";
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
 | `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
-| `hooks` | `@maota/hooks-native` | `hooks` |
+| `hooks` | `@maota/hooks-native` | `hooks`，上下文预算 80 KiB |
+| `context-agent-instructions` | `@maota/context-agent-instructions` | `hook.agent-instructions` |
+| `memory` | `@maota/memory` | `hook.memory`、`tool.memory` |
+| `system-prompt` | `@maota/system-prompt` | `system-prompt` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
 | `hmr` | `@maota/hmr` | `dev.hmr`，缺省关着 |
 

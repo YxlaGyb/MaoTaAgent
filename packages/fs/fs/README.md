@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This library holds the three questions every file tool has to answer before it touches anything: where the workspace root is, whether a path is inside it, and how to write without leaving a torn file behind. It is imported by the two file plugins and spawned by neither, so it reads no config and holds no state. Every refusal is a `CallError` with `-32602`, which means the model sees an argument-shaped problem rather than a crash.
+This library holds the three questions every file tool has to answer before it touches anything: where the workspace root is, whether a path is inside it, and how to write without leaving a torn file behind. It is imported by the file tools and the context providers and spawned by none of them, so it reads no config and holds no state. Every refusal is a `CallError` with `-32602`, which means the model sees an argument-shaped problem rather than a crash.
 
 ## Table of Contents
 
@@ -30,6 +30,8 @@ writeAtomic(target, content);
 
 | Export | Input | Returns |
 |---|---|---|
+| `maotaHome()` | Nothing. | `$MAOTA_HOME`, or `~/.maota` when it is unset. |
+| `projectRoot(cwd)` | A session working directory. | The nearest ancestor holding `.git`, or `cwd` itself when none exists. |
 | `workspace(cwd, spillDir?)` | The session working directory, and optionally a second root to read from. | `{ root, read_roots }`. The root is the real path of `cwd`; `read_roots` is the root, plus the spill directory when one is given. |
 | `existingRoot(dir)` | A directory. | Its real path. Fails when it is not a non-empty string, does not exist, or is not a directory. |
 | `resolvePath({ path, roots, write? })` | A path to check, the roots it may land in, and whether this is a write. | The absolute target. Throws when the path is unusable or lands outside. |

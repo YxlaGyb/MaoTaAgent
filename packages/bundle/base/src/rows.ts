@@ -21,8 +21,10 @@ export const rows: PluginRow[] = [
   { id: "tool-skill", name: "@maota/tool-skill" },
   { id: "tools", name: "@maota/tools" },
   { id: "session", name: "@maota/session" },
-  { id: "hooks", name: "@maota/hooks-native" },
+  { id: "hooks", name: "@maota/hooks-native", config: { max_context_chars: 81920 } },
   { id: "system-prompt", name: "@maota/system-prompt" },
+  { id: "context-agent-instructions", name: "@maota/context-agent-instructions" },
+  { id: "memory", name: "@maota/memory" },
   { id: "agent-core", name: "@maota/agent-core" },
   { id: "hmr", name: "@maota/hmr", disabled: true },
 ];

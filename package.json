@@ -36,6 +36,8 @@
     "tool-todo:smoke": "node packages/todo/tool-todo/tests/tool-todo.smoke.ts",
     "tool-pwsh:smoke": "node packages/shell/tool-pwsh/tests/tool-pwsh.smoke.ts",
     "session:smoke": "node packages/session/tests/session.smoke.ts",
+    "context-instructions:smoke": "node packages/context/agent-instructions/tests/context-instructions.smoke.ts",
+    "memory:smoke": "node packages/memory/memory/tests/memory.smoke.ts",
     "permission:smoke": "node packages/interaction/permission/tests/permission.smoke.ts",
     "tool-subagent:smoke": "node packages/subagent/tool-subagent/tests/tool-subagent.smoke.ts",
     "skill:smoke": "node packages/skill/skill/tests/skill.smoke.ts",
@@ -57,7 +59,9 @@
   },
   "devDependencies": {
     "@maota/agent-core": "workspace:^",
+    "@maota/context-agent-instructions": "workspace:^",
     "@maota/i18n-native": "workspace:^",
+    "@maota/memory": "workspace:^",
     "@maota/i18n-protocol": "workspace:^",
     "@maota/api": "workspace:^",
     "@maota/base": "workspace:^",

@@ -34,7 +34,7 @@ interface Settings {
 const DEFAULTS: Settings = {
   max_concurrent: 4,
   child_max_steps: 8,
-  child_tools_deny: ["skill"],
+  child_tools_deny: ["skill", "memory"],
   explore_tools: ["read", "glob", "grep"],
   general_system: DEFAULT_GENERAL_SYSTEM,
   explore_system: DEFAULT_EXPLORE_SYSTEM,

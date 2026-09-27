@@ -16,7 +16,6 @@ import {
   type LoopState,
   type Message,
   type PreToolDecision,
-  type SourcedText,
   type ToolCall,
   type ToolSpec,
 } from "@maota/agent-loop";
@@ -25,6 +24,7 @@ import { touchedPaths } from "./catalog.ts";
 import { continueNote, overflowNote } from "./compact.ts";
 import { narrow, readRunControl, withoutControl, type RunControl } from "./control.ts";
 import { chatStream } from "./chat.ts";
+import { mergeContextNotes, type ContextNote } from "./context.ts";
 import { compactMessages, fitToolResult, loadHistory, persist, titleOf } from "./history.ts";
 import { asPostTool, asPreTool, asStop, hooksOn, preToolUse, seam, triggerHook } from "./hooks.ts";
 import { active, depths, readLevel, resolveLevel, settings, type LevelSetting } from "./levels.ts";
@@ -71,14 +71,14 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   /// Text an event the loop has no seam for contributes, written into the turn
   /// as a message of its own. Before that array exists it waits here, so
   /// `SessionStart` and a fold are heard by the same first model call.
-  const pending: SourcedText[] = [];
+  const pending: ContextNote[] = [];
   const record = async (event: HookEvent, payload: unknown): Promise<void> => {
     const outcome = await triggerHook(ctx, event, payload);
-    pending.push(...(outcome.context ?? []));
+    pending.push(...(outcome.context ?? []).map((note) => ({ ...note, replace: event === "PreModel" })));
   };
   const flush = (): void => {
     if (pending.length === 0) return;
-    messages.push(...sourcedMessages(pending));
+    mergeContextNotes(messages, pending);
     pending.length = 0;
   };
   const depth = readDepth(params?.depth) ?? (sub ? (depths.get(identity) ?? 0) + 1 : 0);

@@ -21,6 +21,9 @@ importers:
       '@maota/base':
         specifier: workspace:^
         version: link:packages/bundle/base
+      '@maota/context-agent-instructions':
+        specifier: workspace:^
+        version: link:packages/context/agent-instructions
       '@maota/hmr':
         specifier: workspace:^
         version: link:packages/boot/hmr
@@ -39,6 +42,9 @@ importers:
       '@maota/i18n-protocol':
         specifier: workspace:^
         version: link:i18n/i18n-protocol
+      '@maota/memory':
+        specifier: workspace:^
+        version: link:packages/memory/memory
       '@maota/permission':
         specifier: workspace:^
         version: link:packages/interaction/permission
@@ -232,6 +238,18 @@ importers:
 
   packages/bundle/web: {}
 
+  packages/context/agent-instructions:
+    dependencies:
+      '@maota/fs':
+        specifier: workspace:^
+        version: link:../../fs/fs
+      '@maota/hook-protocol':
+        specifier: workspace:^
+        version: link:../../hooks/hook-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
   packages/fs/fs:
     dependencies:
       '@maota/plugin-kit':
@@ -269,6 +287,18 @@ importers:
 
   packages/interaction/permission:
     dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/memory/memory:
+    dependencies:
+      '@maota/fs':
+        specifier: workspace:^
+        version: link:../../fs/fs
+      '@maota/hook-protocol':
+        specifier: workspace:^
+        version: link:../../hooks/hook-protocol
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit

@@ -25,6 +25,8 @@ kind: "package-group"
 
 | 包 | 目录 | 能力 | 职责 |
 |---|---|---|---|
+| `@maota/context-agent-instructions` | [`context/agent-instructions`](context/agent-instructions/) | `hook.agent-instructions` | `AGENTS.md` 与 `CLAUDE.md` 的 `PreModel` 提供者。 |
+| `@maota/memory` | [`memory/memory`](memory/memory/) | `hook.memory`、`tool.memory` | 固定预算的记忆快照，以及维护它的模型工具。 |
 | `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | 前端真正对话的那个包：系统提示词、会话记账、工具装配与流式 `run`。 |
 | `@maota/api` | [`api`](api/) | `api` | 模型网关：openai 后端，以及测试用的 scripted 后端。 |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | 开发期 watcher：为它盯着的路径发布 `dev.source.changed`，生成的那一行是 `disabled`。 |
@@ -53,7 +55,7 @@ kind: "package-group"
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | `serve` profile 在 `default` 那份之上追加的那一行。 |
 
 <a id="bundles"></a>
-一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的十七行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
+一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的二十一行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
 `pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`requires`、`configKeys` 与 `selfCheck`。
 

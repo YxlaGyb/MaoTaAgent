@@ -5,8 +5,32 @@ import { join } from "node:path";
 import type { Message, ToolSpec } from "@maota/agent-loop";
 
 import { catalogNote, lastCatalogEntries, sameCatalog, touchedPaths } from "../src/catalog.ts";
+import { mergeContextNotes } from "../src/context.ts";
 import { hostValue, injectHostArgs, readToolList, stripHostArgs, type HostValues } from "../src/tools.ts";
 
+const contextMessages: Message[] = [
+  { role: "user", content: "hello" },
+  { role: "user", name: "hook:agent-instructions", content: "instructions v1" },
+  { role: "user", name: "hook:memory", content: "memory v1" },
+];
+mergeContextNotes(contextMessages, [
+  { source: "hook:agent-instructions", text: "instructions v1", replace: true },
+  { source: "hook:memory", text: "memory v2", replace: true },
+]);
+assert.deepEqual(contextMessages, [
+  { role: "user", content: "hello" },
+  { role: "user", name: "hook:agent-instructions", content: "instructions v1" },
+  { role: "user", name: "hook:memory", content: "memory v2" },
+]);
+mergeContextNotes(contextMessages, [{ source: "hook:memory", text: "memory v3", replace: true }]);
+assert.equal(contextMessages.length, 3);
+assert.equal(contextMessages[2]?.content, "memory v3");
+contextMessages.splice(1, 2);
+mergeContextNotes(contextMessages, [{ source: "hook:memory", text: "memory v4", replace: true }]);
+assert.equal(contextMessages.at(-1)?.content, "memory v4");
+mergeContextNotes(contextMessages, [{ source: "hook:tool", text: "one" }]);
+mergeContextNotes(contextMessages, [{ source: "hook:tool", text: "two" }]);
+assert.equal(contextMessages.filter((message) => message.name === "hook:tool").length, 2);
 assert.deepEqual(readToolList(undefined), []);
 assert.deepEqual(readToolList({ tools: "nope" }), []);
 assert.deepEqual(readToolList({}), []);

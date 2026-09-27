@@ -52,12 +52,12 @@ One method per event, named after the event, taking that event's payload and ret
 | `decision` | `allow`, `deny` or `ask`. `deny` refuses: a refused prompt is never stored and never reaches the model, and a refused call is never dispatched and never classified. `allow` grants nothing on its own, because the classification and the tool's own approval still run. `ask` is a question rather than a verdict, and only the bridge that knows the permission layer can act on it. |
 | `reason` | Why, when refusing or asking. Only the winner's reasons survive the merge, and they are what the model, or the person being asked, is told. |
 | `args` | Replace the arguments of the tool call this event is about. The first hook that supplies them supplies them. |
-| `context` | Text this hook wants injected into the conversation, one entry per message. Write plain text: the engine stamps the source on your behalf. |
+| `context` | Text this hook wants injected into the conversation, one entry per message. Write plain text: the engine stamps the source on your behalf. At `PreModel`, agent-core replaces the previous message from the same hook source when its content changes. |
 | `output` | Replace what the model is told the call returned, on `PostToolUse`. The first hook that supplies one supplies it. |
 | `preventContinuation` | After a tool call, ask for the turn to end. One hook asking is enough. |
 | `steer` | On `Stop`, one more thing to say before the turn ends. The first hook that offers one supplies it. |
 
-A hook that returns `null`, an empty object, or nothing at all has no opinion and does not affect the outcome.
+A hook that returns `null`, an empty object, or nothing at all has no opinion and does not affect the outcome. Context providers use `scanContextText` and `blockedContextText` before writing a model-visible note.
 
 ### The provider contract
 

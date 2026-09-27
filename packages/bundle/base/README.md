@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the seventeen plugins the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the twenty-one plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
 kind: "package-reference"
 ---
 
@@ -49,7 +49,10 @@ import { rows } from "@maota/base";
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
 | `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
-| `hooks` | `@maota/hooks-native` | `hooks` |
+| `hooks` | `@maota/hooks-native` | `hooks`, with an 80 KiB context budget |
+| `context-agent-instructions` | `@maota/context-agent-instructions` | `hook.agent-instructions` |
+| `memory` | `@maota/memory` | `hook.memory`, `tool.memory` |
+| `system-prompt` | `@maota/system-prompt` | `system-prompt` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
 | `hmr` | `@maota/hmr` | `dev.hmr`, disabled by default |
 
