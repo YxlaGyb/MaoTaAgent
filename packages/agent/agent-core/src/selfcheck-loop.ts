@@ -268,16 +268,16 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     const folded = rig.run({ session_id: "fold", cwd: "E:\\proj", input: "and now" }, [rig.scripted("done")]);
     await folded.done;
     const stored = (rig.saves.at(-1)?.messages ?? []) as Message[];
-    if (stored[0]?.name !== "compact" || stored[1]?.role !== "assistant") {
+    if (stored[0]?.name !== "compact" || stored[1]?.role !== "user") {
       problems.push(`a folded history opened with ${JSON.stringify(stored.slice(0, 2))}`);
     }
     const note = stored[0]?.source as { kind?: unknown; folded?: unknown } | undefined;
-    if (note?.kind !== "compact" || note.folded !== 3) {
+    if (note?.kind !== "compact" || note.folded !== 2) {
       problems.push(`the compact note carried ${JSON.stringify(note)}`);
     }
     if (stored[0]?.content !== "folded note") problems.push("the compact note is not the summary that came back");
-    if (stored.length !== 4) {
-      problems.push(`a folded history kept ${stored.length} messages, expected the note, the kept pair and the answer`);
+    if (stored.length !== 5) {
+      problems.push(`a folded history kept ${stored.length} messages, expected the compact note, recent tail and the answer`);
     }
     if (!folded.heard.some((item) => item.capability === "api" && item.method === "chat")) {
       problems.push("a fold never asked the model to summarise");

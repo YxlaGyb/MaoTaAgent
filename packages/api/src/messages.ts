@@ -23,6 +23,7 @@ export interface ChatRequest {
   messages: Message[];
   tools: unknown[] | undefined;
   temperature: number | undefined;
+  max_tokens: number | undefined;
   session: SessionRef | undefined;
 }
 
@@ -64,6 +65,10 @@ export function readChat(params: unknown, defaultModel: string): ChatRequest {
     messages: projected,
     tools: Array.isArray(input.tools) && input.tools.length > 0 ? input.tools : undefined,
     temperature: typeof input.temperature === "number" ? input.temperature : undefined,
+    max_tokens:
+      typeof input.max_tokens === "number" && Number.isInteger(input.max_tokens) && input.max_tokens > 0
+        ? input.max_tokens
+        : undefined,
     session: sessionOf(input.session),
   };
 }

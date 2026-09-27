@@ -1,8 +1,9 @@
 import { MaoButton } from "maotaui";
 
-import type { AppInfo, Approval, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
+import { ContextMeter } from "./ContextMeter.tsx";
 import { Icon, ICON } from "./Icon.tsx";
 import { MessageList, type LiveTurn } from "./MessageList.tsx";
 
@@ -18,6 +19,8 @@ export function ChatView({
   thinking,
   permission,
   approvals,
+  context,
+  onCompact,
   spawned,
   onRetry,
   onThinking,
@@ -38,6 +41,8 @@ export function ChatView({
   thinking: string;
   permission: string;
   approvals: Approval[];
+  context: ContextView | null;
+  onCompact: () => void;
   spawned: Record<string, SessionSummary[]>;
   onRetry: () => void;
   onKeySaved: () => void;
@@ -72,6 +77,7 @@ export function ChatView({
       {session === null ? null : (
         <header className="chat-head">
           <span className="chat-title">{title}</span>
+          <ContextMeter context={context} running={live?.running === true} onCompact={onCompact} />
         </header>
       )}
 

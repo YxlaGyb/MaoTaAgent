@@ -4,11 +4,11 @@
 /// children, the index the listing rides, the lock a concurrent write takes, and
 /// the folding a full document undergoes. Everything here runs against a
 /// throwaway root, so no check needs a kernel and none leaves anything behind.
+import { checkCompaction } from "./selfcheck-compaction.ts";
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
 import {
   appendEvent,
   appendTodos,
@@ -38,7 +38,6 @@ import {
   type SessionEvent,
   type TodoItem,
 } from "./plan.ts";
-
 export async function runSelfCheck(): Promise<string[]> {
   const problems: string[] = [];
   const root = mkdtempSync(join(tmpdir(), "session-check-"));
@@ -55,7 +54,6 @@ export async function runSelfCheck(): Promise<string[]> {
       const got = encodeDir(cwd);
       if (got !== want) problems.push(`encodeDir(${JSON.stringify(cwd)}) = ${JSON.stringify(got)}, want ${want}`);
     }
-
     for (const bad of ["", "../x", ".hidden", "a/b", "x".repeat(65)]) {
       try {
         load(root, bad, "", limits);
@@ -63,10 +61,8 @@ export async function runSelfCheck(): Promise<string[]> {
       } catch {
       }
     }
-
     const fresh = load(root, "abc", "E:\\proj", limits);
     if (fresh.messages.length !== 0 || fresh.dangling) problems.push("load on a missing session is wrong");
-
     const messages = [
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
@@ -80,7 +76,6 @@ export async function runSelfCheck(): Promise<string[]> {
       problems.push("save dropped the existing title");
     }
     if (!load(root, "abc", "E:\\proj", limits).dangling) problems.push("a trailing user message was not marked dangling");
-
     if (!sameCwd("E:\\proj", "E:\\proj\\")) problems.push("a trailing separator looked like another cwd");
     save(root, { id: "abc", cwd: "E:\\proj\\", messages }, limits);
     try {
@@ -88,13 +83,11 @@ export async function runSelfCheck(): Promise<string[]> {
       problems.push("save overwrote a session whose cwd encodes to the same folder");
     } catch {
     }
-
     try {
       save(root, { id: "big", cwd: "E:\\proj", messages: [{ role: "user", content: "x".repeat(5000) }] }, limits);
       problems.push("save accepted a session over max_bytes");
     } catch {
     }
-
     save(root, { id: "other", cwd: "E:\\other", messages }, limits);
     const listed = list(root);
     if (listed.length !== 2) problems.push(`list found ${listed.length} sessions, want 2`);
@@ -259,7 +252,8 @@ export async function runSelfCheck(): Promise<string[]> {
     };
     save(root, { id: "note", cwd: "E:\\proj", title: "note", messages: [note] }, limits);
     const reread = load(root, "note", "E:\\proj", limits);
-    if (messageSource(reread.messages[0]?.source)?.entries[0]?.name !== "code-review") {
+    const rereadSource = messageSource(reread.messages[0]?.source);
+    if (rereadSource?.kind !== "skill-catalog" || rereadSource.entries[0]?.name !== "code-review") {
       problems.push(`a catalog note came back as ${JSON.stringify(reread.messages[0]?.source)}`);
     }
     if (reread.schema_version !== SCHEMA_VERSION) problems.push("a catalog note wrote the wrong schema");
@@ -279,7 +273,8 @@ export async function runSelfCheck(): Promise<string[]> {
       limits,
     );
     const noted = load(root, "note", "E:\\proj", limits);
-    if (noted.messages[0]?.source?.update !== true) problems.push("the update flag was lost");
+    const notedSource = noted.messages[0]?.source;
+    if (notedSource?.kind !== "skill-catalog" || notedSource.update !== true) problems.push("the update flag was lost");
     if (messageSource({ kind: "other", entries: [] }) !== null) problems.push("messageSource accepted a foreign kind");
     if (messageSource({ kind: "skill-catalog", entries: [{ name: 1, description: "x" }] }) !== null) {
       problems.push("messageSource accepted a malformed entry");
@@ -287,6 +282,7 @@ export async function runSelfCheck(): Promise<string[]> {
     if (messageSource({ kind: "skill-catalog", update: "yes", entries: [] }) !== null) {
       problems.push("messageSource accepted a malformed update flag");
     }
+    checkCompaction(root, limits, problems);
     try {
       save(root, { id: "torn", cwd: "E:\\proj", messages: [{ role: "user", source: { kind: "nope" } }] }, limits);
       problems.push("save accepted a source this build does not know");

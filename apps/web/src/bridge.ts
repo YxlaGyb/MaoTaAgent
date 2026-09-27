@@ -101,6 +101,20 @@ export function createBridge(channel: Channel): Bridge {
     };
   }
 
+  function forwardCompact(topic: string, payload: unknown): HostEvent {
+    const event = (payload ?? {}) as Record<string, unknown>;
+    return {
+      event: "compact." + topic.slice("agent.compact.".length),
+      session_id: typeof event.session_id === "string" ? event.session_id : "",
+      trigger: typeof event.trigger === "string" ? event.trigger : "",
+      folded: typeof event.folded === "number" ? event.folded : 0,
+      chars_before: typeof event.chars_before === "number" ? event.chars_before : 0,
+      chars_after: typeof event.chars_after === "number" ? event.chars_after : 0,
+      ...(typeof event.status === "string" ? { status: event.status } : {}),
+      ...(typeof event.error === "string" ? { error: event.error } : {}),
+    };
+  }
+
   function cwdOf(params: Record<string, unknown>): string {
     return typeof params.cwd === "string" ? params.cwd : "";
   }
@@ -302,6 +316,18 @@ export function createBridge(channel: Channel): Bridge {
         }
         case "chat.send":
           return await send(params);
+        case "chat.context":
+          return await channel.call("agent.loop", "context", {
+            session_id: sessionOf(params),
+            cwd: cwdOf(params),
+            ...(typeof params.model === "string" ? { model: params.model } : {}),
+          });
+        case "chat.compact":
+          return await channel.call("agent.loop", "compact", {
+            session_id: sessionOf(params),
+            cwd: cwdOf(params),
+            ...(typeof params.model === "string" ? { model: params.model } : {}),
+          });
         case "chat.cancel":
           return cancel(params);
         default:
@@ -312,11 +338,13 @@ export function createBridge(channel: Channel): Bridge {
     async open(): Promise<void> {
       try {
         subscription = await channel.subscribe(
-          ["permission.requested", "permission.settled", "agent.subagent.*"],
+          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*"],
           (topic, _seq, payload) => {
             const event = topic.startsWith("agent.subagent.")
               ? forwardSubagent(topic, payload)
-              : forwardPermission(topic, payload);
+              : topic.startsWith("agent.compact.")
+                ? forwardCompact(topic, payload)
+                : forwardPermission(topic, payload);
             if (event !== null) emit(event);
           },
         );

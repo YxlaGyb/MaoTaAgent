@@ -12,6 +12,16 @@ import { CallError } from "@maota/plugin-kit";
 
 import { isPlanEvent, isRetryEvent, validateTodos, viewOf, type RetryEvent, type SessionEvent, type TodosSnapshotEvent, type TodosView } from "./plan.ts";
 import {
+  compactionRecordOf,
+  compactionsOf,
+  historyDir,
+  removeHistoryDir,
+  writeArchiveFile,
+  writeArtifactFile,
+  type ArtifactRef,
+  type CompactionRecord,
+} from "./compaction.ts";
+import {
   SCHEMA_VERSION,
   assertId,
   assertParent,
@@ -52,6 +62,15 @@ export type {
   Limits,
   Warner,
 } from "./document.ts";
+export type {
+  CompactSource,
+  ArtifactRef,
+  ArchiveRef,
+  CompactionRecord,
+  CompactionTrigger,
+  CompactionKind,
+  CompactionStatus,
+} from "./compaction.ts";
 
 export { serially, pendingWrites } from "./lock.ts";
 
@@ -76,6 +95,7 @@ export function load(
       updated_at: now,
       messages: [],
       events: [],
+      compactions: [],
       parent: null,
       dangling: false,
     };
@@ -88,6 +108,7 @@ export interface SaveInput {
   cwd: unknown;
   title?: unknown;
   messages: unknown;
+  compactions?: unknown;
   parent?: unknown;
 }
 
@@ -144,6 +165,9 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
     assertOwnership(found, id, workdir);
 
     const messages = projectMessages(input.messages, true);
+    const compactions = input.compactions === undefined
+      ? (found?.compactions ?? [])
+      : (compactionsOf(input.compactions, true) ?? []);
     const file: SessionFile = {
       schema_version: SCHEMA_VERSION,
       id,
@@ -153,6 +177,7 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
       updated_at: now,
       messages,
       events: found?.events ?? [],
+      compactions,
       parent: assertParent(input.parent) ?? found?.parent ?? null,
       dangling: messages.at(-1)?.role === "user",
     };
@@ -163,6 +188,81 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
   return written;
 }
 
+export interface SaveArtifactInput {
+  id: unknown;
+  cwd: unknown;
+  name: unknown;
+  content: unknown;
+}
+
+export function saveArtifact(root: string, input: SaveArtifactInput): ArtifactRef {
+  const id = assertId(input.id);
+  const workdir = typeof input.cwd === "string" ? input.cwd : "";
+  if (typeof input.content !== "string") {
+    throw new CallError(-32602, "artifact content must be a string");
+  }
+  const name = typeof input.name === "string" && input.name !== "" ? input.name : "artifact";
+  return writeArtifactFile(historyDir(root, encodeDir(workdir), id), name, input.content);
+}
+
+export interface CommitCompactionInput {
+  id: unknown;
+  cwd: unknown;
+  title?: unknown;
+  messages: unknown;
+  parent?: unknown;
+  record: unknown;
+  archive?: { messages: unknown };
+}
+
+export function commitCompaction(
+  root: string,
+  input: CommitCompactionInput,
+  limits: Limits,
+  now = new Date().toISOString(),
+): SessionFile {
+  const id = assertId(input.id);
+  const workdir = typeof input.cwd === "string" ? input.cwd : "";
+  const path = pathOf(root, id, workdir, limits);
+  const requested = compactionRecordOf(input.record, true) as CompactionRecord;
+  const archiveMessages = input.archive === undefined
+    ? null
+    : projectMessages(input.archive.messages, true);
+  const written = withLock(path, () => {
+    const found = readFileAt(path);
+    assertOwnership(found, id, workdir);
+    const messages = projectMessages(input.messages, true);
+    const dir = historyDir(root, encodeDir(workdir), id);
+    const archive = archiveMessages === null || archiveMessages.length === 0
+      ? requested.archive
+      : writeArchiveFile(
+          dir,
+          requested.id,
+          archiveMessages.map((message) => JSON.stringify(message)).join("\n") + "\n",
+          archiveMessages.length,
+        );
+    const record: CompactionRecord = {
+      ...requested,
+      ...(archive === undefined ? {} : { archive }),
+    };
+    const file: SessionFile = {
+      schema_version: SCHEMA_VERSION,
+      id,
+      cwd: trimCwd(workdir),
+      title: typeof input.title === "string" && input.title !== "" ? input.title : (found?.title ?? ""),
+      created_at: found?.created_at ?? now,
+      updated_at: record.at,
+      messages,
+      events: found?.events ?? [],
+      compactions: [...(found?.compactions ?? []), record],
+      parent: assertParent(input.parent) ?? found?.parent ?? null,
+      dangling: messages.at(-1)?.role === "user",
+    };
+    return writeDocument(path, join(root, encodeDir(workdir)), id, file, limits);
+  });
+  upsertIndex(root, summaryOf(written));
+  return written;
+}
 export function write(root: string, id: unknown, cwd: unknown, file: SessionFile, limits: Limits): SessionFile {
   const safeId = assertId(id);
   const workdir = typeof cwd === "string" ? cwd : "";
@@ -244,7 +344,10 @@ export function remove(root: string, id: unknown, cwd: unknown, limits: Limits):
       return false;
     }
   });
-  if (removed) dropIndex(root, safeId, workdir);
+  if (removed) {
+    dropIndex(root, safeId, workdir);
+    removeHistoryDir(historyDir(root, encodeDir(workdir), safeId));
+  }
   return removed;
 }
 

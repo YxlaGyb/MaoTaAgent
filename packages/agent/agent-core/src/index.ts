@@ -9,6 +9,7 @@ import { runPlugin, type Definition } from "@maota/plugin-kit";
 import { startCapabilities } from "./hooks.ts";
 import { applyConfig, infoOf } from "./levels.ts";
 import { runAgent } from "./run.ts";
+import { compactSession, contextOf } from "./history.ts";
 import { runSelfCheck } from "./selfcheck.ts";
 
 export { LEVELS, isLevel, readLevel, readThinking, resolveLevel } from "./levels.ts";
@@ -21,12 +22,14 @@ export const definition: Definition = {
   configKeys: [
     "max_steps",
     "max_parallel_tools",
+    "context_chars",
     "compact_after_chars",
     "compact_keep_messages",
     "context_compact",
     "max_compactions",
     "max_depth",
     "thinking",
+    "model_budgets",
   ],
   requires: [
     { capability: "api" },
@@ -56,6 +59,16 @@ export const definition: Definition = {
 
     info() {
       return infoOf();
+    },
+    context(params, ctx) {
+      const sessionId = typeof params?.session_id === "string" ? params.session_id : "default";
+      const cwd = typeof params?.cwd === "string" && params.cwd !== "" ? params.cwd : null;
+      const model = typeof params?.model === "string" && params.model !== "" ? params.model : undefined;
+      return contextOf(ctx, sessionId, cwd, model);
+    },
+
+    compact(params, ctx) {
+      return compactSession(ctx, params);
     },
   },
 

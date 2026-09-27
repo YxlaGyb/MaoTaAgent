@@ -68,6 +68,45 @@ export interface SessionMessageSource {
   kind: string;
   update?: boolean;
   entries?: Array<{ name: string; description: string }>;
+  id?: string;
+  folded?: number;
+  trigger?: string;
+}
+
+export interface ArtifactRef {
+  name: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+}
+
+export interface ArchiveRef {
+  path: string;
+  bytes: number;
+  sha256: string;
+  messages: number;
+}
+
+export interface CompactionRecord {
+  id: string;
+  at: string;
+  trigger: string;
+  kind: "prune" | "summary";
+  status: "committed" | "failed";
+  folded: number;
+  chars_before: number;
+  chars_after: number;
+  artifacts: ArtifactRef[];
+  archive?: ArchiveRef;
+  error?: string;
+}
+
+export interface ContextView {
+  estimated_chars: number;
+  threshold_chars: number;
+  ratio: number;
+  active: boolean;
+  compactions: CompactionRecord[];
 }
 
 export interface SessionMessage {
@@ -87,6 +126,7 @@ export interface SessionFile {
   created_at: string;
   updated_at: string;
   messages: SessionMessage[];
+  compactions?: CompactionRecord[];
   dangling: boolean;
 }
 
@@ -126,6 +166,12 @@ export interface HostEvent {
   description?: string;
   subagent?: SubagentRef;
   failure?: HostFailure;
+  trigger?: string;
+  folded?: number;
+  chars_before?: number;
+  chars_after?: number;
+  status?: string;
+  error?: string;
 }
 
 export interface Approval {

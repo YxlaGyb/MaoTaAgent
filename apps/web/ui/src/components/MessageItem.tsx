@@ -52,6 +52,19 @@ export function MessageItem({
 }) {
   const t = useT();
 
+  if (message.source?.kind === "compact") {
+    return (
+      <div className="msg-note">
+        <details className="note msg-compact">
+          <summary className="note-summary">
+            <Icon d={ICON.plug} className="icon icon-sm" />
+            {t("compactCheckpoint", { n: message.source.folded ?? 0 })}
+          </summary>
+          <pre className="note-body">{String(message.content ?? "")}</pre>
+        </details>
+      </div>
+    );
+  }
   /// The catalog is written by the harness, not by a person, so it is a folded
   /// grey line rather than a message bubble: it is worth being able to read, and
   /// not worth reading on every turn.

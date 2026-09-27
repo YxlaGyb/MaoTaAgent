@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
 import { MainPane } from "./components/MainPane.tsx";
 import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { DEFAULT_PROJECT } from "./components/Sidebar.tsx";
 import { SidebarPane } from "./components/SidebarPane.tsx";
+import { useContextCompact } from "./useContextCompact.ts";
 import { describe, errorText, failureText } from "./lib/errors.ts";
 import { adoptCatalog } from "./lib/i18n.ts";
 import {
@@ -17,7 +17,6 @@ import {
   type SessionMessage,
   type SessionSummary,
 } from "./lib/rpc.ts";
-
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -26,14 +25,12 @@ function load<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-
 function remember(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
   }
 }
-
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [kernelError, setKernelError] = useState<string | null>(null);
@@ -60,11 +57,16 @@ export function App() {
   const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
   const [spawned, setSpawned] = useState<Record<string, SessionSummary[]>>({});
-
   const activeRef = useRef(active);
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
-
+  const { context, compactNow, loadContext, onCompactEvent } = useContextCompact({
+    activeRef,
+    info,
+    thinking,
+    onMessages: setMessages,
+    onFailure: (session, message) => setFailure({ session, text: message }),
+  });
   useEffect(() => {
     activeRef.current = active;
     remember("maota.active", active);
@@ -87,19 +89,19 @@ export function App() {
     system.addEventListener("change", paint);
     return () => system.removeEventListener("change", paint);
   }, [theme]);
-
   const openSession = useCallback(async (id: string, cwd: string): Promise<void> => {
     const seq = ++loadSeq.current;
     try {
       const file = await call<SessionFile>("sessions.load", { id, cwd });
       if (seq !== loadSeq.current) return;
       setMessages(file.messages ?? []);
+      void loadContext(id, cwd);
     } catch (error) {
       if (seq !== loadSeq.current) return;
       setMessages([]);
       setFailure({ session: id, text: describe(error) });
     }
-  }, []);
+  }, [loadContext]);
 
   const refreshSessions = useCallback(async (): Promise<void> => {
     try {
@@ -160,6 +162,7 @@ export function App() {
 
   const handleEvent = useCallback(
     (event: HostEvent) => {
+      if (onCompactEvent(event)) return;
       if (event.event === "permission.request") {
         const id = event.request_id ?? "";
         if (id === "") return;
@@ -233,7 +236,7 @@ export function App() {
         return turn === undefined ? prev : { ...prev, [sessionId]: applyEvent(turn, event) };
       });
     },
-    [loadSpawned, openSession, refreshSessions],
+    [loadSpawned, onCompactEvent, openSession, refreshSessions],
   );
 
   useEffect(() => {
@@ -473,6 +476,8 @@ export function App() {
         thinking={thinking}
         permission={permission}
         approvals={approvals}
+        context={context}
+        onCompact={() => void compactNow()}
         spawned={spawned}
         palette={palette}
         onPalette={setPalette}

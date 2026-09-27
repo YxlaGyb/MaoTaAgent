@@ -3,6 +3,8 @@ import {
   appendEvent,
   appendTodos,
   childrenOf,
+  commitCompaction,
+  saveArtifact,
   DEFAULT_MAX_EVENTS,
   defaultMaxPath,
   defaultRoot,
@@ -74,6 +76,7 @@ export const definition: Definition = {
             cwd: params?.cwd,
             title: params?.title,
             messages: params?.messages,
+            compactions: params?.compactions,
             parent: params?.parent,
           },
           settings.limits,
@@ -81,6 +84,34 @@ export const definition: Definition = {
       );
     },
 
+    save_artifact(params) {
+      return serially(keyOf(params), () =>
+        saveArtifact(settings.root, {
+          id: params?.id,
+          cwd: params?.cwd,
+          name: params?.name,
+          content: params?.content,
+        }),
+      );
+    },
+
+    commit_compaction(params) {
+      return serially(keyOf(params), () =>
+        commitCompaction(
+          settings.root,
+          {
+            id: params?.id,
+            cwd: params?.cwd,
+            title: params?.title,
+            messages: params?.messages,
+            parent: params?.parent,
+            record: params?.record,
+            archive: params?.archive,
+          },
+          settings.limits,
+        ),
+      );
+    },
     children(params) {
       return serially(keyOf(params), () => ({
         children: childrenOf(settings.root, params?.id, params?.cwd),

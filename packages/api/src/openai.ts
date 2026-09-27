@@ -137,6 +137,7 @@ function body(request: ChatRequest, stream: boolean): string {
     messages: request.messages,
     ...(request.tools ? { tools: asOpenAITools(request.tools) } : {}),
     ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+    ...(request.max_tokens === undefined ? {} : { max_tokens: request.max_tokens }),
     ...(stream ? { stream: true } : {}),
   });
 }

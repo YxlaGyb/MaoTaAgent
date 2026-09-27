@@ -94,6 +94,13 @@ export function createRig(definition: Definition): Rig {
             saves.push(params);
             return {};
           }
+          if (capability === "session" && method === "save_artifact") {
+            return { name: params.name, path: `artifact-${params.name}.txt`, bytes: String(params.content).length, sha256: "test" };
+          }
+          if (capability === "session" && method === "commit_compaction") {
+            saves.push(params);
+            return {};
+          }
           if (capability === "tools" && method === "classify") return { safe: true };
           if (capability === "tools" && method === "call") return "tool output";
           if (capability === "api" && method === "chat") return { message: { role: "assistant", content: "folded note" } };

@@ -14,15 +14,22 @@ export interface LevelSetting {
   tools: boolean;
 }
 
+export interface ModelBudget {
+  context_chars: number;
+  compact_after_chars: number;
+}
+
 const DEFAULTS = {
   max_steps: 8,
   max_parallel_tools: 4,
+  context_chars: 150_000,
   compact_after_chars: 120_000,
   compact_keep_messages: 12,
   context_compact: true,
   max_compactions: 1,
   max_depth: 3,
   thinking: {} as Partial<Record<Level, LevelSetting>>,
+  model_budgets: {} as Record<string, Partial<ModelBudget>>,
 };
 
 export let settings = { ...DEFAULTS };
@@ -67,6 +74,34 @@ export function readThinking(value: unknown): Partial<Record<Level, LevelSetting
   return out;
 }
 
+export function readModelBudgets(value: unknown): Record<string, Partial<ModelBudget>> {
+  const out: Record<string, Partial<ModelBudget>> = {};
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return out;
+  for (const [model, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (model === "" || raw === null || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const table = raw as { context_chars?: unknown; compact_after_chars?: unknown };
+    const budget: Partial<ModelBudget> = {};
+    if (typeof table.context_chars === "number" && table.context_chars > 0) {
+      budget.context_chars = Math.floor(table.context_chars);
+    }
+    if (typeof table.compact_after_chars === "number" && table.compact_after_chars > 0) {
+      budget.compact_after_chars = Math.floor(table.compact_after_chars);
+    }
+    if (budget.context_chars !== undefined || budget.compact_after_chars !== undefined) out[model] = budget;
+  }
+  return out;
+}
+
+export function budgetFor(model: string | undefined): ModelBudget {
+  const modelBudget = model === undefined ? undefined : settings.model_budgets[model];
+  const contextChars = modelBudget?.context_chars ?? settings.context_chars;
+  const trigger = modelBudget?.compact_after_chars ?? settings.compact_after_chars;
+  return {
+    context_chars: contextChars,
+    compact_after_chars: Math.min(trigger, Math.floor(contextChars * 0.8)),
+  };
+}
+
 export function resolveLevel(thinking: Partial<Record<Level, LevelSetting>>, level: Level): LevelSetting {
   return thinking[level] ?? { tools: true };
 }
@@ -84,6 +119,10 @@ export function applyConfig(wiring: Wiring): void {
       typeof wiring.config.max_parallel_tools === "number" && wiring.config.max_parallel_tools > 0
         ? wiring.config.max_parallel_tools
         : DEFAULTS.max_parallel_tools,
+    context_chars:
+      typeof wiring.config.context_chars === "number" && wiring.config.context_chars > 0
+        ? wiring.config.context_chars
+        : DEFAULTS.context_chars,
     compact_after_chars:
       typeof wiring.config.compact_after_chars === "number" && wiring.config.compact_after_chars > 0
         ? wiring.config.compact_after_chars
@@ -102,6 +141,7 @@ export function applyConfig(wiring: Wiring): void {
         ? wiring.config.max_depth
         : DEFAULTS.max_depth,
     thinking: readThinking(wiring.config.thinking),
+    model_budgets: readModelBudgets(wiring.config.model_budgets),
   };
 }
 

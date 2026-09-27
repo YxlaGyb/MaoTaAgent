@@ -10,8 +10,9 @@ import { join } from "node:path";
 import { CallError } from "@maota/plugin-kit";
 
 import { eventsOf, type SessionEvent } from "./plan.ts";
+import { compactSourceOf, compactionsOf, type CompactionRecord, type CompactSource } from "./compaction.ts";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
@@ -24,7 +25,7 @@ export interface SkillCatalogSource {
   entries: Array<{ name: string; description: string }>;
 }
 
-export type MessageSource = SkillCatalogSource;
+export type MessageSource = SkillCatalogSource | CompactSource;
 
 export interface SessionMessage {
   role: string;
@@ -42,6 +43,7 @@ export interface SessionMessage {
 export function messageSource(value: unknown): MessageSource | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
+  if (input.kind === "compact") return compactSourceOf(value, false);
   if (input.kind !== "skill-catalog") return null;
   if (input.update !== undefined && typeof input.update !== "boolean") return null;
   if (!Array.isArray(input.entries)) return null;
@@ -58,7 +60,6 @@ export function messageSource(value: unknown): MessageSource | null {
     entries,
   };
 }
-
 function projectMessage(raw: unknown, strict: boolean): SessionMessage | null {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const input = raw as Record<string, unknown>;
@@ -95,6 +96,7 @@ export interface SessionFile {
   updated_at: string;
   messages: SessionMessage[];
   events: SessionEvent[];
+  compactions: CompactionRecord[];
   parent: SessionParent | null;
   dangling: boolean;
 }
@@ -235,11 +237,13 @@ export function inspect(path: string): Read {
       return { state: "bad", reason: "the document has no id and messages" };
     }
     const version = parsed.schema_version;
-    if (version !== undefined && ![1, 2, 3, SCHEMA_VERSION].includes(version)) {
+    if (version !== undefined && ![1, 2, 3, 4, SCHEMA_VERSION].includes(version)) {
       return { state: "bad", reason: `schema_version ${JSON.stringify(version)} is not one this build reads` };
     }
     const events = eventsOf((parsed as { events?: unknown }).events);
     if (events === null) return { state: "bad", reason: "the event list is not a list of plan events" };
+    const compactions = compactionsOf((parsed as { compactions?: unknown }).compactions ?? [], false);
+    if (compactions === null) return { state: "bad", reason: "the compaction list is not readable" };
     return {
       state: "ok",
       file: {
@@ -247,6 +251,7 @@ export function inspect(path: string): Read {
         schema_version: SCHEMA_VERSION,
         messages: projectMessages(parsed.messages, false),
         events,
+        compactions,
         parent: parentOf((parsed as { parent?: unknown }).parent),
         dangling: false,
       },

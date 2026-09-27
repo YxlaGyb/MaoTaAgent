@@ -3,7 +3,7 @@
 /// and the rows the palette searches, then hands everything to the views.
 
 import { useT } from "../lib/i18n.ts";
-import type { AppInfo, Approval, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { ChatView } from "./ChatView.tsx";
 import type { LiveTurn } from "./MessageList.tsx";
 import { PluginsView } from "./PluginsView.tsx";
@@ -26,6 +26,8 @@ export function MainPane({
   thinking,
   permission,
   approvals,
+  context,
+  onCompact,
   spawned,
   palette,
   onPalette,
@@ -55,6 +57,8 @@ export function MainPane({
   thinking: string;
   permission: string;
   approvals: Approval[];
+  context: ContextView | null;
+  onCompact: () => void;
   spawned: Record<string, SessionSummary[]>;
   palette: boolean;
   onPalette: (open: boolean) => void;
@@ -93,6 +97,8 @@ export function MainPane({
           thinking={thinking}
           permission={permission}
           approvals={approvals}
+          context={context}
+          onCompact={onCompact}
           spawned={spawned}
           onRetry={onRetry}
           onKeySaved={onKeySaved}

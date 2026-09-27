@@ -25,7 +25,7 @@ import { touchedPaths } from "./catalog.ts";
 import { continueNote, overflowNote } from "./compact.ts";
 import { narrow, readRunControl, withoutControl, type RunControl } from "./control.ts";
 import { chatStream } from "./chat.ts";
-import { foldForOverflow, foldHistory, loadHistory, persist, titleOf } from "./history.ts";
+import { compactMessages, fitToolResult, loadHistory, persist, titleOf } from "./history.ts";
 import { asPostTool, asPreTool, asStop, hooksOn, preToolUse, seam, triggerHook } from "./hooks.ts";
 import { active, depths, readLevel, resolveLevel, settings, type LevelSetting } from "./levels.ts";
 import { approvalMode, assemblePrompt, catalogNote, classifyTool, listTools } from "./prompt.ts";
@@ -231,7 +231,6 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   // fold swallowed is still compared against, and the note the model is about
   // to read is never what the fold eats.
   const note = sub ? null : await catalogNote(ctx, history, cwd, touched);
-  if (!sub) await foldHistory(ctx, history, self, record);
   if (note !== null) history.push(note);
 
   const title = origin !== null && origin.description !== "" ? origin.description : titleOf(first?.content);
@@ -254,6 +253,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   /// What this turn has already spent folding the conversation back into the
   /// window, which is the one recovery a run keeps for itself.
   let compactions = 0;
+  let overflowRetries = 0;
   let closed = false;
   /// What the run will say it ended with, so `SessionEnd` can be raised from
   /// the one place every ending passes through.
@@ -267,6 +267,26 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
           max_steps: maxSteps,
           max_parallel: settings.max_parallel_tools,
           chat: async (step) => {
+            try {
+              if (!sub && settings.context_compact && compactions < settings.max_compactions) {
+                const compacted = await compactMessages(ctx, {
+                  sessionId,
+                  cwd,
+                  messages: step.state.messages,
+                  tools: modelTools,
+                  model: runModel,
+                  trigger: "pressure",
+                  beforeCompact: (folded) =>
+                    record("PreCompact", { ...self, step: step.step, messages: folded }),
+                  flush,
+                });
+                if (compacted.status === "summarized") compactions += 1;
+              }
+            } catch (error) {
+              ctx.channel.log("warn", "agent: pressure compaction failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
             await record("PreModel", { ...self, step: step.step });
             flush();
             try {
@@ -303,25 +323,39 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
               asPostTool,
             );
             const control = readRunControl(outcome.output);
-            if (control === null) return decision;
-            const applied = await applyControl(control, invoked, outcome.output);
-            return { ...(decision ?? {}), output: applied };
+            const applied = control === null
+              ? (decision?.output ?? outcome.output)
+              : await applyControl(control, invoked, outcome.output);
+            const fitted = await fitToolResult(
+              ctx,
+              sessionId,
+              cwd,
+              step.state.messages,
+              modelTools,
+              runModel,
+              applied,
+            );
+            return { ...(decision ?? {}), output: fitted };
           },
           onModelError: async (failure, step) => {
-            // A transient failure never reaches here: the adapter that talked to
-            // the endpoint already replaced the attempt, so what is left is the
-            // one failure only this run can answer.
             if (failure.kind !== "context_window") return { action: "give_up" };
-            // A request that no longer fits is answered by folding the older
-            // half of it, and by nothing else. A fold that could not happen, and
-            // a budget that is already spent, are both reasons to stop rather
-            // than to send the request that just failed once more.
-            if (!settings.context_compact || compactions >= settings.max_compactions) {
-              return { action: "give_up" };
-            }
-            compactions += 1;
-            const folded = await foldForOverflow(ctx, messages, step.signal);
-            return folded ? { action: "retry", delay_ms: 0, steer: overflowNote() } : { action: "give_up" };
+            if (!settings.context_compact || overflowRetries >= 1) return { action: "give_up" };
+            overflowRetries += 1;
+            const compacted = await compactMessages(ctx, {
+              sessionId,
+              cwd,
+              messages,
+              tools: modelTools,
+              model: runModel,
+              trigger: "overflow",
+              force: true,
+              beforeCompact: (folded) =>
+                record("PreCompact", { ...self, step: step.step, messages: folded }),
+              flush,
+            });
+            return compacted.status === "none" || compacted.status === "failed"
+              ? { action: "give_up" }
+              : { action: "retry", delay_ms: 0, steer: overflowNote() };
           },
           ...(sub
             ? {}
