@@ -81,6 +81,10 @@ async function discover(channel: Channel, capabilities: Record<string, Route>): 
 
 export const definition: Definition = {
   provides: ["hooks"],
+  requires: [
+    { capability: "hook.agent-instructions", optional: true },
+    { capability: "hook.memory", optional: true },
+  ],
   configKeys: ["max_context_chars", "command_hooks", "parallel", "strict"],
 
   setup(wiring) {
@@ -96,13 +100,21 @@ export const definition: Definition = {
     // are owned the same way a skill's are, under a scope named for the config.
     const listed = wiring.config.command_hooks;
     if (listed !== undefined) commands.set("config", readCommandHooks(listed, "config"));
-    await discover(wiring.channel, { ...wiring.capabilities });
+    try {
+      await discover(wiring.channel, { ...wiring.capabilities });
+    } catch (error) {
+      wiring.channel.log("warn", `hooks: initial discovery deferred until providers start: ${error instanceof Error ? error.message : String(error)}`);
+    }
     wiring.channel.log("info", `hooks: ${providers.map((item) => item.capability).join(", ") || "(none)"}`, {
       count: providers.length,
     });
     // The table handed over at start is a snapshot, and a hook may be mounted,
     // restarted or dropped later; the kernel publishes every change, so no row
     // order is load-bearing here.
+    setTimeout(() => {
+      void discover(wiring.channel, { ...wiring.capabilities }).catch(() => undefined);
+    }, 100);
+
     await wiring.channel.subscribe(["kernel.capabilities.changed"], (_topic, _seq, payload) => {
       const table = (payload as { capabilities?: Record<string, Route> } | null)?.capabilities;
       if (table === undefined || table === null) return;

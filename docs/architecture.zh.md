@@ -18,6 +18,9 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `packages/todo` | 模型持有的计划：它写下任务清单用的工具，以及清单所住的会话文档。 | [README](../packages/todo/tool-todo/README.zh.md) |
 | `packages/subagent` | 委派：把一件子任务交给一个自带上下文的代理的那个 `task` 工具。 | [子代理](user/subagent.zh.md) |
 | `packages/agent/system-prompt` | 提示词：部署方把段落与变量组装进去的那个注册表，以及循环每轮读一次的组装。 | [系统提示词](user/system-prompt.zh.md) |
+| `packages/agent/agent-runner` | turn 协调器：session 串行、系统消息顺序、唤醒预算与 `agent.turn.*` 事件。 | [README](../packages/agent/agent-runner/README.zh.md) |
+| `packages/jobs` | 进程内后台任务注册表，以及模型读写、列出和停止任务的工具。 | [README](../packages/jobs/README.zh.md) |
+| `packages/schedule` | 持久提醒与自动化，以及面向模型的 `cron_*` 管理工具。 | [README](../packages/schedule/README.zh.md) |
 | `packages/*` | 内核插件：api、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tool-todo、tool-subagent、skill-filesystem、skill-bundled、skill、tool-skill、tools、session、system-prompt、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
 | `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
@@ -27,7 +30,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 1. `maota` 定下配置文件与内核二进制。
 2. 它拉起内核，等内核答出能力表。
 3. 内核把 `[plugins.<id>]` 每一项当自己的子进程起起来，按各插件的 `provides` 路由能力。
-4. 前端 invoke 能力：CLI 驱动 `agent.loop`，web 应用通过自己的桥驱动 `session` 与 `agent.loop`。
+4. 前端 invoke 能力：CLI 与 Web 驱动 `agent.runner`，Web 还通过自己的桥使用 `session`；runner 负责串行 turn 并调用 `agent.loop`。
 5. 停机时内核收到 `ui_quit` 或 `kernel_exit`，停掉插件并以宿主报出的码退出。
 
 开发运行还可能带上 `hmr` 插件（生成的那一行默认关着）：它把改动过的路径发布成 `dev.source.changed`。CLI 从每个 `kernel.plugin.started` 里读出解析后的入口，走一遍入口的静态 import 图，维护一份"文件 → 插件"索引；于是每条改动路径都精确落到 import 它的那几个插件上，再让内核以 `reason: "source"` 重启它们。
@@ -48,6 +51,8 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 - 审批闸门是插件，不是内核功能：内核像路由其它能力一样路由 `permission`，从不看命令。
 - Node 宿主从不解释插件的配置值；它只挑路径、说协议。
 - `apps/web` 和其它插件一样是插件；浏览器那一侧不持有任何内核特权。
+- `agent.runner` 是唯一 turn 入口。直接调用 `agent.loop` 会绕过队列、唤醒预算与系统消息投递。
+- 后台任务只存在于进程内。持久计划定义保存在 `$MAOTA_HOME/schedules.json`。
 - 内核从不监视源码；它只看自己的配置，并在宿主开口时重启被点名的那个插件。
 
 ## 相关文档
@@ -62,5 +67,9 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 - [子代理](user/subagent.zh.md)
 - [bundle 包组](../packages/bundle/README.zh.md)
 - [tools 分发器](../packages/agent/tools/README.zh.md)
+- [jobs 包组](../packages/jobs/README.zh.md)
+- [schedule 包组](../packages/schedule/README.zh.md)
+- [后台任务](user/background-tasks.zh.md)
+- [计划任务](user/scheduled-tasks.zh.md)
 - [maota CLI](../apps/cli/README.zh.md)
 - [防御性模式](defensive-patterns.zh.md)

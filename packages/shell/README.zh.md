@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-跑一条命令刻意分成三个包。库持有请求与结果的形状，以及把退出状态变成标签的那一个函数，被 import 而不被拉起。provider 通过真正启动 PowerShell 来答 `shell` 能力，将来换成沙箱 provider 时工具不用察觉。工具是面向模型的那一半：参数、说明与结果渲染。先在这一页挑对包，再打开它的目录看契约。
+跑一条命令刻意分成三个包。库持有请求与结果的形状，以及把退出状态变成标签的那一个函数，被 import 而不被拉起。provider 通过真正启动 PowerShell 来答 `shell` 能力，将来换成沙箱 provider 时工具不用察觉。工具是面向模型的那一半：参数、说明与结果渲染。provider 还支持后台启动、取消与受控脚本文件执行；它们仍走同一个 `shell` 能力，并通过 jobs 注册表登记任务。先在这一页挑对包，再打开它的目录看契约。
 
 ## 目录
 
@@ -28,6 +28,18 @@ kind: "package-group"
 | `@maota/tool-pwsh` | [`tool-pwsh`](tool-pwsh/) | `tool.pwsh` | 提供给模型的那个工具，名为 `pwsh`。 |
 
 这样拆是为了让第二个 provider 能答同一个能力。一个沙箱执行器会用同样的方法、同样的结果形状来提供 `shell`，`tool-pwsh` 照样调 `shell.run` 不动，变的只是 profile 的行清单。
+
+<a id="background-execution"></a>
+## 后台执行
+
+`shell` 能力有四条路径：
+
+- `run`：前台命令，只返回最终结果。
+- `start`：注册 job、启动进程并返回 job id。
+- `job_cancel`：请求终止进程；进程 close 后 job 才结算。
+- `run_file`：在 `$MAOTA_HOME/scripts` 下执行脚本，参数以数组语义传递。
+
+后台输出追加到 jobs 注册表，完成后由 `agent.runner` 唤醒所属 session。宿主必须保持运行；后台任务不跨停机保存。
 
 <a id="related-documentation"></a>
 ## 相关文档

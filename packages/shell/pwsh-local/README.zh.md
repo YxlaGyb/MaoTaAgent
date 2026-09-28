@@ -27,6 +27,9 @@ kind: "package-reference"
 | 方法 | 参数 | 返回 |
 |---|---|---|
 | `run` | `{ command, workdir?, timeout_ms? }` | `ShellRunResult`：`command`、`exit_code`、`signal`、`timed_out`、`truncated`、`stdout`、`stderr`。 |
+| `start` | `{ command, workdir?, timeout_ms?, owner, label? }` | 注册 jobs 记录并启动进程，返回 `{ job_id }`。 |
+| `job_cancel` | `{ job_id, reason? }` | 请求终止进程；job 在进程 close 后结算。 |
+| `run_file` | `{ path, args, workdir?, timeout_ms? }` | 在 `$MAOTA_HOME/scripts` 下执行脚本，不拼 shell 字符串。 |
 
 `command` 必须是非空字符串，否则这次调用是 `-32602`。`workdir` 落回 `cwd` 配置键，`timeout_ms` 落回 `timeout_ms` 配置键。
 

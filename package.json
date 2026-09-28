@@ -50,6 +50,14 @@
     "config:smoke": "node packages/boot/app-boot/tests/config.smoke.ts",
     "hmr:smoke": "node scripts/tests/hmr.smoke.ts",
     "i18n:write": "node docs/i18n.check.ts --write",
+    "runner:smoke": "node packages/agent/agent-runner/tests/runner.smoke.ts",
+    "jobs:smoke": "node packages/jobs/jobs/tests/jobs.smoke.ts",
+    "jobs-integration:smoke": "node scripts/tests/jobs.smoke.ts",
+    "tool-jobs:smoke": "node packages/jobs/tool-jobs/tests/tool-jobs.smoke.ts",
+    "schedule:smoke": "node packages/schedule/schedule/tests/schedule.smoke.ts",
+    "tool-cron:smoke": "node packages/schedule/tool-cron/tests/tool-cron.smoke.ts",
+    "cron:smoke": "node scripts/tests/cron.smoke.ts",
+    "background:smoke": "node scripts/tests/background.smoke.ts",
     "web": "node apps/cli/src/index.ts serve",
     "web:build": "pnpm -C apps/web build",
     "web:smoke": "node apps/web/tests/web.smoke.ts"
@@ -88,6 +96,11 @@
     "@maota/web-bundle": "workspace:^",
     "@types/node": "^22.20.2",
     "eggshell-kernel": "link:..\\eggshellmod\\npm",
-    "tsdown": "^0.23.0"
+    "tsdown": "^0.23.0",
+    "@maota/agent-runner": "workspace:^",
+    "@maota/jobs": "workspace:^",
+    "@maota/tool-jobs": "workspace:^",
+    "@maota/schedule": "workspace:^",
+    "@maota/tool-cron": "workspace:^"
   }
 }

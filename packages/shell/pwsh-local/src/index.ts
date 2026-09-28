@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { CallError, runPlugin, type Definition } from "@maota/plugin-kit";
+import type { ShellFileRunRequest, ShellStartRequest } from "@maota/shell";
 
+import { BackgroundManager, runScript } from "./background.ts";
 import { runPwsh } from "./pwsh.ts";
 
 const DEFAULTS = {
@@ -15,6 +17,7 @@ interface Settings {
 }
 
 let settings: Settings = { ...DEFAULTS, cwd: undefined };
+const background = new BackgroundManager();
 
 function positive(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
@@ -22,6 +25,7 @@ function positive(value: unknown, fallback: number): number {
 
 export const definition: Definition = {
   provides: ["shell"],
+  requires: [{ capability: "jobs", optional: true }],
   configKeys: ["timeout_ms", "max_output_bytes", "cwd"],
 
   setup(wiring) {
@@ -47,6 +51,34 @@ export const definition: Definition = {
         signal: call.signal,
       });
     },
+
+    async start(params: ShellStartRequest, call) {
+      if (typeof params?.command !== "string" || params.command.trim() === "") {
+        throw new CallError(-32602, "command must be a non-empty string");
+      }
+      return await background.start(
+        {
+          command: params.command,
+          ...(typeof params.workdir === "string" && params.workdir !== "" ? { workdir: params.workdir } : settings.cwd === undefined ? {} : { workdir: settings.cwd }),
+          ...(typeof params.timeout_ms === "number" ? { timeout_ms: params.timeout_ms } : {}),
+          owner: String(params.owner ?? ""),
+          ...(typeof params.label === "string" ? { label: params.label } : {}),
+        },
+        call,
+      );
+    },
+
+    job_cancel(params, call) {
+      return background.cancel(params, call);
+    },
+
+    async run_file(params: ShellFileRunRequest) {
+      return await runScript(params);
+    },
+  },
+
+  async close() {
+    await background.close();
   },
 
   async selfCheck() {

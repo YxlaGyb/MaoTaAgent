@@ -7,6 +7,8 @@ import { resolveConfigPath, resolveKernelBin } from "@maota/app-boot";
 import { boot, type Chunk, type Event } from "@maota/host";
 
 import { parseArgs } from "./args.ts";
+import { runCronCommand } from "./cron.ts";
+import { runJobsCommand } from "./jobs.ts";
 import { restartOnSourceChange } from "./hmr.ts";
 
 const VERSION =
@@ -20,6 +22,8 @@ usage:
   maota <question>    ask once, print the final answer, exit
   maota serve         start the web plugin and stay resident (Ctrl-C to exit)
   maota check         check the config only, start nothing (the exit code comes from the kernel)
+  maota jobs ...      list, inspect, or stop background jobs
+  maota cron ...      list, add, update, remove, run, pause, or resume schedules
   maota --help        this text
   maota --version     print the version
 
@@ -179,7 +183,7 @@ function renderSubagent(event: Event): void {
 }
 
 async function ask(input: string): Promise<void> {
-  const stream = await kernel.invoke("agent.loop", "run", { session_id: session, input }, { stream: true });
+  const stream = await kernel.invoke("agent.runner", "send", { session_id: session, cwd: process.cwd(), input, source: { kind: "user" } }, { stream: true });
   for await (const chunk of stream) {
     if (chunk.error) throw new Error(`kernel ended this stream: ${chunk.error.code} ${chunk.error.message}`);
     render(chunk);
@@ -197,6 +201,10 @@ try {
         : "MaoTa web: the web plugin is not listening; see the line above",
     );
     await new Promise(() => undefined);
+  } else if (parsed.kind === "jobs") {
+    await runJobsCommand(kernel, session, parsed.action, parsed.args);
+  } else if (parsed.kind === "cron") {
+    await runCronCommand(kernel, session, parsed.action, parsed.args);
   } else if (parsed.kind === "once") {
     await ask(parsed.question);
   } else {

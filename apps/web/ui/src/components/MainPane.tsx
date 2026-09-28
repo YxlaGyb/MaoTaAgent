@@ -9,6 +9,7 @@ import type { LiveTurn } from "./MessageList.tsx";
 import { PluginsView } from "./PluginsView.tsx";
 import { SearchPalette } from "./SearchPalette.tsx";
 import { SkillsView } from "./SkillsView.tsx";
+import { TasksView } from "./TasksView.tsx";
 
 export function MainPane({
   page,
@@ -42,7 +43,7 @@ export function MainPane({
   onSend,
   onCancel,
 }: {
-  page: "chat" | "settings" | "plugins" | "skills";
+  page: "chat" | "settings" | "plugins" | "skills" | "tasks";
   info: AppInfo | null;
   kernelError: string | null;
   project: string;
@@ -79,7 +80,9 @@ export function MainPane({
 
   return (
     <>
-      {page === "plugins" ? (
+      {page === "tasks" ? (
+        <TasksView session={active} />
+      ) : page === "plugins" ? (
         <PluginsView info={info} />
       ) : page === "skills" ? (
         <SkillsView cwd={project} />

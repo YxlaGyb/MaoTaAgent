@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的二十一个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的二十六个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
 kind: "package-reference"
 ---
 
@@ -36,9 +36,12 @@ import { rows } from "@maota/base";
 | id | 包 | 能力 |
 |---|---|---|
 | `api` | `@maota/api` | `api` |
+| `i18n` | `@maota/i18n-native` | `i18n` |
+| `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
 | `permission` | `@maota/permission` | `permission` |
 | `tool-pwsh` | `@maota/tool-pwsh` | `tool.pwsh` |
+| `tool-jobs` | `@maota/tool-jobs` | `tool.job_output`、`tool.job_list`、`tool.job_kill` |
 | `tool-fs` | `@maota/tool-fs` | `tool.read`、`tool.write`、`tool.edit` |
 | `tool-fs-search` | `@maota/tool-fs-search` | `tool.glob`、`tool.grep` |
 | `tool-todo` | `@maota/tool-todo` | `tool.todo_write` |
@@ -54,11 +57,14 @@ import { rows } from "@maota/base";
 | `memory` | `@maota/memory` | `hook.memory`、`tool.memory` |
 | `system-prompt` | `@maota/system-prompt` | `system-prompt` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
+| `agent-runner` | `@maota/agent-runner` | `agent.runner` |
+| `schedule` | `@maota/schedule` | `schedule` |
+| `tool-cron` | `@maota/tool-cron` | `tool.cron_create`、`tool.cron_list`、`tool.cron_update`、`tool.cron_delete`、`tool.cron_run_now` |
 | `hmr` | `@maota/hmr` | `dev.hmr`，缺省关着 |
 
 ### 顺序
 
-每个 provider 都排在读它的分发器上面：六个 `tool.*` 插件与它们的 `shell`、`permission` provider 排在 `tools` 之前，两个技能 provider 排在 `skill` 之前；两个分发器都排在读它们的 `agent-core` 之前。分发器在 `start` 时只读一次能力表，并把读到的东西缓存下来，所以一个尚未启动的 provider 要到下一次 `list` 才可见。让 provider 排在分发器上面，正是“启动一次就够”的原因。
+provider 排在读它的 dispatcher 之前：`tool.*` 插件、`shell` 与 `permission` 排在 `tools` 前，skill provider 排在 `skill` 前，hook provider 排在 `hooks` 前。`agent-runner` 排在 `agent-core` 后，`schedule` 排在 `agent-runner` 后；`tool-cron` 可以在 `tools` 后启动，因为 dispatcher 会在 `kernel.capabilities.changed` 后重建。
 
 -----
 

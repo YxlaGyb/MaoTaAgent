@@ -31,6 +31,10 @@ const status = parseExitStatus(result);
 |---|---|---|
 | `ShellRunRequest` | `{ command, workdir?, timeout_ms? }` | What a caller asks for. `command` is required and is the whole command line. |
 | `ShellRunResult` | `{ command, exit_code, signal, timed_out, truncated, stdout, stderr }` | What a provider answers. `exit_code` is `null` when the process never reported one. |
+| `ShellStartRequest` | `{ command, workdir?, timeout_ms?, owner, label? }` | What a background start asks for. |
+| `ShellStartResult` | `{ job_id }` | The registry-issued job id. |
+| `ShellCancelRequest` | `{ job_id, reason? }` | A producer cancellation request. |
+| `ShellFileRunRequest` | `{ path, args, workdir?, timeout_ms? }` | A controlled script run. |
 | `parseExitStatus(result)` | `{ ok, label }` | The shared reading of a finished run. |
 
 | Status | `ok` | `label` |

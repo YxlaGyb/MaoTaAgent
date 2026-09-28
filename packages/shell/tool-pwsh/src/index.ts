@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { defineTools, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
-import type { ShellRunResult } from "@maota/shell";
+import type { ShellRunResult, ShellStartResult } from "@maota/shell";
 
 import {
   needsApproval,
@@ -44,10 +44,12 @@ const toolkit = defineTools([
     capability: "tool.pwsh",
     description:
       "Run a PowerShell command in the working directory and return its exit code, stdout and stderr. " +
+      "Set run_in_background to true only for independent long-running work that should not block this turn. " +
       "A command the permission gate treats as destructive needs approval before it runs.",
     parameters: {
       command: { type: "string", required: true, description: "The PowerShell command line to run." },
       timeout_ms: { type: "integer", description: "Kill the command after this many milliseconds." },
+      run_in_background: { type: "boolean", description: "Return a job id immediately and let the command continue in the background." },
       workdir: { type: "string", host: "session_cwd", description: "The session working directory." },
       session_id: { type: "string", host: "session_id", description: "The session this call belongs to." },
       call_id: {
@@ -81,6 +83,26 @@ const toolkit = defineTools([
         };
         const outcome = await requestApproval(call, target, settings.approval_timeout_ms);
         if (outcome !== "allowed-once") return refusalOf(command, outcome);
+      }
+      if (args.run_in_background === true) {
+        const started = (await call.channel.call(
+          "shell",
+          "start",
+          {
+            command,
+            workdir: cwd,
+            owner: sessionId,
+            label: command,
+            ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
+          },
+          { signal: call.signal },
+        )) as ShellStartResult;
+        return {
+          command,
+          status: "running",
+          job_id: started.job_id,
+          message: `Background job ${started.job_id} started. Use job_output when its completion matters.`,
+        };
       }
       const raw = (await call.channel.call(
         "shell",

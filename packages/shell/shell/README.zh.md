@@ -31,6 +31,10 @@ const status = parseExitStatus(result);
 |---|---|---|
 | `ShellRunRequest` | `{ command, workdir?, timeout_ms? }` | 调用方要什么。`command` 必填，且是整条命令行。 |
 | `ShellRunResult` | `{ command, exit_code, signal, timed_out, truncated, stdout, stderr }` | provider 答什么。进程从未报出退出码时 `exit_code` 为 `null`。 |
+| `ShellStartRequest` | `{ command, workdir?, timeout_ms?, owner, label? }` | 后台启动请求。 |
+| `ShellStartResult` | `{ job_id }` | 注册表发出的 job id。 |
+| `ShellCancelRequest` | `{ job_id, reason? }` | producer 取消请求。 |
+| `ShellFileRunRequest` | `{ path, args, workdir?, timeout_ms? }` | 受控脚本运行请求。 |
 | `parseExitStatus(result)` | `{ ok, label }` | 对一次已结束运行的共用读法。 |
 
 | 状态 | `ok` | `label` |

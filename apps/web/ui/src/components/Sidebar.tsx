@@ -91,6 +91,7 @@ export function Sidebar({
   onSettings,
   onPlugins,
   onSkills,
+  onTasks,
   onSearch,
 }: {
   groups: ProjectGroup[];
@@ -115,6 +116,7 @@ export function Sidebar({
   onSettings: () => void;
   onPlugins: () => void;
   onSkills: () => void;
+  onTasks: () => void;
   onSearch: () => void;
 }) {
   const t = useT();
@@ -158,7 +160,7 @@ export function Sidebar({
           <Icon d={ICON.chat} />
           {t("newChat")}
         </button>
-        <button type="button" className="side-row">
+        <button type="button" className="side-row" onClick={onTasks}>
           <Icon d={ICON.clock} />
           {t("tasks")}
         </button>

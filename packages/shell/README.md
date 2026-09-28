@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Running a command is three packages on purpose. The library holds the request and result shapes and the one function that turns an exit status into a label, and it is imported rather than spawned. The provider answers the `shell` capability by actually starting PowerShell, and a sandboxed provider can replace it later without the tool noticing. The tool is the model-facing half: parameters, description and result rendering. Read this page to pick the right package, then open its directory for the contract.
+Running a command is three packages on purpose. The library holds the request and result shapes and the one function that turns an exit status into a label, and it is imported rather than spawned. The provider answers the `shell` capability by actually starting PowerShell, and a sandboxed provider can replace it later without the tool noticing. The tool is the model-facing half: parameters, description and result rendering. The provider also supports background start, cancellation, and controlled script-file execution; those work through the same `shell` capability and the jobs registry. Read this page to pick the right package, then open its directory for the contract.
 
 ## Table of Contents
 
@@ -28,6 +28,18 @@ Running a command is three packages on purpose. The library holds the request an
 | `@maota/tool-pwsh` | [`tool-pwsh`](tool-pwsh/) | `tool.pwsh` | The tool the model is offered, named `pwsh`. |
 
 The split exists so a second provider can answer the same capability. A sandboxed runner would provide `shell` with the same methods and the same result shape, `tool-pwsh` would go on calling `shell.run` unchanged, and only the profile's row list would change.
+
+<a id="background-execution"></a>
+## Background execution
+
+The `shell` capability has four paths:
+
+- `run`: foreground command, one terminal result.
+- `start`: register a job, spawn the process, and return its job id.
+- `job_cancel`: request process termination; the job settles after the process closes.
+- `run_file`: run a script under `$MAOTA_HOME/scripts` with argument-array semantics.
+
+Background output is appended to the jobs registry, and completion wakes the owning session through `agent.runner`. The host must stay alive; background jobs do not survive shutdown.
 
 <a id="related-documentation"></a>
 ## Related documentation

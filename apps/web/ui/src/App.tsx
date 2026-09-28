@@ -47,7 +47,7 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "skills">("chat");
+  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "skills" | "tasks">("chat");
   const [palette, setPalette] = useState(false);
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
@@ -457,6 +457,7 @@ export function App() {
         onArchive={flipArchive}
         onSettings={() => setPage("settings")}
         onPlugins={() => setPage("plugins")}
+        onTasks={() => setPage("tasks")}
         onSkills={() => setPage("skills")}
         onSearch={() => setPalette(true)}
       />

@@ -8,9 +8,11 @@ export interface PluginRow {
 export const rows: PluginRow[] = [
   { id: "api", name: "@maota/api" },
   { id: "i18n", name: "@maota/i18n-native" },
+  { id: "jobs", name: "@maota/jobs" },
   { id: "pwsh-local", name: "@maota/pwsh-local" },
   { id: "permission", name: "@maota/permission" },
   { id: "tool-pwsh", name: "@maota/tool-pwsh" },
+  { id: "tool-jobs", name: "@maota/tool-jobs" },
   { id: "tool-fs", name: "@maota/tool-fs" },
   { id: "tool-fs-search", name: "@maota/tool-fs-search" },
   { id: "tool-todo", name: "@maota/tool-todo" },
@@ -21,10 +23,14 @@ export const rows: PluginRow[] = [
   { id: "tool-skill", name: "@maota/tool-skill" },
   { id: "tools", name: "@maota/tools" },
   { id: "session", name: "@maota/session" },
-  { id: "hooks", name: "@maota/hooks-native", config: { max_context_chars: 81920 } },
   { id: "system-prompt", name: "@maota/system-prompt" },
   { id: "context-agent-instructions", name: "@maota/context-agent-instructions" },
   { id: "memory", name: "@maota/memory" },
+  { id: "hooks", name: "@maota/hooks-native", config: { max_context_chars: 81920 } },
+
   { id: "agent-core", name: "@maota/agent-core" },
+  { id: "agent-runner", name: "@maota/agent-runner" },
+  { id: "schedule", name: "@maota/schedule" },
+  { id: "tool-cron", name: "@maota/tool-cron" },
   { id: "hmr", name: "@maota/hmr", disabled: true },
 ];

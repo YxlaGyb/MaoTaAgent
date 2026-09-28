@@ -25,7 +25,15 @@ export interface SkillCatalogSource {
   entries: Array<{ name: string; description: string }>;
 }
 
-export type MessageSource = SkillCatalogSource | CompactSource;
+export interface SystemMessageSource {
+  kind: "job" | "schedule";
+  id: string;
+  occurrence?: string;
+  mode?: string;
+  title?: string;
+}
+
+export type MessageSource = SkillCatalogSource | CompactSource | SystemMessageSource;
 
 export interface SessionMessage {
   role: string;
@@ -44,6 +52,14 @@ export function messageSource(value: unknown): MessageSource | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
   if (input.kind === "compact") return compactSourceOf(value, false);
+  if (input.kind === "job" || input.kind === "schedule") {
+    if (typeof input.id !== "string" || input.id === "") return null;
+    const source: SystemMessageSource = { kind: input.kind, id: input.id };
+    if (typeof input.occurrence === "string") source.occurrence = input.occurrence;
+    if (typeof input.mode === "string") source.mode = input.mode;
+    if (typeof input.title === "string") source.title = input.title;
+    return source;
+  }
   if (input.kind !== "skill-catalog") return null;
   if (input.update !== undefined && typeof input.update !== "boolean") return null;
   if (!Array.isArray(input.entries)) return null;

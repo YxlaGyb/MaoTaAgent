@@ -24,7 +24,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-前端通过 `agent.loop` 能力找到这个插件。
+生产前端通过 `agent.runner` 找到这个插件；队列、唤醒投递与系统消息由 runner 负责。`agent.loop` 仍是 runner 调用的低层 turn 能力。
 
 ### 方法
 

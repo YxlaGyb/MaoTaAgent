@@ -24,7 +24,7 @@ One input turns a `run` into the other kind of turn this package knows: an `orig
 <a id="use-this-package"></a>
 ## Use this package
 
-A front end reaches this plugin through the `agent.loop` capability.
+Production front ends reach this plugin through `agent.runner`, which owns queueing, wake delivery and system messages. `agent.loop` remains the low-level turn capability the runner calls.
 
 ### Methods
 

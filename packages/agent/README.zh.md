@@ -25,10 +25,11 @@ kind: "package-group"
 |---|---|
 | [`agent-core`](agent-core/README.zh.md) | 插件本体：`agent.loop` 能力、它的配置键、工具装配、会话记账，以及流式的 `run` 方法。 |
 | [`agent-loop`](agent-loop/README.zh.md) | 循环引擎：调用模型、执行工具、给出退出原因。它不读配置，也不碰会话。 |
+| [`agent-runner`](agent-runner/README.zh.md) | turn 协调器：session 串行、队列优先级、唤醒预算与系统消息投递。 |
 | [`system-prompt`](system-prompt/README.zh.md) | 提示词：`system-prompt` 能力、部署方组装用的段落与变量，以及它们注册进的作用域。 |
 | [`tools`](tools/README.zh.md) | 分发器：`tools` 能力、工具注册表、结果预算与落盘。 |
 
-profile 配置拉起的是 `@maota/agent-core`（由 `agent-core/src/index.ts` 构建）、`@maota/system-prompt`（由 `system-prompt/src/index.ts` 构建）与 `@maota/tools`（由 `tools/src/index.ts` 构建）。`agent-loop` 由 agent 那个入口 import，从不被单独拉起。
+profile 配置拉起的是 `@maota/agent-core`（由 `agent-core/src/index.ts` 构建）、`@maota/system-prompt`（由 `system-prompt/src/index.ts` 构建）与 `@maota/tools`（由 `tools/src/index.ts` 构建）。`agent-runner` 是 `agent-core` 之上的生产 turn 入口；`agent-loop` 由 agent 那个入口 import，从不被单独拉起。
 
 <a id="related-documentation"></a>
 ## 相关文档

@@ -33,7 +33,7 @@ export interface Bridge {
   close(): void;
 }
 
-export function createBridge(channel: Channel): Bridge {
+export function createBridge(channel: Channel, capabilities: Record<string, unknown>): Bridge {
   const turns = new Map<string, Turn>();
   const listeners = new Set<(event: HostEvent) => void>();
   let subscription: string | null = null;
@@ -179,7 +179,10 @@ export function createBridge(channel: Channel): Bridge {
 
   async function run(turnId: string, turn: Turn, params: Record<string, unknown>): Promise<void> {
     try {
-      const stream = await channel.stream("agent.loop", "run", params, { signal: turn.abort.signal });
+      const usesRunner = capabilities["agent.runner"] !== undefined;
+      const stream = usesRunner
+        ? await channel.stream("agent.runner", "send", { ...params, source: { kind: "user" } }, { signal: turn.abort.signal })
+        : await channel.stream("agent.loop", "run", params, { signal: turn.abort.signal });
       turn.stream = stream;
       if (turn.cancelled) {
         stream.cancel();
@@ -338,7 +341,7 @@ export function createBridge(channel: Channel): Bridge {
     async open(): Promise<void> {
       try {
         subscription = await channel.subscribe(
-          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*"],
+          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*", "jobs.registered", "jobs.progress", "jobs.settled", "jobs.removed", "agent.turn.*"],
           (topic, _seq, payload) => {
             const event = topic.startsWith("agent.subagent.")
               ? forwardSubagent(topic, payload)

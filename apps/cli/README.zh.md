@@ -24,15 +24,26 @@
 | `maota <问句>` | 一次性：问一次，打印最终回答，退出。 |
 | `maota serve` | 常驻：启动后报出 web 插件的 URL，一直待到 Ctrl-C。 |
 | `maota check` | 只检查：跑内核自己的 `--check`，把它的退出码透传出去。 |
+| `maota jobs list\|show\|kill` | 查看或停止当前会话的后台任务。 |
+| `maota cron list\|add\|update\|remove\|run\|pause\|resume` | 管理持久计划。`add` 与 `update` 接收 JSON 对象。 |
 | `maota --help` | 打印用法并退出 0。 |
 | `maota --version` | 打印 `maota <版本>` 并退出 0。 |
 
-由第一个位置参数决定：`serve` 与 `check` 是子命令，后面不能再带参数；其它任何位置参数都算一次性问句，后面的参数用空格拼起来。
+由第一个位置参数决定模式：`serve` 与 `check` 后面不能再带参数；`jobs` 与 `cron` 接收一个 action 及其参数；其它位置参数算一次性问句，后面的参数用空格拼起来。
 `maota check` 打印的就是内核打印的内容。内核因为某个必需能力没有提供者而扣住的插件、以及用 `disabled = true` 关掉的行，都只算警告：check 仍然退出 0，报告用 `disabled` 与 `blocked` 两个字段列出它们（内核在 `docs/PROTOCOL.md` 第 14.1 节记录这两个字段）。
 
 子代理的活发生在派出它的那一轮里面，所以 CLI 把它缩进打印，而不是揉进这一轮自己的输出：本轮驱动的会话所对应的每条 `agent.subagent.*` 事件都变成一行，例如 `  [explore sub-3f2a] -> read src/a.ts`。子代理别的东西都不上终端，它的答案仍然以那次 `task` 调用的结果形式回来。
 
 <a id="options"></a>
+<a id="jobs-and-schedules"></a>
+## 后台任务与计划任务
+
+`maota jobs list` 列出当前 session 的后台任务。`show <id>` 读取新输出与状态，`kill <id>` 请求停止。
+
+`maota cron list` 列出计划。`add` 与 `update` 接收 JSON 对象；CLI 会注入当前 session 与 cwd。`remove <id>` 删除，`run <id>` 立即运行，`pause` 与 `resume` 切换 enabled。
+
+这些命令只调用 `jobs` 与 `schedule` capability，不直接读写任务文件。
+
 ## 选项
 
 | 选项 | 含义 |

@@ -18,7 +18,6 @@ function readCwd(value: unknown): string {
 
 export const definition: Definition = {
   provides: ["hook.agent-instructions"],
-  requires: [{ capability: "hooks" }],
   configKeys: ["max_bytes"],
 
   setup(wiring) {

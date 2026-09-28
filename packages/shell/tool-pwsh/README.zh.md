@@ -28,6 +28,7 @@ kind: "package-reference"
 |---|---|---|---|
 | `command` | string | 是 | 要跑的命令行。 |
 | `timeout_ms` | integer | 否 | 超过这么多毫秒就把命令杀掉。缺省用 provider 自己的 `timeout_ms`。 |
+| `run_in_background` | boolean | 否 | 启动后台任务并立刻返回 job id。 |
 | `workdir` | string | 宿主 | 会话工作目录。由宿主注入，从不公开。 |
 | `session_id` | string | 宿主 | 这次调用属于哪个会话，闸门据此按会话存策略。由宿主注入，从不公开。 |
 | `call_id` | string | 宿主 | 这次工具调用的 id，用于把审批对上这次调用。由宿主注入，从不公开。 |
@@ -45,7 +46,7 @@ kind: "package-reference"
 | `truncated` | 是否有某一路输出在字节上限处被截断。 |
 | `stdout`、`stderr` | 两路输出的文本。 |
 
-并发是 `never`：命令没有被声明为可以和别的调用并排跑，所以它永远单独跑。
+并发是 `never`：命令没有被声明为可以和别的调用并排跑，所以它永远单独跑。设置 `run_in_background` 后，工具返回 `{ job_id, status: "running" }`；完成通知由 `agent.runner` 投递，输出用 `job_output` 读取。
 
 ### 审批闸门
 

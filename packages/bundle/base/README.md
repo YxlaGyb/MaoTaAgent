@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the twenty-one plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the twenty-six plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
 kind: "package-reference"
 ---
 
@@ -36,9 +36,12 @@ import { rows } from "@maota/base";
 | id | Package | Capability |
 |---|---|---|
 | `api` | `@maota/api` | `api` |
+| `i18n` | `@maota/i18n-native` | `i18n` |
+| `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
 | `permission` | `@maota/permission` | `permission` |
 | `tool-pwsh` | `@maota/tool-pwsh` | `tool.pwsh` |
+| `tool-jobs` | `@maota/tool-jobs` | `tool.job_output`, `tool.job_list`, `tool.job_kill` |
 | `tool-fs` | `@maota/tool-fs` | `tool.read`, `tool.write`, `tool.edit` |
 | `tool-fs-search` | `@maota/tool-fs-search` | `tool.glob`, `tool.grep` |
 | `tool-todo` | `@maota/tool-todo` | `tool.todo_write` |
@@ -54,11 +57,14 @@ import { rows } from "@maota/base";
 | `memory` | `@maota/memory` | `hook.memory`, `tool.memory` |
 | `system-prompt` | `@maota/system-prompt` | `system-prompt` |
 | `agent-core` | `@maota/agent-core` | `agent.loop` |
+| `agent-runner` | `@maota/agent-runner` | `agent.runner` |
+| `schedule` | `@maota/schedule` | `schedule` |
+| `tool-cron` | `@maota/tool-cron` | `tool.cron_create`, `tool.cron_list`, `tool.cron_update`, `tool.cron_delete`, `tool.cron_run_now` |
 | `hmr` | `@maota/hmr` | `dev.hmr`, disabled by default |
 
 ### Order
 
-Every provider sits above the dispatcher that reads it: the six `tool.*` plugins and their `shell` and `permission` providers come before `tools`, and the two skill providers come before `skill`. Both dispatchers come before `agent-core`, which reads them. A dispatcher reads the capability table once at `start` and caches what it finds, so a provider that has not started yet would be invisible until the next `list`. Keeping the providers above their dispatcher is what makes one startup enough.
+Providers sit above dispatchers: `tool.*` plugins, `shell` and `permission` come before `tools`; skill providers come before `skill`; hook providers come before `hooks`. `agent-runner` follows `agent-core`, `schedule` follows `agent-runner`, and `tool-cron` can arrive after `tools` because the dispatcher rebuilds from `kernel.capabilities.changed`.
 
 -----
 

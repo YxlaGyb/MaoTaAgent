@@ -150,10 +150,14 @@ export const definition: Definition = {
       );
     },
 
-    delete(params) {
-      return serially(keyOf(params), () => ({
-        deleted: remove(settings.root, params?.id, params?.cwd, settings.limits),
-      }));
+    delete(params, ctx) {
+      return serially(keyOf(params), async () => {
+        const deleted = remove(settings.root, params?.id, params?.cwd, settings.limits);
+        if (deleted) {
+          await ctx.channel.publish("session.deleted", { id: String(params?.id ?? ""), cwd: String(params?.cwd ?? "") });
+        }
+        return { deleted };
+      });
     },
   },
   selfCheck() {

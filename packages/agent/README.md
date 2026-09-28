@@ -25,10 +25,11 @@ The `agent` plugin is the kernel plugin a user actually talks to: it turns one i
 |---|---|
 | [`agent-core`](agent-core/README.md) | The plugin: the `agent.loop` capability, its config keys, tool wiring, session bookkeeping and the streaming `run` method. |
 | [`agent-loop`](agent-loop/README.md) | The loop engine: model call, tool round, exit reasons. It reads no config and touches no session. |
+| [`agent-runner`](agent-runner/README.md) | The turn coordinator: per-session serialization, queue priority, wake budget and system-message delivery. |
 | [`system-prompt`](system-prompt/README.md) | The prompt: the `system-prompt` capability, the sections and variables a deployment assembles, and the scopes they register into. |
 | [`tools`](tools/README.md) | The dispatcher: the `tools` capability, the tool registry, the result budget and the spill. |
 
-The profile config spawns `@maota/agent-core`, built from `agent-core/src/index.ts`, `@maota/system-prompt`, built from `system-prompt/src/index.ts`, and `@maota/tools`, built from `tools/src/index.ts`. `agent-loop` is imported by the agent entry and never spawned on its own.
+The profile config spawns `@maota/agent-core`, built from `agent-core/src/index.ts`, `@maota/system-prompt`, built from `system-prompt/src/index.ts`, and `@maota/tools`, built from `tools/src/index.ts`. `agent-runner` is the production turn entry above `agent-core`; `agent-loop` is imported by the agent entry and never spawned on its own.
 
 <a id="related-documentation"></a>
 ## Related documentation

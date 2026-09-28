@@ -32,6 +32,7 @@ export function SidebarPane({
   onSettings,
   onPlugins,
   onSkills,
+  onTasks,
   onSearch,
 }: {
   sessions: SessionSummary[];
@@ -58,6 +59,7 @@ export function SidebarPane({
   onSettings: () => void;
   onPlugins: () => void;
   onSkills: () => void;
+  onTasks: () => void;
   onSearch: () => void;
 }) {
   const groups = useMemo(() => {
@@ -119,6 +121,7 @@ export function SidebarPane({
       onSettings={onSettings}
       onPlugins={onPlugins}
       onSkills={onSkills}
+      onTasks={onTasks}
       onSearch={onSearch}
     />
   );

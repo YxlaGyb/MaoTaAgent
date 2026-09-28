@@ -28,6 +28,7 @@ One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a comman
 |---|---|---|---|
 | `command` | string | Yes | The command line to run. |
 | `timeout_ms` | integer | No | Kill the command after this many milliseconds. Defaults to the provider's own `timeout_ms`. |
+| `run_in_background` | boolean | No | Start a background job and return its id immediately. |
 | `workdir` | string | Host | The session working directory. Injected, never published. |
 | `session_id` | string | Host | The session this call belongs to, so the gate can keep a policy per session. Injected, never published. |
 | `call_id` | string | Host | The id of this tool call, so an approval can be matched to it. Injected, never published. |
@@ -45,7 +46,7 @@ One capability, `tool.pwsh`, offered to the model as `pwsh`. It carries a comman
 | `truncated` | Whether either stream was cut at the byte cap. |
 | `stdout`, `stderr` | Both streams as text. |
 
-Concurrency is `never`: a command is not declared safe to run beside another call, so it always runs alone.
+Concurrency is `never`: a command is not declared safe to run beside another call, so it always runs alone. With `run_in_background`, the tool returns `{ job_id, status: "running" }`; completion is delivered by `agent.runner` and output is read with `job_output`.
 
 ### The approval gate
 

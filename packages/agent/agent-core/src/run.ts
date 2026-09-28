@@ -44,6 +44,17 @@ function startedCalls(messages: readonly Message[]): number {
   return messages.filter((message) => message.role === "assistant").length;
 }
 
+function readMessageSource(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== "job" && raw.kind !== "schedule") return null;
+  if (typeof raw.id !== "string" || raw.id === "") return null;
+  const source: Record<string, unknown> = { kind: raw.kind, id: raw.id };
+  if (typeof raw.occurrence === "string") source.occurrence = raw.occurrence;
+  if (typeof raw.mode === "string") source.mode = raw.mode;
+  if (typeof raw.title === "string") source.title = raw.title;
+  return source;
+}
 export async function runAgent(params: any, ctx: Call): Promise<void> {
   const stream = ctx.stream;
   if (!stream) throw new CallError(-32602, "agent.loop.run is streaming: pass meta.stream");
@@ -51,6 +62,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   const sessionId = String(params?.session_id ?? "default");
   const cwd = typeof params?.cwd === "string" && params.cwd !== "" ? params.cwd : null;
   const input = typeof params?.input === "string" ? params.input : "";
+  const source = readMessageSource(params?.source);
   const origin = readOrigin(params?.origin);
   const sub = origin !== null;
   const system = readSystem(params?.system);
@@ -222,7 +234,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   };
 
   const history: Message[] = sub ? [] : await loadHistory(ctx, sessionId, cwd);
-  if (input !== "") history.push({ role: "user", content: input });
+  if (input !== "") history.push({ role: "user", content: input, ...(source === null ? {} : { source }) });
   const first = history.find((message) => message.role === "user" && typeof message.content === "string");
   history.push(...sourcedMessages(prompt?.context ?? []));
   touched = touchedPaths(history, new Map(declared.map((tool) => [tool.name, tool])), cwd);

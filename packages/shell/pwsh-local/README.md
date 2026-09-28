@@ -27,6 +27,9 @@ This provider answers the `shell` capability by starting a real PowerShell proce
 | Method | Params | Returns |
 |---|---|---|
 | `run` | `{ command, workdir?, timeout_ms? }` | `ShellRunResult`: `command`, `exit_code`, `signal`, `timed_out`, `truncated`, `stdout`, `stderr`. |
+| `start` | `{ command, workdir?, timeout_ms?, owner, label? }` | `{ job_id }` after registering a jobs record and spawning the process. |
+| `job_cancel` | `{ job_id, reason? }` | Requests process termination; settlement follows the process close. |
+| `run_file` | `{ path, args, workdir?, timeout_ms? }` | Runs a script under `$MAOTA_HOME/scripts` without shell interpolation. |
 
 `command` must be a non-empty string or the call is a `-32602`. `workdir` falls back to the `cwd` config key, and `timeout_ms` falls back to the `timeout_ms` config key.
 

@@ -266,7 +266,7 @@ export const definition: Definition = {
 
   async setup(wiring) {
     settings = settingsFrom(wiring.config, process.env.NODE_ENV);
-    bridge = createBridge(wiring.channel);
+    bridge = createBridge(wiring.channel, wiring.capabilities);
 
     server = createServer((request, response) => {
       void handle(request, response).catch((error: unknown) => {

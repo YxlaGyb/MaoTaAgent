@@ -18,6 +18,9 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/todo` | The plan the model keeps: the tool it writes its task list with, and the session document the list lives in. | [README](../packages/todo/tool-todo/README.md) |
 | `packages/subagent` | The delegation: the `task` tool that hands one sub-task to an agent with a context of its own. | [subagents](user/subagent.md) |
 | `packages/agent/system-prompt` | The prompt: the registry a deployment assembles sections and variables into, and the assembly the loop reads once per turn. | [the system prompt](user/system-prompt.md) |
+| `packages/agent/agent-runner` | The turn coordinator: per-session serialization, system delivery order, wake budget and `agent.turn.*` events. | [README](../packages/agent/agent-runner/README.md) |
+| `packages/jobs` | The process-local background job registry and its model-facing read, list and kill tools. | [README](../packages/jobs/README.md) |
+| `packages/schedule` | Durable reminders and automation, plus the model-facing `cron_*` management tools. | [README](../packages/schedule/README.md) |
 | `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, system-prompt, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
@@ -27,7 +30,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 1. `maota` resolves the config file and the kernel binary.
 2. It spawns the kernel and waits for the capability table.
 3. The kernel starts every `[plugins.<id>]` entry as its own child process and routes capabilities by each plugin's `provides`.
-4. The front end invokes capabilities: the CLI drives `agent.loop`, while the web app drives `session` and `agent.loop` through its own bridge.
+4. The front end invokes capabilities: the CLI and Web drive `agent.runner`, while the web app also uses `session` through its bridge; the runner serializes turns and calls `agent.loop`.
 5. Shutdown asks the kernel for `ui_quit` or `kernel_exit`; the kernel stops its plugins and exits with the code the host reports.
 
 A development run may also carry the `hmr` plugin, whose generated row ships disabled: it publishes `dev.source.changed` with the path that changed. From each `kernel.plugin.started` event the CLI reads the resolved entry and walks that entry's static import graph, keeping a file-to-plugin index; a changed path is then resolved to exactly the plugins that import it, and those are restarted with `reason: "source"`.
@@ -48,6 +51,8 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - The approval gate is a plugin, not a kernel feature: the kernel routes `permission` like any other capability and never inspects a command.
 - The Node host never interprets plugin config values; it picks paths and speaks the protocol.
 - `apps/web` is a plugin like any other; the browser side holds no kernel privileges of its own.
+- `agent.runner` is the only turn entry point. Direct `agent.loop` calls bypass queueing, wake budget and system delivery.
+- Background jobs are process-local. Durable schedule definitions live in `$MAOTA_HOME/schedules.json`.
 - The kernel never watches source files; it watches its own config and restarts one named plugin when a host asks it to.
 
 ## Related documentation
@@ -62,5 +67,9 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - [the subagents](user/subagent.md)
 - [bundle package group](../packages/bundle/README.md)
 - [the tools dispatcher](../packages/agent/tools/README.md)
+- [jobs package group](../packages/jobs/README.md)
+- [schedule package group](../packages/schedule/README.md)
+- [background tasks](user/background-tasks.md)
+- [scheduled tasks](user/scheduled-tasks.md)
 - [maota CLI](../apps/cli/README.md)
 - [Defensive patterns](defensive-patterns.md)

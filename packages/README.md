@@ -28,6 +28,11 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/context-agent-instructions` | [`context/agent-instructions`](context/agent-instructions/) | `hook.agent-instructions` | The `PreModel` provider for `AGENTS.md` and `CLAUDE.md`. |
 | `@maota/memory` | [`memory/memory`](memory/memory/) | `hook.memory`, `tool.memory` | The fixed-budget memory snapshot and the model tool that maintains it. |
 | `@maota/agent-core` | [`agent/agent-core`](agent/agent-core/) | `agent.loop` | The package a front end talks to: the system prompt, session bookkeeping, tool wiring and the streaming `run`. |
+| `@maota/agent-runner` | [`agent/agent-runner`](agent/agent-runner/) | `agent.runner` | Per-session turn serialization, queue priority, wake budget and system message delivery. |
+| `@maota/jobs` | [`jobs/jobs`](jobs/jobs/) | `jobs` | The central process-local background job registry. |
+| `@maota/tool-jobs` | [`jobs/tool-jobs`](jobs/tool-jobs/) | `tool.job_output`, `tool.job_list`, `tool.job_kill` | The model tools for reading, listing and stopping jobs. |
+| `@maota/schedule` | [`schedule/schedule`](schedule/schedule/) | `schedule` | Persistent reminders and scripted or agent-backed automation. |
+| `@maota/tool-cron` | [`schedule/tool-cron`](schedule/tool-cron/) | `tool.cron_*` | The model tools for schedule management. |
 | `@maota/api` | [`api`](api/) | `api` | The model gateway: an openai backend and a scripted one for tests. |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | The development watcher: it publishes `dev.source.changed` for the paths it watches, and its generated row ships disabled. |
 | `@maota/hooks-native` | [`hooks/hooks-native`](hooks/hooks-native/) | `hooks` | The hook engine: it discovers the `hook.*` capabilities, asks the ones a hook point belongs to, and merges their answers into one. |
@@ -55,7 +60,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
 <a id="bundles"></a>
-A profile's rows come from those two lists: `base` mounts the twenty-one rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
+A profile's rows come from those two lists: `base` mounts the twenty-six rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
 `pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
 

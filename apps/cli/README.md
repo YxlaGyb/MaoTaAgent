@@ -24,15 +24,26 @@ English | [中文](README.zh.md)
 | `maota <question>` | One-shot: ask once, print the final answer, exit. |
 | `maota serve` | Resident: boot, report the web plugin's URL, stay until Ctrl-C. |
 | `maota check` | Check only: run the kernel's own `--check` and pass its exit code through. |
+| `maota jobs list\|show\|kill` | Inspect or stop background jobs for the selected session. |
+| `maota cron list\|add\|update\|remove\|run\|pause\|resume` | Manage persistent schedules. `add` and `update` take a JSON object. |
 | `maota --help` | Print the usage text and exit 0. |
 | `maota --version` | Print `maota <version>` and exit 0. |
 
-The first positional argument decides: `serve` and `check` are subcommands and take no further arguments, while any other positional argument starts a one-shot question whose remaining arguments are joined with spaces.
+The first positional argument decides the mode. `serve` and `check` take no further arguments; `jobs` and `cron` take an action and its arguments. Any other positional argument starts a one-shot question whose remaining arguments are joined with spaces.
 `maota check` prints whatever the kernel prints. A plugin the kernel holds back because a capability it requires has no provider, and a plugin row switched off with `disabled = true`, are both warnings: the check still exits 0, and the report names them in `disabled` and `blocked` (the kernel documents both fields in `docs/PROTOCOL.md` section 14.1).
 
 A subagent's work happens inside the turn that started it, so the CLI prints it indented rather than folding it into the turn's own output: every `agent.subagent.*` event naming the session this run drives becomes one line, such as `  [explore sub-3f2a] -> read src/a.ts`. Nothing else about the child reaches the terminal, and its answer still arrives as the result of the `task` call that started it.
 
 <a id="options"></a>
+<a id="jobs-and-schedules"></a>
+## Jobs and schedules
+
+`maota jobs list` lists background jobs for the selected session. `show <id>` reads new output and status, and `kill <id>` requests cancellation.
+
+`maota cron list` lists schedules. `add` and `update` take a JSON object; the CLI injects the current session and cwd. `remove <id>` deletes, `run <id>` runs immediately, and `pause` or `resume` changes `enabled`.
+
+These commands call the `jobs` and `schedule` capabilities. They never write task files directly.
+
 ## Options
 
 | Option | Meaning |

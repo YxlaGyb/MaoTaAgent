@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, and the plan the model keeps. Eight methods answer a caller: `list`, `load`, `save`, `delete`, `children`, the plan pair `todos` and `save_todos`, and `events`. The document is version 4, written whole to a temporary file and renamed into place under a lock a second host pointed at the same directory also honours. Saving the messages never drops the plan, and a document written by version 1, 2 or 3 is normalized on the way in and written back as version 4. A document may carry a parent link, which is how a subagent's session is stored: it stays in its parent's folder, and both `children` and `list` carry the link.
+Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, and the plan the model keeps. Eight methods answer a caller: `list`, `load`, `save`, `delete`, `children`, the plan pair `todos` and `save_todos`, and `events`. The document is version 5, written whole to a temporary file and renamed into place under a lock a second host pointed at the same directory also honours. Saving the messages never drops the plan, and a document written by version 1, 2 or 3 is normalized on the way in and written back as version 5. A document may carry a parent link, which is how a subagent's session is stored: it stays in its parent's folder, and both `children` and `list` carry the link.
 
 ## Table of Contents
 
@@ -29,23 +29,27 @@ Stored conversations: one JSON document per session and working directory, holdi
 | `list` | none | `{ dir, sessions }`, sorted by `updated_at`, newest first: every session the index holds, a subagent's included, each with the link that says who spawned it. |
 | `load` | `{ id, cwd }` | The document, with `dangling` worked out. A session that has never been written reads as an empty one. |
 | `save` | `{ id, cwd, title?, messages, parent? }` | The document as written. |
-| `delete` | `{ id, cwd }` | `{ deleted }`. |
+| `delete` | `{ id, cwd }` | `{ deleted }`. Publishes `session.deleted` when a document was removed. |
 | `children` | `{ id, cwd }` | `{ children }`: the subagent sessions this one spawned, oldest first, each a summary of the shape `list` uses. |
 | `todos` | `{ id, cwd }` | The plan projection. |
 | `save_todos` | `{ id, cwd, todos }` | The plan projection after the write. |
 | `events` | `{ id, cwd }` | `{ events, todos }`: the plan events the document keeps, and the projection folded from them. |
 
+### Events
+
+A successful `delete` publishes `session.deleted` with `{ id, cwd }`. Jobs and schedules use this to cancel work owned by the deleted session.
+
 ### The document
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `4`, for every document this version writes. |
+| `schema_version` | `5`, for every document this version writes. |
 | `id` | The session id. |
 | `cwd` | The working directory this session belongs to, trimmed of trailing separators. |
 | `title` | What `list` shows. A `save` that omits it keeps the title already stored. |
 | `created_at` | When the document was first written. |
 | `updated_at` | When it was last written, by either write path. |
-| `messages` | The transcript: the same array `agent-core` assembles and hands back. A message may carry a `source`, such as a skill catalog note; `messageSource` validates it at the file boundary and drops a value this build cannot read. |
+| `messages` | The transcript: the same array `agent-core` assembles and hands back. A message may carry a `source`: a skill catalog note, or a system delivery with `kind: "job"` or `kind: "schedule"` plus an id. `messageSource` validates it at the file boundary and drops a value this build cannot read. |
 | `events` | One entry per plan write, `{ kind: "todos.write", at, todos }`, plus a `{ kind: "todos.snapshot", at, todos }` standing in for the writes that fell past `max_events`. A document this version writes always carries the field, empty at first. |
 | `parent` | `null` for a session a person opened, or the link to the session that spawned this one: `{ id, cwd, call_id, type, description }`. |
 | `dangling` | Not stored: `load` sets it when the last message is a user message, which is what a turn that never finished looks like. |
@@ -115,7 +119,7 @@ Both write paths go through `serially`, keyed by the working directory and the s
 
 ### Versions
 
-`load` accepts a document whose `schema_version` is 1, 2 or 3, filling in an empty `events` and no parent, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after such a read writes the document back at version 4, so the migration costs one write and needs no separate command. An event, or a parent link, whose shape this version cannot trust is dropped while the rest of the document is kept.
+`load` accepts a document whose `schema_version` is 1, 2 or 3, filling in an empty `events` and no parent, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after such a read writes the document back at version 5, so the migration costs one write and needs no separate command. An event, or a parent link, whose shape this version cannot trust is dropped while the rest of the document is kept.
 
 ### A child is found through its link
 
