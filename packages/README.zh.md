@@ -34,6 +34,12 @@ kind: "package-group"
 | `@maota/schedule` | [`schedule/schedule`](schedule/schedule/) | `schedule` | 持久提醒，以及 script 或 agent 驱动的自动化。 |
 | `@maota/tool-cron` | [`schedule/tool-cron`](schedule/tool-cron/) | `tool.cron_*` | 管理计划任务的模型工具。 |
 | `@maota/api` | [`api`](api/) | `api` | 模型网关：openai 后端，以及测试用的 scripted 后端。 |
+| `@maota/model-protocol` | [`model/model-protocol`](model/model-protocol/) |  | 与厂商无关的请求、流、模型元数据与失败方言。 |
+| `@maota/model-router` | [`model/model-router`](model/model-router/) | `model` | 提供商与模型目录、适配器发现、思考档位路由、凭据与重试。 |
+| `@maota/model-api` | [`model/model-api`](model/model-api/) | `model.adapter.api` | 把新模型请求形状转给保留的 `api` 插件的兼容边缘。 |
+| `@maota/model-openai` | [`model/model-openai`](model/model-openai/) | `model.adapter.openai` | OpenAI Chat Completions 边缘适配器。 |
+| `@maota/model-anthropic` | [`model/model-anthropic`](model/model-anthropic/) | `model.adapter.anthropic` | Anthropic Messages 边缘适配器。 |
+| `@maota/model-scripted` | [`model/model-scripted`](model/model-scripted/) | `model.adapter.scripted` | 测试使用的确定性模型适配器。 |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | 开发期 watcher：为它盯着的路径发布 `dev.source.changed`，生成的那一行是 `disabled`。 |
 | `@maota/hooks-native` | [`hooks/hooks-native`](hooks/hooks-native/) | `hooks` | hook 引擎：发现那些 `hook.*` 能力、只问某个 hook 点归属的那些，再把它们的答案合并成一份。 |
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | 工具在破坏性命令前问的那道闸门：会话的档位、还在等回答的问题，以及成对留痕的审计文件。 |
@@ -60,7 +66,7 @@ kind: "package-group"
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | `serve` profile 在 `default` 那份之上追加的那一行。 |
 
 <a id="bundles"></a>
-一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的二十六个行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
+一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的三十个行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
 `pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`requires`、`configKeys` 与 `selfCheck`。
 

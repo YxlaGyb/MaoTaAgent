@@ -7,30 +7,18 @@ import { SidebarPane } from "./components/SidebarPane.tsx";
 import { useContextCompact } from "./useContextCompact.ts";
 import { describe, errorText, failureText } from "./lib/errors.ts";
 import { adoptCatalog } from "./lib/i18n.ts";
+import { load, remember } from "./lib/storage.ts";
 import {
   call,
   subscribe,
   type AppInfo,
   type Approval,
   type HostEvent,
+  type ModelRoute,
   type SessionFile,
   type SessionMessage,
   type SessionSummary,
 } from "./lib/rpc.ts";
-function load<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw === null ? fallback : (JSON.parse(raw) as T);
-  } catch {
-    return fallback;
-  }
-}
-function remember(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-  }
-}
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [kernelError, setKernelError] = useState<string | null>(null);
@@ -47,11 +35,12 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "skills" | "tasks">("chat");
+  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "tasks">("chat");
   const [palette, setPalette] = useState(false);
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
   const [thinking, setThinking] = useState<string>(() => load<string>("maota.thinking", "off"));
+  const [modelRoute, setModelRoute] = useState<ModelRoute | null>(null);
   const [permission, setPermission] = useState<string>("ask");
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
@@ -60,13 +49,30 @@ export function App() {
   const activeRef = useRef(active);
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
-  const { context, compactNow, loadContext, onCompactEvent } = useContextCompact({
+  const drafts = useRef(new Set<string>());
+  const { context, clearContext, compactNow, loadContext, onCompactEvent } = useContextCompact({
     activeRef,
     info,
     thinking,
+    modelRoute,
     onMessages: setMessages,
     onFailure: (session, message) => setFailure({ session, text: message }),
   });
+  const clearSessionView = useCallback((): void => {
+    clearContext();
+    setMessages([]);
+    setApprovals([]);
+    setSpawned({});
+  }, [clearContext]);
+  const newDraft = useCallback((cwd: string): { id: string; cwd: string } => {
+    clearSessionView();
+    setModelRoute(null);
+    const fresh = { id: crypto.randomUUID(), cwd };
+    drafts.current.add(fresh.id);
+    activeRef.current = fresh;
+    setActive(fresh);
+    return fresh;
+  }, [clearSessionView]);
   useEffect(() => {
     activeRef.current = active;
     remember("maota.active", active);
@@ -94,6 +100,7 @@ export function App() {
     try {
       const file = await call<SessionFile>("sessions.load", { id, cwd });
       if (seq !== loadSeq.current) return;
+      setModelRoute(file.model_route?.provider === "api" ? null : file.model_route ?? null);
       setMessages(file.messages ?? []);
       void loadContext(id, cwd);
     } catch (error) {
@@ -102,7 +109,6 @@ export function App() {
       setFailure({ session: id, text: describe(error) });
     }
   }, [loadContext]);
-
   const refreshSessions = useCallback(async (): Promise<void> => {
     try {
       const reply = await call<{ sessions?: SessionSummary[] }>("sessions.list");
@@ -111,7 +117,6 @@ export function App() {
       setKernelError(describe(error));
     }
   }, []);
-
   /// The sub-sessions a session spawned, keyed by the call each one came from.
   /// They are fetched rather than listed because a subagent's work is opened on
   /// demand: the sidebar and the search never see them.
@@ -129,7 +134,6 @@ export function App() {
       setSpawned({});
     }
   }, []);
-
   const loadInfo = useCallback(async (): Promise<void> => {
     try {
       const next = await call<AppInfo>("app.info");
@@ -140,7 +144,6 @@ export function App() {
       setKernelError(describe(error));
     }
   }, []);
-
   /// The approval mode lives with the session in the permission plugin, so the
   /// page asks for it instead of keeping a copy of its own.
   const loadPermission = useCallback(async (sessionId: string, cwd: string): Promise<void> => {
@@ -150,7 +153,6 @@ export function App() {
     } catch {
     }
   }, []);
-
   const rebuildApprovals = useCallback(async (sessionId: string): Promise<void> => {
     try {
       const reply = await call<{ requests?: Approval[] }>("permission.pending", { session_id: sessionId });
@@ -159,7 +161,6 @@ export function App() {
       setApprovals([]);
     }
   }, []);
-
   const handleEvent = useCallback(
     (event: HostEvent) => {
       if (onCompactEvent(event)) return;
@@ -182,10 +183,8 @@ export function App() {
         setApprovals((prev) => prev.filter((item) => item.id !== id));
         return;
       }
-
       const turnId = event.turn_id ?? "";
       if (turnId === "") return;
-
       if (event.event === "turn.start") {
         const sessionId = event.session_id ?? "";
         if (sessionId === "") return;
@@ -205,10 +204,8 @@ export function App() {
         }));
         return;
       }
-
       const sessionId = turns.current.get(turnId);
       if (sessionId === undefined) return;
-
       if (event.event === "turn.done" || event.event === "turn.cancelled" || event.event === "turn.error") {
         turns.current.delete(turnId);
         setLives((prev) => {
@@ -230,7 +227,6 @@ export function App() {
         }
         return;
       }
-
       setLives((prev) => {
         const turn = prev[sessionId];
         return turn === undefined ? prev : { ...prev, [sessionId]: applyEvent(turn, event) };
@@ -238,12 +234,10 @@ export function App() {
     },
     [loadSpawned, onCompactEvent, openSession, refreshSessions],
   );
-
   useEffect(() => {
     void loadInfo();
     void refreshSessions();
   }, [loadInfo, refreshSessions]);
-
   useEffect(
     () =>
       subscribe(handleEvent, () => {
@@ -257,20 +251,20 @@ export function App() {
       }),
     [handleEvent, loadSpawned, openSession, rebuildApprovals, refreshSessions],
   );
-
   useEffect(() => {
     if (active === null) {
-      setMessages([]);
-      setApprovals([]);
-      setSpawned({});
+      clearSessionView();
+      return;
+    }
+    if (drafts.current.has(active.id)) {
+      clearSessionView();
       return;
     }
     void openSession(active.id, active.cwd);
     void loadSpawned(active.id, active.cwd);
     void loadPermission(active.id, active.cwd);
     void rebuildApprovals(active.id);
-  }, [active, loadPermission, loadSpawned, openSession, rebuildApprovals]);
-
+  }, [active, clearSessionView, loadPermission, loadSpawned, openSession, rebuildApprovals]);
   const send = useCallback(
     async (text: string, at: { id: string; cwd: string }): Promise<void> => {
       if (text.trim() === "") return;
@@ -282,13 +276,14 @@ export function App() {
           cwd: at.cwd,
           input: text,
           thinking,
+          ...(modelRoute === null ? {} : { route: modelRoute }),
         });
       } catch (error) {
         setPending(null);
         setFailure({ session: at.id, text: describe(error) });
       }
     },
-    [thinking],
+    [modelRoute, thinking],
   );
 
   const submit = useCallback(
@@ -298,13 +293,11 @@ export function App() {
         void send(text, current);
         return;
       }
-      const fresh = { id: crypto.randomUUID(), cwd: project };
-      activeRef.current = fresh;
+      const fresh = newDraft(project);
       setFailure(null);
-      setActive(fresh);
       void send(text, fresh);
     },
-    [project, send],
+    [newDraft, project, send],
   );
 
   const cancel = async (): Promise<void> => {
@@ -353,13 +346,12 @@ export function App() {
   );
 
   const newChat = (cwd: string): void => {
+    loadSeq.current += 1;
     setFailure(null);
     setPending(null);
     setPage("chat");
     setRemoved((prev) => prev.filter((item) => item !== cwd));
-    const fresh = { id: crypto.randomUUID(), cwd };
-    activeRef.current = fresh;
-    setActive(fresh);
+    newDraft(cwd);
   };
 
   const open = (session: SessionSummary): void => {
@@ -427,7 +419,15 @@ export function App() {
 
   if (page === "settings") {
     return (
-      <SettingsView info={info} theme={theme} onTheme={setTheme} onBack={() => setPage("chat")} />
+      <SettingsView
+        info={info}
+        theme={theme}
+        onTheme={setTheme}
+        onModels={(models) => {
+          setInfo((current) => current === null ? current : { ...current, models });
+        }}
+        onBack={() => setPage("chat")}
+      />
     );
   }
 
@@ -458,7 +458,6 @@ export function App() {
         onSettings={() => setPage("settings")}
         onPlugins={() => setPage("plugins")}
         onTasks={() => setPage("tasks")}
-        onSkills={() => setPage("skills")}
         onSearch={() => setPalette(true)}
       />
       <MainPane
@@ -475,6 +474,7 @@ export function App() {
         pending={pending}
         failure={failure}
         thinking={thinking}
+        modelRoute={modelRoute}
         permission={permission}
         approvals={approvals}
         context={context}
@@ -486,8 +486,8 @@ export function App() {
         onPickProject={() => void pickProject()}
         onOpen={open}
         onRetry={() => void loadInfo()}
-        onKeySaved={() => void loadInfo()}
         onThinking={setThinking}
+        onModelRoute={setModelRoute}
         onPermission={(mode) => void changePermission(mode)}
         onAnswer={(id, decision) => void answer(id, decision)}
         onSend={submit}

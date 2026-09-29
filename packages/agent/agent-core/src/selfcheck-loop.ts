@@ -103,7 +103,7 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
   /// knowing which tool asked: the narrowing, the model and the hooks all come
   /// off one `control` field on the result.
   {
-    const seen: Array<{ tools?: ToolSpec[]; model?: string }> = [];
+    const seen: Array<{ tools?: ToolSpec[]; route?: { provider?: string; model?: string } }> = [];
     const hookCalls: Array<{ method: string; params: any }> = [];
     const answers = [
       { role: "assistant", content: null, tool_calls: [{ id: "c1", function: { name: "skill", arguments: "{}" } }] },
@@ -140,6 +140,10 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
             };
           }
           if (capability === "session" && method === "load") return { messages: calls2 };
+          if (capability === "model" && method === "resolve") {
+            const selected = String(params?.route?.model ?? params?.model ?? "default");
+            return { route: { provider: "smoke", model: selected }, provider: { id: "smoke", name: "Smoke", adapter: "openai", base_url: "http://smoke", auth: { kind: "file" }, verified: true }, model: { provider: "smoke", model: selected, name: selected, capabilities: { tools: true, vision: false }, reasoning_efforts: [], verified: true } };
+          }
           if (capability === "session" && method === "save") {
             saves2.push(params);
             return {};
@@ -169,11 +173,11 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     if ((seen[0]?.tools ?? []).map((tool) => tool.name).join(",") !== "read,write,skill") {
       problems.push(`the first step listed ${rig.surfaced(seen)}`);
     }
-    if (seen[0]?.model !== undefined) problems.push("an unrelated run picked up a model on its own");
+    if (seen[0]?.route?.model !== "default") problems.push(`an unrelated run picked up ${String(seen[0]?.route?.model)}`);
     if ((seen[1]?.tools ?? []).map((tool) => tool.name).join(",") !== "read") {
       problems.push(`the narrowed step listed ${rig.surfaced(seen)}`);
     }
-    if (seen[1]?.model !== "small") problems.push(`the narrowed step asked for ${String(seen[1]?.model)}`);
+    if (seen[1]?.route?.model !== "small") problems.push(`the narrowed step asked for ${String(seen[1]?.route?.model)}`);
     const saved = (saves2.at(-1)?.messages ?? []) as Message[];
     const result = saved.find((message) => message.role === "tool");
     if (result?.content !== "the instructions") {
@@ -210,6 +214,9 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
             return { content: "review this", control: { context: "fork" } };
           }
           if (capability === "session" && method === "load") return { messages: [{ role: "user", content: "go" }] };
+          if (capability === "model" && method === "resolve") {
+            return { route: { provider: "smoke", model: "default" }, provider: { id: "smoke", name: "Smoke", adapter: "openai", base_url: "http://smoke", auth: { kind: "file" }, verified: true }, model: { provider: "smoke", model: "default", name: "default", capabilities: { tools: true, vision: false }, reasoning_efforts: [], verified: true } };
+          }
           if (capability === "session" && method === "save") {
             saves3.push(params as Record<string, any>);
             return {};
@@ -279,7 +286,7 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     if (stored.length !== 5) {
       problems.push(`a folded history kept ${stored.length} messages, expected the compact note, recent tail and the answer`);
     }
-    if (!folded.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+    if (!folded.heard.some((item) => item.capability === "model" && item.method === "complete")) {
       problems.push("a fold never asked the model to summarise");
     }
     if (folded.chat.length !== 1) problems.push(`a folded turn ran ${folded.chat.length} steps, expected 1`);
@@ -393,7 +400,7 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     if (!retried.some((message) => message.name === "recovery:model" && message.content?.includes("context window"))) {
       problems.push(`the overflowing retry was not told how to read the fold: ${JSON.stringify(retried)}`);
     }
-    if (!overflowed.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+    if (!overflowed.heard.some((item) => item.capability === "model" && item.method === "complete")) {
       problems.push("an overflowing turn never asked for a fold");
     }
     const retracted = overflowed.events.find((event) => event.type === "retract");
@@ -423,7 +430,7 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     if (refusedFold?.reason !== "model_error" || refusedFold?.failure?.kind !== "context_window") {
       problems.push(`a turn with folding off ended as ${JSON.stringify(refusedFold)}`);
     }
-    if (off.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+    if (off.heard.some((item) => item.capability === "model" && item.method === "complete")) {
       problems.push("a turn with folding off still asked for a fold");
     }
     definition.setup?.({
@@ -439,7 +446,7 @@ export async function checkLoopRuns(definition: Definition, rig: Rig, problems: 
     if (gaveUp?.reason !== "model_error" || gaveUp?.failure?.kind !== "context_window") {
       problems.push(`an unfoldable overflow ended as ${JSON.stringify(gaveUp)}`);
     }
-    if (stuck.heard.some((item) => item.capability === "api" && item.method === "chat")) {
+    if (stuck.heard.some((item) => item.capability === "model" && item.method === "complete")) {
       problems.push("a conversation with nothing to fold still asked for a fold");
     }
     rig.failCode = -32053;

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-服务把计划保存在 `$MAOTA_HOME/schedules.json`。它支持 `remind`、fresh-session `agent` 与无 LLM 的 `script` 三种运行方式，宿主重启后每个任务最多补发一次最近错过的 occurrence，并写入有界运行历史。
+服务把计划保存在 `$MAOTA_HOME/schedules.json`。它支持 `remind`、fresh-session `agent` 与无模型的 `script` 三种运行方式，宿主重启后每个任务最多补发一次最近错过的 occurrence，并写入有界运行历史。
 
 ## 目录
 

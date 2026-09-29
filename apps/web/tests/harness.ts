@@ -22,7 +22,9 @@ const bin =
   join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
 
 const PLUGINS: Array<[string, string]> = [
-  ["api", "packages/api/src/index.ts"],
+  ["model-router", "packages/model/model-router/src/index.ts"],
+  ["model-scripted", "packages/model/model-scripted/src/index.ts"],
+  ["model-openai", "packages/model/model-openai/src/index.ts"],
   ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
   ["permission", "packages/interaction/permission/src/index.ts"],
   ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
@@ -44,6 +46,16 @@ export const home = mkdtempSync(join(tmpdir(), "maota-web-"));
 const config = join(home, "eggshell.local.toml");
 
 writeFileSync(
+  join(home, "models.json"),
+  JSON.stringify({
+    revision: 1,
+    providers: [{ id: "smoke", name: "Smoke", adapter: "scripted", base_url: "http://smoke", auth: { kind: "file" }, enabled: true, verified: true }],
+    models: [{ provider: "smoke", model: "smoke-chat", name: "Smoke Chat", capabilities: { tools: true, vision: false }, reasoning_efforts: [], enabled: true, verified: true }],
+    default_route: { provider: "smoke", model: "smoke-chat" },
+  }, null, 2) + "\n",
+);
+
+writeFileSync(
   join(home, "eggshell.toml"),
   PLUGINS.map(
     ([id, main]) => `[plugins.${id}]\ncommand = '${process.execPath}'\nargs = ['${join(root, main)}']\n`,
@@ -55,29 +67,29 @@ writeFileSync(
   [
     'extends = ["eggshell.toml"]',
     "",
-    "[plugins.api.config]",
-    'backend = "scripted"',
-    'model = "smoke-chat"',
+    "[plugins.model-scripted.config]",
     "script = [",
     `  { text = '${SHORT}' },`,
     `  { text = '${LONG}' },`,
     "  { },",
-    "  { text = 'first workdir turn' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'ran it' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'refused' },",
-    "  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },",
-    "  { text = 'ran it anyway' },",
-    "  { tool = 'task', args = { prompt = 'read note.txt and tell me what it says', description = 'look at the note', subagent_type = 'explore' } },",
-    "  { tool = 'read', args = { file_path = 'note.txt' } },",
-    "  { text = 'the note says hi' },",
-    "  { text = 'the subagent read the note' },",
+    `  { text = 'first workdir turn' },`,
+    `  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },`,
+    `  { text = 'ran it' },`,
+    `  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },`,
+    `  { text = 'refused' },`,
+    `  { tool = 'pwsh', args = { command = \"Write-Output rm file\" } },`,
+    `  { text = 'ran it anyway' },`,
+    `  { tool = 'task', args = { prompt = 'read note.txt and tell me what it says', description = 'look at the note', subagent_type = 'explore' } },`,
+    `  { tool = 'read', args = { file_path = 'note.txt' } },`,
+    `  { text = 'the note says hi' },`,
+    `  { text = 'the subagent read the note' },`,
     "]",
     "",
     "[plugins.agent-core.config.thinking]",
-    'off = "smoke-chat"',
-    'medium = { model = "smoke-reasoner", tools = false }',
+    'medium = { tools = false }',
+    "[plugins.model-router.config]",
+    "file = '" + join(home, "models.json").replace(/\\/g, "/") + "'",
+    "",
     "",
     "[plugins.web.config]",
     "port = 0",

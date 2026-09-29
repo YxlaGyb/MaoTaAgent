@@ -13,6 +13,7 @@ export interface TurnInput {
   cwd: string;
   input: string;
   thinking?: string;
+  route?: { provider: string; model: string; reasoning?: string };
   source: TurnSource;
   permission?: "ask" | "auto" | "full";
   max_steps?: number;

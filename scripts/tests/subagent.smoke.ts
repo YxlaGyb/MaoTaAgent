@@ -29,7 +29,8 @@ writeFileSync(join(dir, "note.txt"), "hi\n");
 writeFileSync(
   join(dir, "eggshell.toml"),
   [
-    ...plugin("api", "api"),
+    ...plugin("model-scripted", "model/model-scripted"),
+    ...plugin("model-router", "model/model-router"),
     ...plugin("tool-fs", "fs/tool-fs"),
     ...plugin("tool-fs-search", "fs/tool-fs-search"),
     ...plugin("tools", "agent/tools"),
@@ -46,9 +47,7 @@ writeFileSync(
   [
     'extends = ["eggshell.toml"]',
     "",
-    "[plugins.api.config]",
-    'backend = "scripted"',
-    'model = "smoke"',
+    "[plugins.model-scripted.config]",
     "script = [",
     '  { tool = "task", args = { prompt = "read note.txt and tell me what it says", description = "look at the note", subagent_type = "explore" } },',
     '  { tool = "read", args = { file_path = "note.txt" } },',
@@ -60,8 +59,22 @@ writeFileSync(
     '  { text = "understood" },',
     "  { text = \"(the script ran out)\" },",
     "]",
+
+    "[plugins.model-router.config]",
+    "file = '" + join(dir, "models.json").replace(/\\/g, "/") + "'",
+
     "",
   ].join("\n"),
+);
+
+writeFileSync(
+  join(dir, "models.json"),
+  JSON.stringify({
+    revision: 1,
+    providers: [{ id: "smoke", name: "Smoke", adapter: "scripted", base_url: "http://smoke", auth: { kind: "file" }, enabled: true, verified: true }],
+    models: [{ provider: "smoke", model: "smoke", name: "Smoke", capabilities: { tools: true, vision: false }, reasoning_efforts: [], enabled: true, verified: true }],
+    default_route: { provider: "smoke", model: "smoke" },
+  }, null, 2) + "\n",
 );
 
 const logs: string[] = [];

@@ -16,6 +16,8 @@ function plugin(id: string, pkg: string): string[] {
 const config = join(dir, "eggshell.toml");
 writeFileSync(config, [
   ...plugin("api", "api"),
+  ...plugin("model-api", "model/model-api"),
+  ...plugin("model-router", "model/model-router"),
   ...plugin("jobs", "jobs/jobs"),
   ...plugin("shell", "shell/pwsh-local"),
   ...plugin("permission", "interaction/permission"),

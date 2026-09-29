@@ -188,7 +188,7 @@ assert.equal(report.ok, true, `the agent selfCheck reported ${JSON.stringify(rep
 assert.deepEqual(report.provides, ["agent.loop"]);
 assert.deepEqual(
   (report.requires ?? []).map((item) => item.capability),
-  ["api", "tools", "session", "system-prompt", "skill", "permission", "hooks"],
+  ["model", "tools", "session", "system-prompt", "skill", "permission", "hooks"],
 );
 
 console.log("agent ok: the prompt assembly, tool specs, host args, the entry --check report");

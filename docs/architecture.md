@@ -21,7 +21,8 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/agent/agent-runner` | The turn coordinator: per-session serialization, system delivery order, wake budget and `agent.turn.*` events. | [README](../packages/agent/agent-runner/README.md) |
 | `packages/jobs` | The process-local background job registry and its model-facing read, list and kill tools. | [README](../packages/jobs/README.md) |
 | `packages/schedule` | Durable reminders and automation, plus the model-facing `cron_*` management tools. | [README](../packages/schedule/README.md) |
-| `packages/*` | The kernel plugins: api, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, system-prompt, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
+| `packages/model` | The model routing layer: the internal model protocol, catalog and router, the preserved `api` compatibility adapter, the OpenAI and Anthropic edge adapters, and the scripted test adapter. | `packages/model/*/src/index.ts` |
+| `packages/*` | The kernel plugins: api, model-*, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, system-prompt, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
 | `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
 | `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
 

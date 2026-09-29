@@ -15,6 +15,7 @@
   "dependencies": {
     "@maota/agent-loop": "workspace:^",
     "@maota/hook-protocol": "workspace:^",
+    "@maota/model-protocol": "workspace:^",
     "@maota/plugin-kit": "workspace:^"
   },
   "types": "lib/index.d.ts"

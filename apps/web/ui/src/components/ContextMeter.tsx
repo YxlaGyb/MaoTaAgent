@@ -46,7 +46,7 @@ export function ContextMeter({
   const [open, setOpen] = useState(false);
   const value = percent(context);
   const last = context?.compactions.at(-1);
-  const disabled = running || context?.active === true;
+  const compactDisabled = context === null || running || context?.active === true;
   return (
     <div className="context-wrap">
       <button
@@ -67,7 +67,6 @@ export function ContextMeter({
             strokeDasharray={`${value} 100`}
           />
         </svg>
-        <span className="context-percent">{value}%</span>
       </button>
       {open ? (
         <div className="context-panel">
@@ -94,7 +93,7 @@ export function ContextMeter({
               ))}
             </details>
           ) : null}
-          <MaoButton variant="solid" size="sm" disabled={disabled} onClick={onCompact}>
+          <MaoButton variant="solid" size="sm" disabled={compactDisabled} onClick={onCompact}>
             {context?.active === true ? t("compactRunning") : t("compactNow")}
           </MaoButton>
         </div>

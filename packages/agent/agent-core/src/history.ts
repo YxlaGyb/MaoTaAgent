@@ -4,6 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Call } from "@maota/plugin-kit";
+import type { ModelRoute } from "@maota/model-protocol";
 import { asText, type Message, type ToolSpec } from "@maota/agent-loop";
 import {
   DEFAULT_TAIL_CHARS,
@@ -212,6 +213,7 @@ export interface CompactOptions {
   messages: Message[];
   tools: readonly ToolSpec[];
   model: string | undefined;
+  route?: ModelRoute;
   trigger: CompactTrigger;
   force?: boolean;
   beforeCompact?: (folded: number) => Promise<void>;
@@ -297,10 +299,11 @@ export async function compactMessages(ctx: Call, options: CompactOptions): Promi
   const id = randomUUID();
   let summary: string;
   try {
+    if (options.route === undefined) throw new Error("compaction has no model route");
     const reply = (await ctx.channel.call(
-      "api",
-      "chat",
-      { messages: foldRequest(foldedMessages), model, max_tokens: SUMMARY_MAX_TOKENS },
+      "model",
+      "complete",
+      { route: options.route, messages: foldRequest(foldedMessages), max_tokens: SUMMARY_MAX_TOKENS },
       { signal: ctx.signal },
     )) as { message?: { content?: unknown } } | null;
     const content = reply?.message?.content;
@@ -378,6 +381,12 @@ export async function compactSession(
   const sessionId = typeof input.session_id === "string" && input.session_id !== "" ? input.session_id : "default";
   const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : null;
   const model = typeof input.model === "string" && input.model !== "" ? input.model : undefined;
+  const resolved = await ctx.channel.call(
+    "model",
+    "resolve",
+    model === undefined ? {} : { model },
+    { signal: ctx.signal },
+  ) as { route: ModelRoute };
   if (activeCompactions.has(sessionId) || active.has(sessionId)) return { status: "busy", session_id: sessionId };
   const loaded = (await ctx.channel.call(
     "session",
@@ -394,7 +403,8 @@ export async function compactSession(
       cwd,
       messages,
       tools,
-      model,
+      model: `${resolved.route.provider}/${resolved.route.model}`,
+      route: resolved.route,
       trigger: "manual",
       force: true,
     });
@@ -421,6 +431,7 @@ export async function persist(
   messages: readonly Message[],
   title: string,
   parent: SubagentOrigin | null,
+  route: ModelRoute | null,
 ): Promise<void> {
   await ctx.channel.call(
     "session",
@@ -430,6 +441,7 @@ export async function persist(
       cwd: cwd ?? "",
       title,
       messages,
+      model_route: route,
       ...(parent === null
         ? {}
         : {

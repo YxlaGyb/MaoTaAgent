@@ -32,7 +32,7 @@ export const definition: Definition = {
     "model_budgets",
   ],
   requires: [
-    { capability: "api" },
+    { capability: "model" },
     { capability: "tools" },
     { capability: "session" },
     { capability: "system-prompt" },

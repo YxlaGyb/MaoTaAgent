@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the twenty-six plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the thirty plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
 kind: "package-reference"
 ---
 
@@ -36,6 +36,10 @@ import { rows } from "@maota/base";
 | id | Package | Capability |
 |---|---|---|
 | `api` | `@maota/api` | `api` |
+| `model-api` | `@maota/model-api` | `model.adapter.api` |
+| `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
+| `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
+| `model-router` | `@maota/model-router` | `model` |
 | `i18n` | `@maota/i18n-native` | `i18n` |
 | `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
@@ -64,7 +68,7 @@ import { rows } from "@maota/base";
 
 ### Order
 
-Providers sit above dispatchers: `tool.*` plugins, `shell` and `permission` come before `tools`; skill providers come before `skill`; hook providers come before `hooks`. `agent-runner` follows `agent-core`, `schedule` follows `agent-runner`, and `tool-cron` can arrive after `tools` because the dispatcher rebuilds from `kernel.capabilities.changed`.
+Providers sit above dispatchers: `tool.*` plugins, `shell` and `permission` come before `tools`; skill providers come before `skill`; hook providers come before `hooks`. The four `model-*` routers and adapters follow the preserved `api` row and come before `agent-core`, which depends on the `model` capability. `agent-runner` follows `agent-core`, `schedule` follows `agent-runner`, and `tool-cron` can arrive after `tools` because the dispatcher rebuilds from `kernel.capabilities.changed`.
 
 -----
 

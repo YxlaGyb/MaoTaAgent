@@ -20,6 +20,7 @@ import {
   type ToolSpec,
 } from "@maota/agent-loop";
 import type { HookEvent } from "@maota/hook-protocol";
+import { readRoute, type ModelRoute, type ResolvedModel } from "@maota/model-protocol";
 import { touchedPaths } from "./catalog.ts";
 import { continueNote, overflowNote } from "./compact.ts";
 import { narrow, readRunControl, withoutControl, type RunControl } from "./control.ts";
@@ -70,9 +71,25 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   const deny = readNames(params?.tools_deny, "tools_deny") ?? [];
   const maxSteps = readSteps(params?.max_steps, settings.max_steps);
   const identity = origin?.parent_session_id ?? sessionId;
-  const setting: LevelSetting = sub
+  const base: LevelSetting = sub
     ? { ...(active.get(identity) ?? { tools: true }) }
     : resolveLevel(settings.thinking, readLevel(params?.thinking));
+  const chosen = params?.route === undefined ? undefined : readRoute(params.route);
+  const resolved = await ctx.channel.call(
+    "model",
+    "resolve",
+    sub && base.route !== undefined
+      ? { route: base.route }
+      : chosen === undefined
+        ? { level: readLevel(params?.thinking), ...(base.model === undefined ? {} : { model: base.model }) }
+        : { route: chosen, level: readLevel(params?.thinking) },
+    { signal: ctx.signal },
+  ) as ResolvedModel;
+  const setting: LevelSetting = {
+    ...base,
+    route: resolved.route,
+    tools: base.tools && resolved.model.capabilities.tools,
+  };
 
   // Depth is a property of the run, not of the tool that started it: a child is
   // one deeper than the run that owns its parent session, and a deployment may
@@ -131,7 +148,8 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   /// of the run, and the model's view, the refusal gate and the loop all read
   /// the same current list rather than three snapshots.
   let narrowed: string[] | null = null;
-  let runModel = setting.model;
+  let runRoute: ModelRoute = resolved.route;
+  let runModel = `${runRoute.provider}/${runRoute.model}`;
   let visible = declared;
   let modelTools = visible.map(stripHostArgs);
   let visibleNames = new Set(visible.map((tool) => tool.name));
@@ -211,7 +229,12 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   const applyControl = async (control: RunControl, invoked: ToolCall, output: unknown): Promise<unknown> => {
     const content = withoutControl(output);
     if (control.tools_allow !== undefined) narrowTo(control.tools_allow);
-    if (control.model !== undefined) runModel = control.model;
+    if (control.model !== undefined) {
+      const selected = await ctx.channel.call("model", "resolve", { model: control.model }, { signal: ctx.signal }) as ResolvedModel;
+      runRoute = selected.route;
+      runModel = `${selected.route.provider}/${selected.route.model}`;
+      active.set(sessionId, { ...setting, route: selected.route });
+    }
     if (control.hooks !== undefined && hooksOn()) {
       const scope = `${identity}:${invoked.id}`;
       try {
@@ -246,7 +269,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   if (note !== null) history.push(note);
 
   const title = origin !== null && origin.description !== "" ? origin.description : titleOf(first?.content);
-  await persist(ctx, sessionId, cwd, history, title, origin);
+  await persist(ctx, sessionId, cwd, history, title, origin, runRoute);
 
   const messages: Message[] = [
     { role: "system", content: await assemblePrompt(ctx, identity, cwd, mode, system) },
@@ -287,6 +310,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
                   messages: step.state.messages,
                   tools: modelTools,
                   model: runModel,
+                  route: runRoute,
                   trigger: "pressure",
                   beforeCompact: (folded) =>
                     record("PreCompact", { ...self, step: step.step, messages: folded }),
@@ -306,7 +330,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
                 ctx,
                 step.state.messages,
                 modelTools,
-                runModel,
+                runRoute,
                 step.signal,
                 step.delta,
                 { id: sessionId, cwd: cwd ?? "", step: step.step },
@@ -359,6 +383,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
               messages,
               tools: modelTools,
               model: runModel,
+              route: runRoute,
               trigger: "overflow",
               force: true,
               beforeCompact: (folded) =>
@@ -412,7 +437,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         text: cancelled ? "this turn was cancelled" : `this turn ended against an unexpected failure: ${detail}`,
       });
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
       stream.push({ type: "done", steps: ending.steps, text: cancelled ? "" : detail, reason });
     }
     if (outcome !== null) {
@@ -432,7 +457,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
       const stopping = subagentPayload();
       if (stopping !== null) await record("SubagentStop", stopping);
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
       announceSub("agent.subagent.finished", {
         steps: outcome.steps,
         reason: outcome.reason,
@@ -456,7 +481,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
     flush();
     // What the last two points said belongs to the turn like everything else,
     // or a hook that only speaks at the end is never heard at all.
-    if (messages.length > before) await persist(ctx, sessionId, cwd, messages.slice(1), title, origin);
+    if (messages.length > before) await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
     if (!sub) active.delete(sessionId);
     depths.delete(sessionId);
     // A hook a tool brought belongs to the run that tool ran in, so it is

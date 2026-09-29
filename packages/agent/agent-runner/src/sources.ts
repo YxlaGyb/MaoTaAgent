@@ -26,6 +26,16 @@ export function asTurnInput(value: unknown): TurnInput {
     source,
   };
   if (typeof raw.thinking === "string" && raw.thinking !== "") input.thinking = raw.thinking;
+  if (raw.route !== null && typeof raw.route === "object" && !Array.isArray(raw.route)) {
+    const route = raw.route as Record<string, unknown>;
+    if (typeof route.provider === "string" && route.provider !== "" && typeof route.model === "string" && route.model !== "") {
+      input.route = {
+        provider: route.provider,
+        model: route.model,
+        ...(typeof route.reasoning === "string" && route.reasoning !== "" ? { reasoning: route.reasoning } : {}),
+      };
+    }
+  }
   if (raw.permission === "ask" || raw.permission === "auto" || raw.permission === "full") input.permission = raw.permission;
   if (typeof raw.max_steps === "number" && Number.isInteger(raw.max_steps) && raw.max_steps > 0) input.max_steps = raw.max_steps;
   if (Array.isArray(raw.tools_deny) && raw.tools_deny.every((item) => typeof item === "string")) input.tools_deny = [...raw.tools_deny];

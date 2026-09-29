@@ -47,7 +47,7 @@ export function SkillPicker({
   return (
     <Popover
       className="skills"
-      title={t("skillInsert")}
+      title={t("add")}
       open={open}
       disabled={disabled}
       onToggle={() => {
@@ -55,12 +55,7 @@ export function SkillPicker({
         setQuery("");
       }}
       onClose={() => setOpen(false)}
-      label={
-        <>
-          <Icon d={ICON.plug} className="icon icon-sm" />
-          {t("skills")}
-        </>
-      }
+      label={<Icon name={ICON.plus} className="icon icon-sm" />}
     >
       <div className="popover-head">
         <span>{t("skillInsert")}</span>

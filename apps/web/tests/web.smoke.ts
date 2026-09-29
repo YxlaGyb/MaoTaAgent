@@ -32,8 +32,9 @@ await check("app.info", async () => {
   assert.equal(appInfo.listening, true, "the plugin should be listening on that URL");
   assert.equal(appInfo.version, info.version, "both should report the same version");
   assert.equal(appInfo.dev, false, "config.dev should win over NODE_ENV");
-  assert.equal(appInfo.thinking?.medium?.model, "smoke-reasoner", "levels should come from the agent plugin");
   assert.equal(appInfo.thinking?.medium?.tools, false, "the level's tools flag should come through");
+  assert.equal(appInfo.models?.default_route?.provider, "smoke", "the default model route should come from the model router");
+  assert.equal(appInfo.models?.default_route?.model, "smoke-chat", "the default model should be listed");
   assert.ok(appInfo.levels.includes("medium"), `levels should contain medium, got ${JSON.stringify(appInfo.levels)}`);
   assert.ok(
     appInfo.sessions_dir?.startsWith(home) === true,
@@ -83,13 +84,6 @@ await check("skills.list", async () => {
     true,
     "a summary should not leak the provider's own rank",
   );
-});
-
-await check("api key from the page", async () => {
-  assert.equal((await call("app.info")).has_key, false, "a fresh home should report no key");
-  assert.equal((await call("settings.set_key", { api_key: "sk-smoke" })).has_key, true, "saving should report back");
-  assert.equal((await call("app.info")).has_key, true, "app.info should see it right away");
-  assert.equal(readFileSync(join(home, "api_key"), "utf8").trim(), "sk-smoke", "the key should be on disk");
 });
 
 startStream();
@@ -349,6 +343,36 @@ await check("subagent: the child runs, and the page hears it under the parent's 
     child.messages.filter((message: { source?: unknown }) => isCatalog(message)).length,
     0,
     "a subagent is never sent the skill catalog",
+  );
+});
+
+await check("models: provider and model persist", async () => {
+  const before = await call("models.list");
+  const providerReply = await call("models.save_provider", {
+    name: "Smoke provider",
+    adapter: "openai",
+    base_url: "http://127.0.0.1:9/v1",
+    api_key: "sk-smoke",
+    verified: true,
+    expected_revision: before.revision,
+  });
+  const provider = providerReply.providers.find((item: { name?: string }) => item.name === "Smoke provider");
+  assert.ok(provider?.id, "saving a provider should return its id");
+  const modelReply = await call("models.save_model", {
+    provider: provider.id,
+    model: "smoke-model",
+    name: "Smoke model",
+    capabilities: { tools: true, vision: false },
+    expected_revision: providerReply.revision,
+  });
+  assert.ok(
+    modelReply.models.some((item: { provider?: string; model?: string }) => item.provider === provider.id && item.model === "smoke-model"),
+    "saving a model should return it",
+  );
+  const listed = await call("models.list");
+  assert.ok(
+    listed.models.some((item: { provider?: string; model?: string }) => item.provider === provider.id && item.model === "smoke-model"),
+    "the saved model should still be listed",
   );
 });
 

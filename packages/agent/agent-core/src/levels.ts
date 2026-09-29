@@ -12,6 +12,7 @@ export type Level = (typeof LEVELS)[number];
 export interface LevelSetting {
   model?: string;
   tools: boolean;
+  route?: { provider: string; model: string; reasoning?: string };
 }
 
 export interface ModelBudget {

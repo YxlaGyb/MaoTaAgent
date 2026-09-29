@@ -1,26 +1,30 @@
 import { useCallback, useState, type MutableRefObject } from "react";
 
-import { call, type AppInfo, type ContextView, type HostEvent, type SessionFile, type SessionMessage } from "./lib/rpc.ts";
+import { call, type AppInfo, type ContextView, type HostEvent, type ModelRoute, type SessionFile, type SessionMessage } from "./lib/rpc.ts";
 
 export function useContextCompact({
   activeRef,
   info,
   thinking,
+  modelRoute,
   onMessages,
   onFailure,
 }: {
   activeRef: MutableRefObject<{ id: string; cwd: string } | null>;
   info: AppInfo | null;
   thinking: string;
+  modelRoute: ModelRoute | null;
   onMessages: (messages: SessionMessage[]) => void;
   onFailure: (session: string, message: string) => void;
 }) {
   const [context, setContext] = useState<ContextView | null>(null);
+  const clearContext = useCallback((): void => setContext(null), []);
 
   const model = useCallback((): string | undefined => {
+    if (modelRoute !== null) return modelRoute.model;
     const value = info?.thinking?.[thinking]?.model;
     return typeof value === "string" && value !== "" ? value : undefined;
-  }, [info, thinking]);
+  }, [info, modelRoute, thinking]);
 
   const loadContext = useCallback(async (id: string, cwd: string): Promise<void> => {
     try {
@@ -72,6 +76,6 @@ export function useContextCompact({
     return true;
   }, [activeRef, loadContext, onFailure, reload]);
 
-  return { context, compactNow, loadContext, onCompactEvent };
+  return { context, clearContext, compactNow, loadContext, onCompactEvent };
 }
 

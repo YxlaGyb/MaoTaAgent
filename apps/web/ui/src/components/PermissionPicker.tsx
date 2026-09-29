@@ -1,12 +1,12 @@
 import { useState } from "react";
 
 import { useT, type MessageKey } from "../lib/i18n.ts";
-import { Icon, ICON } from "./Icon.tsx";
+import { Icon, ICON, type IconName } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
 export const PERMISSION_OPTIONS: readonly {
   value: string;
-  icon: string;
+  icon: IconName;
   name: MessageKey;
   note: MessageKey;
   tone: string;
@@ -41,7 +41,7 @@ export function PermissionPicker({
       onClose={() => setOpen(false)}
       label={
         <>
-          <Icon d={current.icon} className="icon icon-sm" />
+          <Icon name={current.icon} className="icon icon-sm" />
           {t(current.name)}
         </>
       }
@@ -61,12 +61,12 @@ export function PermissionPicker({
             setOpen(false);
           }}
         >
-          <Icon d={option.icon} className="icon option-icon" />
+          <Icon name={option.icon} className="icon option-icon" />
           <span className="option-text">
             <span className="option-name">{t(option.name)}</span>
             <span className="option-note">{t(option.note)}</span>
           </span>
-          {option.value === value ? <Icon d={ICON.check} className="icon icon-sm option-check" /> : null}
+          {option.value === value ? <Icon name={ICON.check} className="icon icon-sm option-check" /> : null}
         </button>
       ))}
     </Popover>

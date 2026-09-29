@@ -1,6 +1,6 @@
-/// The sidebar pane: the project and session tree beside the chat. It folds
-/// the session list into project groups, keeps pinned and archived rows apart,
-/// and hands the sorted result to Sidebar.
+/// The sidebar pane: the project tree and recent beside the chat. It folds
+/// sessions into their folders, keeps pinned and archived rows apart, and
+/// hands the sorted result to Sidebar.
 
 import { useMemo } from "react";
 
@@ -31,7 +31,6 @@ export function SidebarPane({
   onArchive,
   onSettings,
   onPlugins,
-  onSkills,
   onTasks,
   onSearch,
 }: {
@@ -58,15 +57,17 @@ export function SidebarPane({
   onArchive: (id: string) => void;
   onSettings: () => void;
   onPlugins: () => void;
-  onSkills: () => void;
   onTasks: () => void;
   onSearch: () => void;
 }) {
   const groups = useMemo(() => {
-    const cwds = new Set<string>([DEFAULT_PROJECT, project, ...projects]);
-    for (const session of sessions) cwds.add(session.cwd === "" ? DEFAULT_PROJECT : session.cwd);
+    const cwds = new Set<string>([project, ...projects]);
+    for (const session of sessions) {
+      const cwd = session.cwd === "" ? DEFAULT_PROJECT : session.cwd;
+      if (cwd !== DEFAULT_PROJECT) cwds.add(cwd);
+    }
     return [...cwds]
-      .filter((cwd) => !removed.includes(cwd))
+      .filter((cwd) => cwd !== DEFAULT_PROJECT && !removed.includes(cwd))
       .map((cwd) => ({
         cwd,
         sessions: sessions
@@ -79,13 +80,24 @@ export function SidebarPane({
           ),
       }))
       .sort((left, right) => {
-        if (left.cwd === DEFAULT_PROJECT) return -1;
-        if (right.cwd === DEFAULT_PROJECT) return 1;
         const leftName = projectLabel(left.cwd, "", names[left.cwd] ?? "");
         const rightName = projectLabel(right.cwd, "", names[right.cwd] ?? "");
         return leftName.localeCompare(rightName);
       });
   }, [archived, names, pinned, project, projects, removed, sessions]);
+
+  const recent = useMemo(
+    () =>
+      sessions
+        .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === DEFAULT_PROJECT)
+        .filter((session) => !archived.includes(session.id))
+        .sort(
+          (left, right) =>
+            Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
+            right.updated_at.localeCompare(left.updated_at),
+        ),
+    [archived, pinned, sessions],
+  );
 
   const pinnedRows = useMemo(
     () => sessions.filter((session) => pinned.includes(session.id) && !archived.includes(session.id)),
@@ -100,10 +112,10 @@ export function SidebarPane({
   return (
     <Sidebar
       groups={groups}
+      recent={recent}
       pinned={pinnedRows}
       archived={archivedRows}
       names={names}
-      project={project}
       activeId={activeId}
       running={running}
       onNew={onNew}
@@ -120,7 +132,6 @@ export function SidebarPane({
       onArchive={onArchive}
       onSettings={onSettings}
       onPlugins={onPlugins}
-      onSkills={onSkills}
       onTasks={onTasks}
       onSearch={onSearch}
     />

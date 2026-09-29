@@ -6,7 +6,9 @@ export interface PluginRow {
 }
 
 export const rows: PluginRow[] = [
-  { id: "api", name: "@maota/api" },
+  { id: "model-openai", name: "@maota/model-openai" },
+  { id: "model-anthropic", name: "@maota/model-anthropic" },
+  { id: "model-router", name: "@maota/model-router" },
   { id: "i18n", name: "@maota/i18n-native" },
   { id: "jobs", name: "@maota/jobs" },
   { id: "pwsh-local", name: "@maota/pwsh-local" },

@@ -51,7 +51,7 @@ const toolkit = defineTools([
   {
     capability: "tool.cron_create",
     description:
-      "Create a persistent scheduled task. Use remind to send a reminder into this session, agent to run a self-contained prompt in a fresh session, or script to run a controlled script without an LLM.",
+      "Create a persistent scheduled task. Use remind to send a reminder into this session, agent to run a self-contained prompt in a fresh session, or script to run a controlled script without a model.",
     parameters: { ...scheduleParameters, ...commonParameters },
     concurrency: "never",
     maxResultChars: 8_000,

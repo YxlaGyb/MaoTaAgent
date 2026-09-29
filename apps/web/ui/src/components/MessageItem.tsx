@@ -57,7 +57,7 @@ export function MessageItem({
       <div className="msg-note">
         <details className="note msg-compact">
           <summary className="note-summary">
-            <Icon d={ICON.plug} className="icon icon-sm" />
+            <Icon name={ICON.plug} className="icon icon-sm" />
             {t("compactCheckpoint", { n: message.source.folded ?? 0 })}
           </summary>
           <pre className="note-body">{String(message.content ?? "")}</pre>
@@ -73,7 +73,7 @@ export function MessageItem({
       <div className="msg-note">
         <details className="note">
           <summary className="note-summary">
-            <Icon d={ICON.plug} className="icon icon-sm" />
+            <Icon name={ICON.plug} className="icon icon-sm" />
             {message.source.update === true ? t("skillCatalogUpdated") : t("skillCatalog")}
           </summary>
           <pre className="note-body">{String(message.content ?? "")}</pre>

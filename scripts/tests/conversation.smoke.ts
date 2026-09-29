@@ -33,7 +33,8 @@ writeFileSync(
 writeFileSync(
   join(dir, "eggshell.toml"),
   [
-    ...plugin("api", "api"),
+    ...plugin("model-scripted", "model/model-scripted"),
+    ...plugin("model-router", "model/model-router"),
     ...plugin("pwsh-local", "shell/pwsh-local"),
     ...plugin("tool-pwsh", "shell/tool-pwsh"),
     ...plugin("tool-fs", "fs/tool-fs"),
@@ -54,20 +55,32 @@ writeFileSync(
   [
     'extends = ["eggshell.toml"]',
     "",
-    "[plugins.api.config]",
-    'backend = "scripted"',
-    'model = "smoke"',
+    "[plugins.model-scripted.config]",
     "script = [",
     '  { tool = "pwsh", args = { command = "echo hi" } },',
     '  { tool = "skill", args = { name = "hello" } },',
     '  { text = "all done" },',
     '  { text = "second turn" },',
     "]",
+
+    "[plugins.model-router.config]",
+    "file = '" + join(dir, "models.json").replace(/\\/g, "/") + "'",
+
     "",
     "[plugins.skill-filesystem.config]",
     `dirs = ['${join(dir, "skills").replace(/\\/g, "/")}']`,
     "",
   ].join("\n"),
+);
+
+writeFileSync(
+  join(dir, "models.json"),
+  JSON.stringify({
+    revision: 1,
+    providers: [{ id: "smoke", name: "Smoke", adapter: "scripted", base_url: "http://smoke", auth: { kind: "file" }, enabled: true, verified: true }],
+    models: [{ provider: "smoke", model: "smoke", name: "Smoke", capabilities: { tools: true, vision: false }, reasoning_efforts: [], enabled: true, verified: true }],
+    default_route: { provider: "smoke", model: "smoke" },
+  }, null, 2) + "\n",
 );
 
 const logs: string[] = [];

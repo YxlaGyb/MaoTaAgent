@@ -2,67 +2,53 @@ import { useState } from "react";
 import { MaoButton, MaoTextArea } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
-import type { AppInfo } from "../lib/rpc.ts";
+import type { AppInfo, ContextView, ModelRoute } from "../lib/rpc.ts";
+import { ContextMeter } from "./ContextMeter.tsx";
+import { Icon, ICON } from "./Icon.tsx";
 import { PermissionPicker } from "./PermissionPicker.tsx";
 import { SkillPicker } from "./SkillPicker.tsx";
 import { ThinkingPicker } from "./ThinkingPicker.tsx";
-
-function SendIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width="16"
-      height="16"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M8 12.5V3.5M4.5 7L8 3.5L11.5 7" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="currentColor">
-      <rect x="2" y="2" width="12" height="12" rx="2" />
-    </svg>
-  );
-}
 
 export function Composer({
   info,
   cwd,
   thinking,
+  modelRoute,
   permission,
   permissionDisabled,
   running,
   blocked,
+  context,
   onThinking,
+  onModelRoute,
   onPermission,
+  onCompact,
   onSend,
   onCancel,
 }: {
   info: AppInfo | null;
   cwd: string;
   thinking: string;
+  modelRoute: ModelRoute | null;
   permission: string;
   permissionDisabled: boolean;
   running: boolean;
   blocked: boolean;
+  context: ContextView | null;
   onThinking: (level: string) => void;
+  onModelRoute: (route: ModelRoute | null) => void;
   onPermission: (mode: string) => void;
+  onCompact: () => void;
   onSend: (text: string) => void;
   onCancel: () => void;
 }) {
   const t = useT();
+  const hasModel = (info?.models?.models ?? []).some((model) =>
+    model.enabled && (info?.models?.providers.find((item) => item.id === model.provider)?.enabled ?? true));
   const [text, setText] = useState("");
 
   const submit = (): void => {
-    if (running || blocked || text.trim() === "") return;
+    if (running || blocked || !hasModel || text.trim() === "") return;
     onSend(text);
     setText("");
   };
@@ -93,26 +79,27 @@ export function Composer({
         }}
       />
       <div className="composer-row">
+        <SkillPicker cwd={cwd} disabled={blocked || info?.capabilities?.skill === undefined} onPick={reference} />
         <PermissionPicker
           value={permission}
           disabled={blocked || permissionDisabled}
           note={info?.capabilities?.permission === undefined ? t("permissionOff") : undefined}
           onChange={onPermission}
         />
-        <SkillPicker cwd={cwd} disabled={blocked || info?.capabilities?.skill === undefined} onPick={reference} />
-        <ThinkingPicker info={info} value={thinking} disabled={blocked} onChange={onThinking} />
+        <ContextMeter context={context} running={running} onCompact={onCompact} />
+        <ThinkingPicker info={info} thinking={thinking} modelRoute={modelRoute} disabled={blocked} onThinking={onThinking} onModelRoute={onModelRoute} />
         {running ? (
           <MaoButton className="composer-send" aria-label={t("stop")} onClick={onCancel}>
-            <StopIcon />
+            <Icon name={ICON.square} size={12} />
           </MaoButton>
         ) : (
           <MaoButton
             className="composer-send"
             aria-label={t("send")}
-            disabled={blocked || text.trim() === ""}
+            disabled={blocked || !hasModel || text.trim() === ""}
             onClick={submit}
           >
-            <SendIcon />
+            <Icon name={ICON.arrowUp} size={16} />
           </MaoButton>
         )}
       </div>

@@ -15,6 +15,7 @@
 
 import { CallError, type Call } from "@maota/plugin-kit";
 import { ModelFailureError, readModelFailure, type ChatDelta, type Message, type ToolSpec } from "@maota/agent-loop";
+import type { ModelRoute } from "@maota/model-protocol";
 
 /// Which conversation this call is answering for, so a replacement the adapter
 /// makes can be written down where the turn will be read afterwards.
@@ -28,15 +29,15 @@ export async function chatStream(
   ctx: Call,
   messages: readonly Message[],
   tools: readonly ToolSpec[],
-  model: string | undefined,
+  route: ModelRoute,
   signal: AbortSignal,
   delta: (chunk: ChatDelta) => void,
   session: SessionRef,
 ): Promise<Message> {
   const stream = await ctx.channel.stream(
-    "api",
+    "model",
     "chat",
-    { messages, tools, session, ...(model === undefined ? {} : { model }) },
+    { route, messages, tools, session },
     { signal },
   );
   let final: Message | undefined;
@@ -59,7 +60,7 @@ export async function chatStream(
   if (!final) {
     if (failure !== undefined) throw failure;
     if (signal.aborted) throw new CallError(-32013, "cancelled");
-    throw new CallError(-32603, "api returned no message");
+    throw new CallError(-32603, "model router returned no message");
   }
   return final;
 }

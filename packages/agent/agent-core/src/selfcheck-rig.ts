@@ -10,7 +10,7 @@ import { kindOfCode, type LoopEvent, type Message, type ToolSpec } from "@maota/
 
 export interface RunResult {
   call: Call;
-  chat: Array<{ messages: Message[]; tools?: ToolSpec[]; model?: string }>;
+  chat: Array<{ messages: Message[]; tools?: ToolSpec[]; route?: { provider?: string; model?: string } }>;
   events: LoopEvent[];
   heard: Array<{ capability: string; method: string; params: any }>;
   sent: Array<{ topic: string; payload: Record<string, any> }>;
@@ -65,7 +65,7 @@ export function createRig(definition: Definition): Rig {
     }),
     surfaced: (chat) => (chat[0]?.tools ?? []).map((tool) => tool.name).join(","),
     run(params, script, gate, failChat = false) {
-      const chat: Array<{ messages: Message[]; tools?: ToolSpec[]; model?: string }> = [];
+      const chat: Array<{ messages: Message[]; tools?: ToolSpec[]; route?: { provider?: string; model?: string } }> = [];
       const events: LoopEvent[] = [];
       const heard: Array<{ capability: string; method: string; params: any }> = [];
       const sent: Array<{ topic: string; payload: Record<string, any> }> = [];
@@ -90,6 +90,10 @@ export function createRig(definition: Definition): Rig {
             };
           }
           if (capability === "session" && method === "load") return { messages: rig.history };
+          if (capability === "model" && method === "resolve") {
+            const selected = String(params?.route?.model ?? params?.model ?? "default");
+            return { route: { provider: "smoke", model: selected }, provider: { id: "smoke", name: "Smoke", adapter: "openai", base_url: "http://smoke", auth: { kind: "file" }, verified: true }, model: { provider: "smoke", model: selected, name: selected, capabilities: { tools: true, vision: false }, reasoning_efforts: [], verified: true } };
+          }
           if (capability === "session" && method === "save") {
             saves.push(params);
             return {};
@@ -103,7 +107,7 @@ export function createRig(definition: Definition): Rig {
           }
           if (capability === "tools" && method === "classify") return { safe: true };
           if (capability === "tools" && method === "call") return "tool output";
-          if (capability === "api" && method === "chat") return { message: { role: "assistant", content: "folded note" } };
+          if (capability === "model" && method === "complete") return { message: { role: "assistant", content: "folded note" } };
           if (capability === "hooks" && method === "trigger") return rig.hookAnswer(params);
           throw new Error(`unexpected call ${capability}/${method}`);
         },

@@ -138,8 +138,8 @@ export async function checkAgentRuns(definition: Definition, rig: Rig, problems:
     [rig.scripted("child done")],
   );
   await inherited.done;
-  if (inherited.chat[0]?.model !== "m-low") {
-    problems.push(`a subagent ran on model ${JSON.stringify(inherited.chat[0]?.model)}, expected the parent's`);
+  if (inherited.chat[0]?.route?.model !== "m-low") {
+    problems.push(`a subagent ran on model ${JSON.stringify(inherited.chat[0]?.route)}, expected the parent's`);
   }
   if (rig.surfaced(inherited.chat) !== "read,write,task,skill") {
     problems.push(`the skill tool stopped being an ordinary tool: ${rig.surfaced(inherited.chat)}`);
@@ -218,8 +218,8 @@ export async function checkAgentRuns(definition: Definition, rig: Rig, problems:
     [rig.scripted("child done")],
   );
   await orphan.done;
-  if (orphan.chat[0]?.model !== undefined) {
-    problems.push(`a subagent outlived its parent's level: ${JSON.stringify(orphan.chat[0]?.model)}`);
+  if (orphan.chat[0]?.route?.model !== "default") {
+    problems.push(`a subagent outlived its parent's level: ${JSON.stringify(orphan.chat[0]?.route)}`);
   }
 
   for (const [bad, why] of [

@@ -37,7 +37,8 @@ const config = join(dir, "eggshell.toml");
 writeFileSync(
   config,
   [
-    ...plugin("api", packageEntry("api")),
+    ...plugin("model-scripted", packageEntry("model/model-scripted")),
+    ...plugin("model-router", packageEntry("model/model-router")),
     ...plugin("pwsh-local", packageEntry("shell/pwsh-local")),
     ...plugin("permission", packageEntry("interaction/permission")),
     ...plugin("tool-pwsh", packageEntry("shell/tool-pwsh")),
@@ -50,9 +51,7 @@ writeFileSync(
     ...plugin("hooks", packageEntry("hooks/hooks-native")),
     ...plugin("hook-deny", join(root, "scripts", "tests", "fixtures", "hook-deny", "src", "index.ts")),
     ...plugin("agent", packageEntry("agent/agent-core")),
-    "[plugins.api.config]",
-    'backend = "scripted"',
-    'model = "smoke"',
+    "[plugins.model-scripted.config]",
     "script = [",
     `  { tool = "pwsh", args = { command = "New-Item -Path '${slash(refusedFile)}' -ItemType File -Force; Write-Output MAOTA_HOOK_DENY" } },`,
     `  { tool = "pwsh", args = { command = "rm -Recurse -Force '${slash(keeper)}'" } },`,
@@ -60,8 +59,22 @@ writeFileSync(
     '  { text = "all done" },',
     '  { text = "after the steer" },',
     "]",
+
+    "[plugins.model-router.config]",
+    "file = '" + join(dir, "models.json").replace(/\\/g, "/") + "'",
+
     "",
   ].join("\n"),
+);
+
+writeFileSync(
+  join(dir, "models.json"),
+  JSON.stringify({
+    revision: 1,
+    providers: [{ id: "smoke", name: "Smoke", adapter: "scripted", base_url: "http://smoke", auth: { kind: "file" }, enabled: true, verified: true }],
+    models: [{ provider: "smoke", model: "smoke", name: "Smoke", capabilities: { tools: true, vision: false }, reasoning_efforts: [], enabled: true, verified: true }],
+    default_route: { provider: "smoke", model: "smoke" },
+  }, null, 2) + "\n",
 );
 
 const logs: string[] = [];

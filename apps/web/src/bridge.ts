@@ -232,6 +232,7 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
       cwd: typeof params.cwd === "string" ? params.cwd : "",
       input,
       thinking: typeof params.thinking === "string" && params.thinking !== "" ? params.thinking : "off",
+      ...(params.route !== null && typeof params.route === "object" && !Array.isArray(params.route) ? { route: params.route } : {}),
     });
     return { turn_id };
   }
@@ -263,11 +264,16 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
         .call("api", "key", {})
         .then((reply) => (reply as { has_key?: unknown } | null)?.has_key)
         .catch(() => null);
+      const models = await channel
+        .call("model", "list", {})
+        .then((reply) => reply as BridgeFacts["models"])
+        .catch(() => null);
       return {
         sessions_dir: typeof listed === "string" ? listed : null,
         levels: agent?.levels ?? [],
         thinking: (agent?.thinking as BridgeFacts["thinking"]) ?? null,
         has_key: typeof keyed === "boolean" ? keyed : null,
+        models,
       };
     },
 
@@ -298,6 +304,20 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
           return await channel.call("api", "key_set", {
             api_key: typeof params.api_key === "string" ? params.api_key : "",
           });
+        case "models.list":
+          return await channel.call("model", "list", {});
+        case "models.discover":
+          return await channel.call("model", "discover", params);
+        case "models.save_provider":
+          return await channel.call("model", "save_provider", params);
+        case "models.delete_provider":
+          return await channel.call("model", "delete_provider", params);
+        case "models.save_model":
+          return await channel.call("model", "save_model", params);
+        case "models.delete_model":
+          return await channel.call("model", "delete_model", params);
+        case "models.set_default":
+          return await channel.call("model", "set_default", params);
         case "permission.get":
           return await channel.call("permission", "policy", { session_id: sessionOf(params), cwd: cwdOf(params) });
         case "permission.set":

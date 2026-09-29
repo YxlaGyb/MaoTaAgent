@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The service stores schedules in `$MAOTA_HOME/schedules.json`. It supports `remind`, fresh-session `agent`, and no-LLM `script` runs, dispatches at most one missed occurrence after restart, and writes bounded run history.
+The service stores schedules in `$MAOTA_HOME/schedules.json`. It supports `remind`, fresh-session `agent`, and model-free `script` runs, dispatches at most one missed occurrence after restart, and writes bounded run history.
 
 ## Table of Contents
 

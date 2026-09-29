@@ -12,7 +12,7 @@ import { CallError } from "@maota/plugin-kit";
 import { eventsOf, type SessionEvent } from "./plan.ts";
 import { compactSourceOf, compactionsOf, type CompactionRecord, type CompactSource } from "./compaction.ts";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
@@ -103,6 +103,12 @@ export function projectMessages(value: unknown, strict: boolean): SessionMessage
   return out;
 }
 
+export interface SessionModelRoute {
+  provider: string;
+  model: string;
+  reasoning?: string;
+}
+
 export interface SessionFile {
   schema_version: number;
   id: string;
@@ -114,6 +120,7 @@ export interface SessionFile {
   events: SessionEvent[];
   compactions: CompactionRecord[];
   parent: SessionParent | null;
+  model_route: SessionModelRoute | null;
   dangling: boolean;
 }
 
@@ -199,6 +206,17 @@ export function assertId(id: unknown): string {
 /// A stored document is read leniently and written strictly: a malformed link
 /// inside a file reads as absent, while one this process was handed is a bug
 /// worth refusing.
+export function modelRouteOf(value: unknown): SessionModelRoute | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.provider !== "string" || raw.provider === "" || typeof raw.model !== "string" || raw.model === "") return null;
+  return {
+    provider: raw.provider,
+    model: raw.model,
+    ...(typeof raw.reasoning === "string" && raw.reasoning !== "" ? { reasoning: raw.reasoning } : {}),
+  };
+}
+
 export function parentOf(value: unknown): SessionParent | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
@@ -253,7 +271,7 @@ export function inspect(path: string): Read {
       return { state: "bad", reason: "the document has no id and messages" };
     }
     const version = parsed.schema_version;
-    if (version !== undefined && ![1, 2, 3, 4, SCHEMA_VERSION].includes(version)) {
+    if (version !== undefined && ![1, 2, 3, 4, 5, SCHEMA_VERSION].includes(version)) {
       return { state: "bad", reason: `schema_version ${JSON.stringify(version)} is not one this build reads` };
     }
     const events = eventsOf((parsed as { events?: unknown }).events);
@@ -269,6 +287,7 @@ export function inspect(path: string): Read {
         events,
         compactions,
         parent: parentOf((parsed as { parent?: unknown }).parent),
+        model_route: modelRouteOf((parsed as { model_route?: unknown }).model_route),
         dangling: false,
       },
     };

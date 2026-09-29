@@ -27,6 +27,7 @@ import {
   assertParent,
   encodeDir,
   pathOf,
+  modelRouteOf,
   projectMessages,
   readFileAt,
   trimCwd,
@@ -97,6 +98,7 @@ export function load(
       events: [],
       compactions: [],
       parent: null,
+      model_route: null,
       dangling: false,
     };
   }
@@ -110,6 +112,7 @@ export interface SaveInput {
   messages: unknown;
   compactions?: unknown;
   parent?: unknown;
+  model_route?: unknown;
 }
 
 /// A document keeps the events that built its plan, which without a ceiling
@@ -179,6 +182,7 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
       events: found?.events ?? [],
       compactions,
       parent: assertParent(input.parent) ?? found?.parent ?? null,
+      model_route: modelRouteOf(input.model_route) ?? found?.model_route ?? null,
       dangling: messages.at(-1)?.role === "user",
     };
 
@@ -256,6 +260,7 @@ export function commitCompaction(
       events: found?.events ?? [],
       compactions: [...(found?.compactions ?? []), record],
       parent: assertParent(input.parent) ?? found?.parent ?? null,
+      model_route: found?.model_route ?? null,
       dangling: messages.at(-1)?.role === "user",
     };
     return writeDocument(path, join(root, encodeDir(workdir)), id, file, limits);

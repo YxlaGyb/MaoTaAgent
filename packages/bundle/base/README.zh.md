@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的二十六个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的三十个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
 kind: "package-reference"
 ---
 
@@ -36,6 +36,10 @@ import { rows } from "@maota/base";
 | id | 包 | 能力 |
 |---|---|---|
 | `api` | `@maota/api` | `api` |
+| `model-api` | `@maota/model-api` | `model.adapter.api` |
+| `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
+| `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
+| `model-router` | `@maota/model-router` | `model` |
 | `i18n` | `@maota/i18n-native` | `i18n` |
 | `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
@@ -64,7 +68,7 @@ import { rows } from "@maota/base";
 
 ### 顺序
 
-provider 排在读它的 dispatcher 之前：`tool.*` 插件、`shell` 与 `permission` 排在 `tools` 前，skill provider 排在 `skill` 前，hook provider 排在 `hooks` 前。`agent-runner` 排在 `agent-core` 后，`schedule` 排在 `agent-runner` 后；`tool-cron` 可以在 `tools` 后启动，因为 dispatcher 会在 `kernel.capabilities.changed` 后重建。
+provider 排在读它的 dispatcher 之前：`tool.*` 插件、`shell` 与 `permission` 排在 `tools` 前，skill provider 排在 `skill` 前，hook provider 排在 `hooks` 前。四个 `model-*` 路由器与适配器排在保留的 `api` 行之后，并排在依赖 `model` 能力的 `agent-core` 之前。`agent-runner` 排在 `agent-core` 后，`schedule` 排在 `agent-runner` 后；`tool-cron` 可以在 `tools` 后启动，因为 dispatcher 会在 `kernel.capabilities.changed` 后重建。
 
 -----
 

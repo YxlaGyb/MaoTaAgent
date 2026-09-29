@@ -51,6 +51,24 @@ importers:
       '@maota/memory':
         specifier: workspace:^
         version: link:packages/memory/memory
+      '@maota/model-anthropic':
+        specifier: workspace:^
+        version: link:packages/model/model-anthropic
+      '@maota/model-api':
+        specifier: workspace:^
+        version: link:packages/model/model-api
+      '@maota/model-openai':
+        specifier: workspace:^
+        version: link:packages/model/model-openai
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:packages/model/model-protocol
+      '@maota/model-router':
+        specifier: workspace:^
+        version: link:packages/model/model-router
+      '@maota/model-scripted':
+        specifier: workspace:^
+        version: link:packages/model/model-scripted
       '@maota/permission':
         specifier: workspace:^
         version: link:packages/interaction/permission
@@ -198,6 +216,9 @@ importers:
       '@maota/hook-protocol':
         specifier: workspace:^
         version: link:../../hooks/hook-protocol
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../../model/model-protocol
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit
@@ -335,6 +356,57 @@ importers:
       '@maota/hook-protocol':
         specifier: workspace:^
         version: link:../../hooks/hook-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-anthropic:
+    dependencies:
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../model-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-api:
+    dependencies:
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../model-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-openai:
+    dependencies:
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../model-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-protocol:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-router:
+    dependencies:
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../model-protocol
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/model/model-scripted:
+    dependencies:
+      '@maota/model-protocol':
+        specifier: workspace:^
+        version: link:../model-protocol
       '@maota/plugin-kit':
         specifier: workspace:^
         version: link:../../plugin-kit

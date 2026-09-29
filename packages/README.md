@@ -34,6 +34,12 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/schedule` | [`schedule/schedule`](schedule/schedule/) | `schedule` | Persistent reminders and scripted or agent-backed automation. |
 | `@maota/tool-cron` | [`schedule/tool-cron`](schedule/tool-cron/) | `tool.cron_*` | The model tools for schedule management. |
 | `@maota/api` | [`api`](api/) | `api` | The model gateway: an openai backend and a scripted one for tests. |
+| `@maota/model-protocol` | [`model/model-protocol`](model/model-protocol/) |  | The vendor-neutral request, stream, model metadata and failure dialect. |
+| `@maota/model-router` | [`model/model-router`](model/model-router/) | `model` | The provider/model catalog, adapter discovery, thinking-level routing, credentials and retries. |
+| `@maota/model-api` | [`model/model-api`](model/model-api/) | `model.adapter.api` | The compatibility edge that routes the new model request shape through the preserved `api` plugin. |
+| `@maota/model-openai` | [`model/model-openai`](model/model-openai/) | `model.adapter.openai` | The OpenAI Chat Completions edge adapter. |
+| `@maota/model-anthropic` | [`model/model-anthropic`](model/model-anthropic/) | `model.adapter.anthropic` | The Anthropic Messages edge adapter. |
+| `@maota/model-scripted` | [`model/model-scripted`](model/model-scripted/) | `model.adapter.scripted` | The deterministic model adapter used by tests. |
 | `@maota/hmr` | [`boot/hmr`](boot/hmr/) | `dev.hmr` | The development watcher: it publishes `dev.source.changed` for the paths it watches, and its generated row ships disabled. |
 | `@maota/hooks-native` | [`hooks/hooks-native`](hooks/hooks-native/) | `hooks` | The hook engine: it discovers the `hook.*` capabilities, asks the ones a hook point belongs to, and merges their answers into one. |
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | The gate a tool asks before a destructive command: the session's mode, the questions waiting for an answer, and the paired audit file. |
@@ -60,7 +66,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
 <a id="bundles"></a>
-A profile's rows come from those two lists: `base` mounts the twenty-six rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
+A profile's rows come from those two lists: `base` mounts the thirty rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
 `pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
 

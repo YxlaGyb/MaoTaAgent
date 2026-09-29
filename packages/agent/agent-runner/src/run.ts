@@ -20,6 +20,7 @@ function loopParams(input: TurnInput): Record<string, unknown> {
     input: input.input,
     source: input.source,
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
+    ...(input.route === undefined ? {} : { route: input.route }),
     ...(input.max_steps === undefined ? {} : { max_steps: input.max_steps }),
     ...(denied.size === 0 ? {} : { tools_deny: [...denied] }),
   };

@@ -26,8 +26,53 @@ export interface AppInfo {
   levels: string[];
   thinking: Record<string, { model?: string; tools?: boolean }> | null;
   has_key: boolean | null;
+  models: ModelCatalogView | null;
   capabilities: Record<string, { plugin: string }>;
   i18n: HostCatalog | null;
+}
+
+export interface ModelRoute {
+  provider: string;
+  model: string;
+  reasoning?: string;
+}
+
+export interface ModelProviderView {
+  id: string;
+  name: string;
+  adapter: string;
+  base_url: string;
+  auth: { kind: "file" } | { kind: "env"; name: string };
+  enabled: boolean;
+  verified: boolean;
+  key_configured: boolean;
+  key_source: "file" | "env";
+}
+
+export interface ModelView {
+  provider: string;
+  model: string;
+  name: string;
+  context_tokens?: number;
+  max_output_tokens?: number;
+  capabilities: { tools: boolean; vision: boolean };
+  reasoning_efforts: string[];
+  enabled: boolean;
+  verified: boolean;
+}
+
+export interface AdapterView {
+  id: string;
+  name: string;
+  endpoint_hint?: string;
+}
+
+export interface ModelCatalogView {
+  revision: number;
+  providers: ModelProviderView[];
+  models: ModelView[];
+  default_route: ModelRoute | null;
+  adapters: AdapterView[];
 }
 
 export interface SessionSummary {
@@ -127,6 +172,7 @@ export interface SessionFile {
   updated_at: string;
   messages: SessionMessage[];
   compactions?: CompactionRecord[];
+  model_route?: ModelRoute | null;
   dangling: boolean;
 }
 
@@ -189,6 +235,7 @@ export interface BridgeFacts {
   levels: string[];
   thinking: Record<string, { model?: string; tools?: boolean }> | null;
   has_key: boolean | null;
+  models: ModelCatalogView | null;
 }
 
 export interface SkillInvocationPolicy {

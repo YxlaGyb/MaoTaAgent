@@ -1,14 +1,13 @@
-/// The main pane: the chat, skills and plugins views, with the search overlay
+/// The main pane: the chat, tasks and plugins views, with the search overlay
 /// that drops over them. It turns the session list into the chat header's title
 /// and the rows the palette searches, then hands everything to the views.
 
 import { useT } from "../lib/i18n.ts";
-import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { ChatView } from "./ChatView.tsx";
 import type { LiveTurn } from "./MessageList.tsx";
 import { PluginsView } from "./PluginsView.tsx";
 import { SearchPalette } from "./SearchPalette.tsx";
-import { SkillsView } from "./SkillsView.tsx";
 import { TasksView } from "./TasksView.tsx";
 
 export function MainPane({
@@ -25,6 +24,7 @@ export function MainPane({
   pending,
   failure,
   thinking,
+  modelRoute,
   permission,
   approvals,
   context,
@@ -36,14 +36,14 @@ export function MainPane({
   onPickProject,
   onOpen,
   onRetry,
-  onKeySaved,
   onThinking,
+  onModelRoute,
   onPermission,
   onAnswer,
   onSend,
   onCancel,
 }: {
-  page: "chat" | "settings" | "plugins" | "skills" | "tasks";
+  page: "chat" | "settings" | "plugins" | "tasks";
   info: AppInfo | null;
   kernelError: string | null;
   project: string;
@@ -56,6 +56,7 @@ export function MainPane({
   pending: string | null;
   failure: { session: string; text: string } | null;
   thinking: string;
+  modelRoute: ModelRoute | null;
   permission: string;
   approvals: Approval[];
   context: ContextView | null;
@@ -67,8 +68,8 @@ export function MainPane({
   onPickProject: () => void;
   onOpen: (session: SessionSummary) => void;
   onRetry: () => void;
-  onKeySaved: () => void;
   onThinking: (value: string) => void;
+  onModelRoute: (route: ModelRoute | null) => void;
   onPermission: (mode: string) => void;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
   onSend: (text: string) => void;
@@ -84,8 +85,6 @@ export function MainPane({
         <TasksView session={active} />
       ) : page === "plugins" ? (
         <PluginsView info={info} />
-      ) : page === "skills" ? (
-        <SkillsView cwd={project} />
       ) : (
         <ChatView
           info={info}
@@ -98,14 +97,15 @@ export function MainPane({
           failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
           hasKey={info?.has_key ?? null}
           thinking={thinking}
+          modelRoute={modelRoute}
           permission={permission}
           approvals={approvals}
           context={context}
           onCompact={onCompact}
           spawned={spawned}
           onRetry={onRetry}
-          onKeySaved={onKeySaved}
           onThinking={onThinking}
+          onModelRoute={onModelRoute}
           onPermission={onPermission}
           onAnswer={onAnswer}
           onSend={onSend}

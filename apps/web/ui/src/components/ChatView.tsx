@@ -1,9 +1,8 @@
 import { MaoButton } from "maotaui";
 
-import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
-import { ContextMeter } from "./ContextMeter.tsx";
 import { Icon, ICON } from "./Icon.tsx";
 import { MessageList, type LiveTurn } from "./MessageList.tsx";
 
@@ -17,6 +16,7 @@ export function ChatView({
   live,
   failure,
   thinking,
+  modelRoute,
   permission,
   approvals,
   context,
@@ -24,6 +24,7 @@ export function ChatView({
   spawned,
   onRetry,
   onThinking,
+  onModelRoute,
   onPermission,
   onAnswer,
   onSend,
@@ -39,14 +40,15 @@ export function ChatView({
   failure: string | null;
   hasKey: boolean | null;
   thinking: string;
+  modelRoute: ModelRoute | null;
   permission: string;
   approvals: Approval[];
   context: ContextView | null;
   onCompact: () => void;
   spawned: Record<string, SessionSummary[]>;
   onRetry: () => void;
-  onKeySaved: () => void;
   onThinking: (level: string) => void;
+  onModelRoute: (route: ModelRoute | null) => void;
   onPermission: (mode: string) => void;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
   onSend: (text: string) => void;
@@ -61,12 +63,16 @@ export function ChatView({
       info={info}
       cwd={session?.cwd ?? ""}
       thinking={thinking}
+      modelRoute={modelRoute}
       permission={permission}
       permissionDisabled={permissionDisabled}
       running={live?.running === true}
       blocked={kernelError !== null}
+      context={context}
       onThinking={onThinking}
+      onModelRoute={onModelRoute}
       onPermission={onPermission}
+      onCompact={onCompact}
       onSend={onSend}
       onCancel={onCancel}
     />
@@ -77,13 +83,12 @@ export function ChatView({
       {session === null ? null : (
         <header className="chat-head">
           <span className="chat-title">{title}</span>
-          <ContextMeter context={context} running={live?.running === true} onCompact={onCompact} />
         </header>
       )}
 
       {kernelError === null ? null : (
         <div className="banner banner-error">
-          <Icon d={ICON.alert} className="icon icon-sm" />
+          <Icon name={ICON.alert} className="icon icon-sm" />
           <span>{kernelError}</span>
           <MaoButton variant="ghost" size="sm" onClick={onRetry}>
             {t("retry")}
@@ -108,7 +113,7 @@ export function ChatView({
           />
           {failure === null ? null : (
             <div className="banner banner-error">
-              <Icon d={ICON.alert} className="icon icon-sm" />
+              <Icon name={ICON.alert} className="icon icon-sm" />
               <span>{failure}</span>
             </div>
           )}

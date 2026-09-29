@@ -16,7 +16,7 @@ export function ApprovalCard({
   return (
     <div className="approval">
       <div className="approval-head">
-        <Icon d={ICON.alert} className="icon icon-sm" />
+        <Icon name={ICON.alert} className="icon icon-sm" />
         <span className="approval-title">{t("approvalTitle")}</span>
       </div>
       <div className="approval-tool">{t("approvalTool", { tool: approval.tool })}</div>
