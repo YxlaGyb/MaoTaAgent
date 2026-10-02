@@ -1,5 +1,5 @@
 ---
-description: "The base row list: the thirty plugin rows the default profile mounts, the order they are mounted in, and why that order matters to the tool dispatcher."
+description: "The base row list: the thirty plugin rows the default profile mounts and the dependency graph they declare."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package holds one array and nothing else: the list of rows a profile mounts. Each row names a package and optionally a config block, and the launcher turns the list into a generated `eggshell.toml` plus a link per package inside the profile directory. The order is part of the contract, because the tool dispatcher discovers its tools from the capabilities that already exist when it starts. `hmr` is the one row that ships disabled.
+This package holds one array and nothing else: the list of rows a profile mounts. Each row names a package and optionally a config block, and the launcher turns the list into a generated `eggshell.toml` plus a link per package inside the profile directory. Row order is not load-bearing: startup order comes from each plugin's `injects` and `registrations` declarations. `hmr` is the one row that ships disabled.
 
 ## Table of Contents
 
@@ -68,7 +68,7 @@ import { rows } from "@maota/base";
 
 ### Order
 
-Providers sit above dispatchers: `tool.*` plugins, `shell` and `permission` come before `tools`; skill providers come before `skill`; hook providers come before `hooks`. The four `model-*` routers and adapters follow the preserved `api` row and come before `agent-core`, which depends on the `model` capability. `agent-runner` follows `agent-core`, `schedule` follows `agent-runner`, and `tool-cron` can arrive after `tools` because the dispatcher rebuilds from `kernel.capabilities.changed`.
+Registries start before the providers that register with them: `tools` precedes `tool.*`, `skill` precedes `skill.*`, and `model` precedes `model.adapter.*`. `agent-core` injects `model`, `tools`, `session`, `system-prompt`, `skill`, `permission` and `hooks`; `agent-runner` injects `agent.loop`; `schedule` injects `agent.runner`; and `tool-cron` registers with `tools` while injecting `schedule`.
 
 -----
 

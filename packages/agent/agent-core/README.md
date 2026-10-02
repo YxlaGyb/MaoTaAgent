@@ -125,7 +125,7 @@ A child run reaches every one of those points but two: `UserPromptSubmit` and `S
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The definition: `provides`, `configKeys`, `requires`, and the `run`, `info` and `selfCheck` methods, each delegating to the module that owns it |
+| [`src/index.ts`](src/index.ts) | The definition: `provides`, `configKeys`, `injects`, and the `run`, `info` and `selfCheck` methods, each delegating to the module that owns it |
 | [`src/catalog.ts`](src/catalog.ts) | The skill catalog note: when to append one and how it is compared with the last |
 | [`src/chat.ts`](src/chat.ts) | The streaming model call: the parameters it is given and the reply it resolves to |
 | [`src/compact.ts`](src/compact.ts) | Folding a long history into one note, and the note a step ceiling leaves behind |

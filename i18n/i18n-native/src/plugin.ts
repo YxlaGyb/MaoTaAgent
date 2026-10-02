@@ -90,6 +90,9 @@ async function discover(channel: Channel, capabilities: Record<string, Route>): 
 
 export const definition: Definition = {
   provides: ["i18n"],
+  injects: [],
+  registrations: [],
+  hostCalls: [],
   configKeys: ["locale", "languages"],
 
   setup(wiring) {

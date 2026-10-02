@@ -37,6 +37,9 @@ function flush(): void {
 
 export const definition: Definition = {
   provides: ["dev.hmr"],
+  hostCalls: ["dev.hmr"],
+  registrations: [],
+  injects: [],
   configKeys: ["roots"],
 
   setup(wiring) {

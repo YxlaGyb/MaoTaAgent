@@ -257,10 +257,14 @@ function write(response: ServerResponse, status: number, contentType: string, bo
 
 export const definition: Definition = {
   provides: ["web"],
-  requires: [
+  hostCalls: ["web"],
+  registrations: [],
+  injects: [
     { capability: "session" },
     { capability: "agent.loop" },
+    { capability: "agent.runner", optional: true },
     { capability: "permission", optional: true },
+    { capability: "i18n", optional: true },
   ],
   configKeys: ["port", "host", "dev", "open"],
 

@@ -225,6 +225,10 @@ assert.throws(
 const kit = defineTools([echo, writer]);
 
 assert.deepEqual(kit.provides, ["tool.echo", "tool.write"]);
+assert.deepEqual(kit.registrations, [
+  { service: "tools", capability: "tool.echo" },
+  { service: "tools", capability: "tool.write" },
+]);
 
 assert.deepEqual(kit.methods.describe({}, call("tool.echo")), {
   name: "echo",

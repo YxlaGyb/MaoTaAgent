@@ -25,7 +25,7 @@ Two packages own the two halves, and neither imports the other.
 
 `@maota/tool-subagent` owns the request: the `task` tool the model calls, the two kinds of subagent it may ask for, the tool surface and system prompt each kind gets, the cap on how many are in flight, and the shape of the answer. `@maota/agent-core` owns the run: `agent.loop` grew a sub-run mode (`origin`, `system`, `tools_allow`, `tools_deny`, `max_steps`), and that mode is what makes a child a child.
 
-The split keeps the static dependency graph acyclic. `tool-subagent` requires `agent.loop` at `^1.3` and calls it; `agent-core` knows nothing about the delegating tool and discovers it the way it discovers every other tool, through `tools.list`. A deployment that never mounts `tool-subagent` simply has no `task` tool, and a deployment that mounts it without `agent-core` fails its `requires`.
+The split keeps the static dependency graph acyclic. `tool-subagent` injects `agent.loop` and calls it; `agent-core` knows nothing about the delegating tool and discovers it the way it discovers every other tool, through `tools.list`. A deployment that never mounts `tool-subagent` simply has no `task` tool, and a deployment that mounts it without `agent-core` fails its `injects`.
 
 <a id="the-two-kinds-of-subagent"></a>
 ## The two kinds of subagent

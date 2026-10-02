@@ -14,6 +14,8 @@ const selfCheck = definition.selfCheck!;
 const list = definition.methods.list!;
 const call = definition.methods.call!;
 const classify = definition.methods.classify!;
+const register = definition.methods.register!;
+const unregister = definition.methods.unregister!;
 
 const echo = {
   name: "echo",
@@ -57,14 +59,19 @@ function harness(
   return { channel, asked, notes, listeners };
 }
 
-function context(found: Harness, method: string): Call {
+function context(found: Harness, method: string, caller = "agent-core"): Call {
+  const registration =
+    method === "register" || method === "unregister"
+      ? { service: "tools", capability: caller === "bad" ? "tool.bad" : "tool.echo" }
+      : undefined;
   return {
     channel: found.channel,
     config: {},
     capabilities: {},
     capability: "tools",
     method,
-    caller: "agent-core",
+    caller,
+    ...(registration === undefined ? {} : { registration }),
     signal: new AbortController().signal,
     stream: undefined,
   } as unknown as Call;
@@ -91,6 +98,7 @@ const found = harness({
 const wiring = { channel: found.channel, config: { spill_dir: spillDir, preview_chars: 40 }, capabilities: table };
 setup(wiring);
 await start(wiring);
+await register({ capability: "tool.echo" }, context(found, "register", "echo"));
 
 assert.deepEqual(definition.provides, ["tools"]);
 assert.deepEqual(found.listeners.length, 1);
@@ -107,6 +115,7 @@ assert.deepEqual(
 found.listeners[0]?.("kernel.capabilities.changed", 1, {
   capabilities: { "tool.bad": { plugin: "bad" }, "tool.echo": table["tool.echo"] },
 });
+await register({ capability: "tool.bad" }, context(found, "register", "bad"));
 const afterChange = (await list({}, context(found, "list"))) as { tools: Array<{ name: string }> };
 assert.deepEqual(afterChange.tools.map((tool) => tool.name), ["echo"], "list did not follow the new table");
 assert.ok(found.notes.some((note) => note.includes("bad")), "a broken tool was dropped silently");
@@ -114,6 +123,7 @@ assert.ok(found.notes.some((note) => note.includes("bad")), "a broken tool was d
 found.listeners[0]?.("kernel.capabilities.changed", 2, { capabilities: {} });
 assert.deepEqual((await list({}, context(found, "list"))) as unknown, { tools: [] });
 found.listeners[0]?.("kernel.capabilities.changed", 3, { capabilities: table });
+await register({ capability: "tool.echo" }, context(found, "register", "echo"));
 
 await assert.rejects(async () => await call({ name: "absent" }, context(found, "call")), /no such tool: absent/);
 await assert.rejects(async () => await classify({ name: "absent" }, context(found, "classify")), /no such tool: absent/);
@@ -172,6 +182,9 @@ assert.equal(existsSync(first), true, "the sweep dropped a result that still fit
 await call({ name: "echo" }, context(found, "call"));
 assert.equal(existsSync(first), false, "the sweep did not trim down to the byte cap");
 assert.equal(existsSync(second), true, "the sweep dropped the newest result");
+
+assert.deepEqual(await unregister({ capability: "tool.echo" }, context(found, "unregister", "echo")), { removed: true });
+assert.deepEqual((await list({}, context(found, "list"))) as unknown, { tools: [] });
 
 close("done");
 

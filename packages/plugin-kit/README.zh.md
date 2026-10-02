@@ -26,8 +26,8 @@ kind: "package-reference"
 
 | 导出 | 含义 |
 |---|---|
-| `runPlugin(definition)` | 每个被拉起的包都调用的入口。带 `--check` 时校验 `provides`、semver、`requires`、`configKeys` 与 `selfCheck`，打印一行 JSON 后退出；否则在 stdio 上提供服务。 |
-| `Definition` | `provides`、`requires`、`configKeys`、`setup`、`start`、`methods`、`close` 与 `selfCheck`。 |
+| `runPlugin(definition)` | 每个被拉起的包都调用的入口。带 `--check` 时校验 `provides`、`injects`、`registrations`、`hostCalls`、`configKeys` 与 `selfCheck`，打印一行 JSON 后退出；否则在 stdio 上提供服务并执行注册生命周期。 |
+| `Definition` | `provides`、`injects`、`registrations`、`hostCalls`、`configKeys`、`setup`、`start`、`methods`、`close` 与 `selfCheck`。 |
 | `Call` | 方法收到的东西：`channel`、`signal`、`config`、`capabilities`、`caller`、`capability`、`method` 与 `stream`。 |
 | `CallError` | 带 JSON-RPC 码与可选 `data` 的失败。 |
 | `Channel` | 在内核连接上的 `call`、`stream`、`publish`、`subscribe`、`unsubscribe`、`notify` 与 `log`。 |

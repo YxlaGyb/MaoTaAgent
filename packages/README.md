@@ -68,7 +68,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 <a id="bundles"></a>
 A profile's rows come from those two lists: `base` mounts the thirty rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
-`pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `requires`, `configKeys` and `selfCheck` without a kernel.
+`pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `injects`, `registrations`, `hostCalls`, `configKeys` and `selfCheck` without a kernel.
 
 <a id="related-documentation"></a>
 ## Related documentation

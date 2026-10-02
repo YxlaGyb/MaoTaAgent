@@ -111,7 +111,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "schedule" }],
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [{ capability: "schedule" }],
   configKeys: [],
   methods: { ...toolkit.methods },
   selfCheck() {

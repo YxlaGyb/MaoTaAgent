@@ -200,7 +200,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "agent.loop" }],
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [{ capability: "agent.loop" }],
   configKeys: [
     "max_concurrent",
     "child_max_steps",

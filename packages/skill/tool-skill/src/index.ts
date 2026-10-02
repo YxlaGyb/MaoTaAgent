@@ -183,6 +183,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [],
   configKeys: [],
   methods: { ...toolkit.methods },
 

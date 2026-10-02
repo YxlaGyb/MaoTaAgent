@@ -56,6 +56,9 @@ async function chat(params: AdapterChatRequest, ctx: Call): Promise<void> {
 
 export const definition: Definition = {
   provides: ["model.adapter.openai"],
+  hostCalls: [],
+  registrations: [{ service: "model", capability: "model.adapter.openai" }],
+  injects: [],
   configKeys: [],
   methods: {
     describe() {

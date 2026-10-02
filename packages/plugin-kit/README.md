@@ -26,8 +26,8 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 
 | Export | Meaning |
 |---|---|
-| `runPlugin(definition)` | The entry every spawned package calls. Under `--check` it validates `provides`, semver, `requires`, `configKeys` and `selfCheck`, prints one JSON line and exits; otherwise it serves stdio. |
-| `Definition` | `provides`, `requires`, `configKeys`, `setup`, `start`, `methods`, `close` and `selfCheck`. |
+| `runPlugin(definition)` | The entry every spawned package calls. Under `--check` it validates `provides`, `injects`, `registrations`, `hostCalls`, `configKeys` and `selfCheck`, prints one JSON line and exits; otherwise it serves stdio and performs registration lifecycle. |
+| `Definition` | `provides`, `injects`, `registrations`, `hostCalls`, `configKeys`, `setup`, `start`, `methods`, `close` and `selfCheck`. |
 | `Call` | What a method receives: `channel`, `signal`, `config`, `capabilities`, `caller`, `capability`, `method` and `stream`. |
 | `CallError` | A failure with a JSON-RPC code and optional `data`. |
 | `Channel` | `call`, `stream`, `publish`, `subscribe`, `unsubscribe`, `notify` and `log` over the kernel connection. |

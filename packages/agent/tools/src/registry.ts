@@ -8,15 +8,31 @@ export interface ToolRoute {
   plugin: string;
 }
 
-export function discover(capabilities: Record<string, Route>): Map<string, ToolRoute> {
-  const tools = new Map<string, ToolRoute>();
-  for (const [capability, route] of Object.entries(capabilities)) {
-    if (!capability.startsWith(TOOL_PREFIX)) continue;
-    const name = capability.slice(TOOL_PREFIX.length);
-    if (name === "") continue;
-    tools.set(name, { name, capability, plugin: route.plugin });
+export function nameOf(capability: string): string | null {
+  if (!capability.startsWith(TOOL_PREFIX)) return null;
+  const name = capability.slice(TOOL_PREFIX.length);
+  return name === "" ? null : name;
+}
+
+export function add(
+  tools: Map<string, ToolRoute>,
+  capability: string,
+  plugin: string,
+): ToolRoute {
+  const name = nameOf(capability);
+  if (name === null) throw new Error(`not a tool capability: ${capability}`);
+  const entry = { name, capability, plugin };
+  tools.set(name, entry);
+  return entry;
+}
+
+export function reconcile(
+  tools: Map<string, ToolRoute>,
+  capabilities: Record<string, Route>,
+): void {
+  for (const [name, tool] of tools) {
+    if (capabilities[tool.capability]?.plugin !== tool.plugin) tools.delete(name);
   }
-  return tools;
 }
 
 export function sorted(tools: Map<string, ToolRoute>): ToolRoute[] {

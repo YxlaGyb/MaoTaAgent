@@ -40,6 +40,9 @@ function keyOf(params: unknown): string {
 
 export const definition: Definition = {
   provides: ["session"],
+  hostCalls: [],
+  registrations: [],
+  injects: [],
   configKeys: ["dir", "max_bytes", "max_path", "max_events"],
 
   setup(wiring) {

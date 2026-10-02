@@ -77,6 +77,9 @@ const methods = {
 
 export const definition: Definition = {
   provides: ["system-prompt"],
+  hostCalls: [],
+  registrations: [],
+  injects: [],
   configKeys: ["persona"],
 
   setup(wiring) {

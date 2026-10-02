@@ -113,6 +113,9 @@ function readDirs(value: unknown): string[] {
 
 export const definition: Definition = {
   provides: ["skill.filesystem"],
+  hostCalls: [],
+  registrations: [{ service: "skill", capability: "skill.filesystem" }],
+  injects: [],
   configKeys: ["dirs", "max_depth"],
 
   setup(wiring: Wiring) {

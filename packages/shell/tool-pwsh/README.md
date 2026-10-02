@@ -62,8 +62,8 @@ The wait is wider than a normal capability call on purpose. `approval_timeout_ms
 
 | Entry | Meaning |
 |---|---|
-| requires `shell ^1` | The provider capability this tool calls. `run` forwards to `shell.run` and renders the answer. |
-| requires `permission ^1` (optional) | The gate. Without it the tool still loads, and reads an unreadable policy as the mode that asks. |
+| injects `shell` | The provider capability this tool calls. `run` forwards to `shell.run` and renders the answer. |
+| injects `permission` (optional) | The gate. Without it the tool still loads, and reads an unreadable policy as the mode that asks. |
 | `configKeys` | `approval_timeout_ms`: how long one approval may wait, default 300000. The command timeout, the output cap and the fallback directory belong to the provider. |
 
 -----

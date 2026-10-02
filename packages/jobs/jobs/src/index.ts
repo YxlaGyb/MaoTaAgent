@@ -33,7 +33,9 @@ function requireRegistry(): JobRegistry {
 
 export const definition: Definition = {
   provides: ["jobs"],
-  requires: [{ capability: "session", optional: true }],
+  hostCalls: ["jobs"],
+  registrations: [],
+  injects: [{ capability: "session", optional: true }],
   configKeys: ["max_jobs_per_owner", "max_jobs_total", "running_output_bytes", "settled_output_bytes"],
 
   setup(wiring) {

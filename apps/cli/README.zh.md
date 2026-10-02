@@ -30,7 +30,7 @@
 | `maota --version` | 打印 `maota <版本>` 并退出 0。 |
 
 由第一个位置参数决定模式：`serve` 与 `check` 后面不能再带参数；`jobs` 与 `cron` 接收一个 action 及其参数；其它位置参数算一次性问句，后面的参数用空格拼起来。
-`maota check` 打印的就是内核打印的内容。内核因为某个必需能力没有提供者而扣住的插件、以及用 `disabled = true` 关掉的行，都只算警告：check 仍然退出 0，报告用 `disabled` 与 `blocked` 两个字段列出它们（内核在 `docs/PROTOCOL.md` 第 14.1 节记录这两个字段）。
+`maota check` 打印的就是内核打印的内容。内核因为某个 inject 或 registration service 没有提供者而扣住的插件、以及用 `disabled = true` 关掉的行，都只算警告：check 仍然退出 0，报告用 `disabled` 与 `blocked` 两个字段列出它们（内核在 `docs/PROTOCOL.md` 第 14.1 节记录这两个字段）。
 
 子代理的活发生在派出它的那一轮里面，所以 CLI 把它缩进打印，而不是揉进这一轮自己的输出：本轮驱动的会话所对应的每条 `agent.subagent.*` 事件都变成一行，例如 `  [explore sub-3f2a] -> read src/a.ts`。子代理别的东西都不上终端，它的答案仍然以那次 `task` 调用的结果形式回来。
 
@@ -92,7 +92,7 @@ roots = ["<repo>/apps", "<repo>/packages"]
 ```
 
 那个插件监视 `roots`，把变动的路径以 `dev.source.changed` 发出去。CLI 对每条 `kernel.plugin.started` 事件读出该插件解析后的 `cwd` 与入口参数，走过这个入口的静态 import 图（[`src/graph.ts`](src/graph.ts)），记下哪个插件 import 了哪个文件。之后每条 `dev.source.changed` 路径都会解析到恰好 import 它的那些插件，这些插件以 `reason: "source"` 重启（[`src/hmr.ts`](src/hmr.ts)）。像 `packages/plugin-kit/src/index.ts` 这样的共享文件会重启每个 import 它的插件；没人 import 的路径什么也不重启。不写这一行就什么都不监视，所以生产运行里没有 watcher，CLI 自己也不额外监视。
-当内核因为某个插件必需的依赖缺席而把它扣住时，会发布 `kernel.plugin.blocked`，带上插件和它在等的那些能力，CLI 会打一行 stderr：`MaoTa: <plugin> waits for <capability>`。插件在其提供者消失时也会被重载器停进同一个等待态，把提供者带回来的那次重载会重新启动它。
+当内核因为某个 inject 或 registration service 缺席而扣住插件时，会发布 `kernel.plugin.blocked`，带上插件和它在等的那些能力，CLI 会打一行 stderr：`MaoTa: <plugin> waits for <capability>`。插件在其提供者消失时也会被重载器停进同一个等待态，把提供者带回来的那次重载会重新启动它。
 
 <a id="development"></a>
 ## 开发

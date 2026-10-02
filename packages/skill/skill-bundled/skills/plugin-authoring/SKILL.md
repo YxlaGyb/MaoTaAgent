@@ -34,9 +34,11 @@ packages/<group>/README.md             the group map, when the group is new
 
 ```
 export const definition: Definition = {
-  provides: [{ capability: "tool.thing", version: "1.0.0" }],
+  provides: ["tool.thing"],
+  injects: [{ capability: "session", optional: true }],
+  registrations: [{ service: "tools", capability: "tool.thing" }],
+  hostCalls: [],
   configKeys: ["dir"],
-  requires: [{ capability: "fs", version: "^1", optional: true }],
   setup(wiring) {},
   start(wiring) {},
   methods: { async run(params, ctx) {} },
@@ -46,14 +48,17 @@ export const definition: Definition = {
 runPlugin(definition);
 ```
 
-- `provides` is the whole registration. A capability name is
+- `provides` is the whole routable surface. A capability name is
   `<domain>` for an engine, `tool.<name>` for something the model calls, and
   `context.<name>`, `hook.<name>` or `skill.<name>` for a pluggable slot.
+- `injects` names the services this plugin needs. `registrations` publishes one
+  of its provided capabilities into a registry service, and plugin-kit performs
+  the register/unregister lifecycle automatically. `hostCalls` names
+  capabilities the embedding host calls directly.
 - `setup` reads `wiring.config` and must default every key it accepts.
-- `start` reads `wiring.capabilities` **once**, and the table it is handed is the
-  whole deployment, so row order in the bundle is not load bearing. A plugin
-  that wants to notice a provider arriving later subscribes to
-  `kernel.capabilities.changed` and rebuilds from that payload.
+- A registry consumer reads its registrations, not every matching capability.
+  A plugin that wants to notice a provider arriving later subscribes to
+  `kernel.capabilities.changed` and reconciles stale entries from that payload.
 - `methods` are the RPC surface. Invalid arguments throw
   `CallError(-32602, ...)`; a missing capability is not an error the caller
   should have to catch.

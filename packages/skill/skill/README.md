@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-One package holds two things, because they are the same vocabulary: the dialect every provider and consumer speaks, and the registry that merges what the providers offer. The dialect is the frontmatter projection, the `SkillSummary` and `SkillCandidate` shapes, the catalog renderer and the body renderer. The registry provides `skill` with `list`, `load` and `catalog`, discovers every `skill.*` capability the kernel published, and settles a duplicate name by rank and then by provider name. Providers import this package for its vocabulary while the profile spawns it for its capability, so it serves only in a process that was started with it.
+One package holds two things, because they are the same vocabulary: the dialect every provider and consumer speaks, and the registry that merges what the providers offer. The dialect is the frontmatter projection, the `SkillSummary` and `SkillCandidate` shapes, the catalog renderer and the body renderer. The registry provides `skill` with `list`, `load` and `catalog`, holds the `skill.*` providers registered through its own `register` method, and settles a duplicate name by rank and then by provider name. Providers import this package for its vocabulary while the profile spawns it for its capability, so it serves only in a process that was started with it.
 
 ## Table of Contents
 
@@ -86,11 +86,11 @@ A provider is a plugin that provides a `skill.<name>` capability, where the name
 |---|---|
 | [`src/protocol.ts`](src/protocol.ts) | The dialect: `isSkillName`, the entry and summary types, `summarize`, `projectSkill`, `parseFrontmatter`, `renderCatalog` and `renderSkillContent`. |
 | [`src/scan.ts`](src/scan.ts) | `scanSkillRoot`: one directory read as a bundle (`<name>/SKILL.md`) or a flat entry (`<name>.md`). |
-| [`src/index.ts`](src/index.ts) | The registry: discovery, `collect`, the three methods and `selfCheck`. |
+| [`src/index.ts`](src/index.ts) | The registry: registration, `collect`, the methods and `selfCheck`. |
 
-### Discovery, merging and failure
+### Registration, merging and failure
 
-`start` reads the capability table once and keeps every name that begins with `skill.`, the way the tool dispatcher keeps every `tool.` name. `list` then asks each provider in turn and sorts the candidates by rank, then by provider capability name, then by the order the provider listed them, so the winner of a duplicate name never depends on the order a table happened to be built in. Two providers, the same rank and the same capability name is a configuration mistake rather than a rule this package should invent.
+Providers register their `skill.*` capabilities with this service. `start` keeps the current routing snapshot so it can reject forged ownership, and capability changes prune registrations whose provider disappeared. `list` then asks each registered provider in turn and sorts the candidates by rank, then by provider capability name, then by the order the provider listed them, so the winner of a duplicate name never depends on the order a table happened to be built in. Two providers with the same rank and capability name are a configuration mistake rather than a rule this package should invent.
 
 A provider that throws, or answers something this build cannot read, is reported once with a warning and leaves `complete` false. Every other provider's candidates still come back, because one broken provider should cost its own skills rather than the whole catalog.
 

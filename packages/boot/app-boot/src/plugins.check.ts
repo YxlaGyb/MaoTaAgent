@@ -2,14 +2,16 @@ import { spawnSync } from "node:child_process";
 
 import { PROFILE_TEMPLATES, entryOf, rowsOfBundles, repoRoot } from "./index.ts";
 
-interface Require {
+interface Inject {
   capability: string;
   optional?: boolean;
 }
 
 interface Report {
   provides?: string[];
-  requires?: Require[];
+  injects?: Inject[];
+  registrations?: Array<{ service: string; capability: string }>;
+  host_calls?: string[];
   problems?: string[];
 }
 
@@ -43,9 +45,14 @@ for (const { report } of checked) {
 let failed = 0;
 for (const { id, report, status, detail } of checked) {
   const problems = [...(report.problems ?? [])];
-  for (const item of report.requires ?? []) {
+  for (const item of report.injects ?? []) {
     if (item.optional !== true && !offered.has(item.capability)) {
-      problems.push(`requires \`${item.capability}\`, which no plugin in this set provides`);
+      problems.push(`injects \`${item.capability}\`, which no plugin in this set provides`);
+    }
+  }
+  for (const item of report.registrations ?? []) {
+    if (!offered.has(item.service)) {
+      problems.push(`registers with \`${item.service}\`, which no plugin in this set provides`);
     }
   }
   if (status !== 0 || problems.length > 0) {

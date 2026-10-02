@@ -125,7 +125,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 定义：`provides`、`configKeys`、`requires`，以及 `run`、`info`、`selfCheck` 三个方法，各自委派给拥有它的模块 |
+| [`src/index.ts`](src/index.ts) | 定义：`provides`、`configKeys`、`injects`，以及 `run`、`info`、`selfCheck` 三个方法，各自委派给拥有它的模块 |
 | [`src/catalog.ts`](src/catalog.ts) | 技能目录注记：什么时候追加一条，以及它如何与上一条比较 |
 | [`src/chat.ts`](src/chat.ts) | 流式的模型调用：给它的参数，以及它最终解出的回复 |
 | [`src/compact.ts`](src/compact.ts) | 把长历史折成一条注记，以及步数上限留下的那条注记 |

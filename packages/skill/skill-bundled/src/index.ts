@@ -16,6 +16,9 @@ function skillsDir(): string {
 
 export const definition: Definition = {
   provides: ["skill.bundled"],
+  hostCalls: [],
+  registrations: [{ service: "skill", capability: "skill.bundled" }],
+  injects: [],
   configKeys: [],
 
   methods: {

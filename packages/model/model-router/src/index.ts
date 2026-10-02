@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CallError, isPluginEntry, runPlugin, type Definition } from "@maota/plugin-kit";
+import { CallError, isPluginEntry, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import { failureOf, isThinkingLevel, kindOfCode, readModelRequest, readRoute } from "@maota/model-protocol";
 import {
   adapterDescriptors,
@@ -15,6 +15,7 @@ import {
   view,
 } from "./catalog.ts";
 import { completeModel, streamModel } from "./chat.ts";
+import { addAdapter, adapterId, adapterRoute, removeAdapter, setRoutes } from "./registry.ts";
 import { DEFAULT_RETRY, policyFor, readRetry, type RetryTables } from "./retry.ts";
 
 let retry: RetryTables = readRetry(undefined);
@@ -34,13 +35,47 @@ function selfCheck(): string[] {
 
 export const definition: Definition = {
   provides: ["model"],
-  requires: [{ capability: "session", optional: true }],
+  hostCalls: [],
+  registrations: [],
+  injects: [{ capability: "session", optional: true }],
   configKeys: ["file", "stream_idle_timeout_ms", "retry"],
   setup(wiring) {
     configure(wiring.config);
     retry = readRetry(wiring.config.retry);
   },
+  start(wiring) {
+    setRoutes(wiring.capabilities);
+    void wiring.channel
+      .subscribe(["kernel.capabilities.changed"], (_topic, _seq, payload) => {
+        const table = (payload as { capabilities?: Record<string, import("@maota/plugin-kit").Route> } | null)?.capabilities;
+        if (table !== undefined && table !== null) setRoutes(table);
+      })
+      .catch((error) => {
+        wiring.channel.log("warn", "model router could not watch the capability table", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  },
   methods: {
+    register(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      const id = adapterId(capability);
+      if (id === null) throw new CallError(-32602, `not an adapter capability: ${capability}`);
+      const current = adapterRoute(id);
+      if (current !== undefined && current.plugin !== ctx.caller) {
+        throw new CallError(-32602, `${id} is already registered by ${current.plugin}`);
+      }
+      requireRegistration(ctx, capability);
+      addAdapter(capability, ctx.caller);
+      return { capability };
+    },
+    unregister(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      const id = adapterId(capability);
+      if (id === null || adapterRoute(id)?.plugin !== ctx.caller) return { removed: false };
+      requireRegistration(ctx, capability);
+      return { removed: removeAdapter(capability, ctx.caller) };
+    },
     async describe(_params, ctx) {
       return { adapters: await adapterDescriptors(ctx) };
     },
@@ -93,5 +128,11 @@ export const definition: Definition = {
     return selfCheck();
   },
 };
+
+function requireRegistration(ctx: Call, capability: string): void {
+  if (ctx.registration?.service !== "model" || ctx.registration.capability !== capability) {
+    throw new CallError(-32602, `${ctx.caller} did not declare registration of ${capability}`);
+  }
+}
 
 if (isPluginEntry(import.meta.url)) runPlugin(definition);

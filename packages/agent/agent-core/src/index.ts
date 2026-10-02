@@ -19,6 +19,8 @@ export type { SubagentOrigin } from "./subagent.ts";
 
 export const definition: Definition = {
   provides: ["agent.loop"],
+  hostCalls: [],
+  registrations: [],
   configKeys: [
     "max_steps",
     "max_parallel_tools",
@@ -31,7 +33,7 @@ export const definition: Definition = {
     "thinking",
     "model_budgets",
   ],
-  requires: [
+  injects: [
     { capability: "model" },
     { capability: "tools" },
     { capability: "session" },

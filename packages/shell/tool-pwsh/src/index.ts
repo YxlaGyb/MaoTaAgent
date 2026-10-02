@@ -121,7 +121,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [
     { capability: "shell" },
     { capability: "permission", optional: true },
   ],

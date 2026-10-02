@@ -1,5 +1,5 @@
 ---
-description: "base 行清单：default profile 挂载的三十个插件行、它们的挂载顺序，以及这个顺序为什么对工具分发器重要。"
+description: "base 行清单：default profile 挂载的三十个插件行，以及它们声明的依赖图。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个包只装一个数组，别无他物：profile 挂载的那份行清单。每一行点明一个包，可选地带上一个配置块；启动器把这份清单变成生成的 `eggshell.toml`，并在 profile 目录里为每个包建一条链接。顺序也是契约的一部分，因为工具分发器是在 `start` 时从当时已存在的能力里发现工具的。`hmr` 是唯一一个带着 disabled 出厂的。
+这个包只装一个数组，别无他物：profile 挂载的那份行清单。每一行点明一个包，可选地带上一个配置块；启动器把这份清单变成生成的 `eggshell.toml`，并在 profile 目录里为每个包建一条链接。行顺序不是契约的一部分：启动顺序来自每个插件声明的 `injects` 与 `registrations`。`hmr` 是唯一一个带着 disabled 出厂的。
 
 ## 目录
 
@@ -68,7 +68,7 @@ import { rows } from "@maota/base";
 
 ### 顺序
 
-provider 排在读它的 dispatcher 之前：`tool.*` 插件、`shell` 与 `permission` 排在 `tools` 前，skill provider 排在 `skill` 前，hook provider 排在 `hooks` 前。四个 `model-*` 路由器与适配器排在保留的 `api` 行之后，并排在依赖 `model` 能力的 `agent-core` 之前。`agent-runner` 排在 `agent-core` 后，`schedule` 排在 `agent-runner` 后；`tool-cron` 可以在 `tools` 后启动，因为 dispatcher 会在 `kernel.capabilities.changed` 后重建。
+注册表先于向它注册的 provider 启动：`tools` 先于 `tool.*`，`skill` 先于 `skill.*`，`model` 先于 `model.adapter.*`。`agent-core` 注入 `model`、`tools`、`session`、`system-prompt`、`skill`、`permission` 与 `hooks`；`agent-runner` 注入 `agent.loop`；`schedule` 注入 `agent.runner`；`tool-cron` 向 `tools` 注册，同时注入 `schedule`。
 
 -----
 

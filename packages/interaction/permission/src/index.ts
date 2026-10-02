@@ -107,6 +107,9 @@ async function request(params: unknown, call: Call): Promise<{ outcome: Outcome 
 
 export const definition: Definition = {
   provides: ["permission"],
+  hostCalls: [],
+  registrations: [],
+  injects: [],
   configKeys: ["mode", "dir", "max_records", "rules", "remember"],
 
   setup(wiring) {

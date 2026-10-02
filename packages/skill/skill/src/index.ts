@@ -19,11 +19,12 @@ import {
 } from "./protocol.ts";
 import {
   DEFAULTS,
-  discover,
   isActive,
+  isSkillCapability,
   messageOf,
   pathCandidates,
   positive,
+  reconcile,
   readCandidate,
   strings,
   type Collection,
@@ -39,6 +40,7 @@ export type { SkillConflict } from "./discovery.ts";
 
 let settings = { ...DEFAULTS };
 let providers: Array<[string, Route]> = [];
+let routes: Record<string, Route> = {};
 
 /// Names this deployment has switched off. It is process state rather than
 /// disk state on purpose: a deployment serves one session, so what a person
@@ -130,6 +132,9 @@ function modelCatalog(skills: readonly SkillSummary[]): CatalogEntry[] {
 
 export const definition: Definition = {
   provides: ["skill"],
+  hostCalls: [],
+  registrations: [],
+  injects: [],
   configKeys: ["catalog_description_max", "catalog_max_chars"],
 
   setup(wiring) {
@@ -140,13 +145,44 @@ export const definition: Definition = {
   },
 
   start(wiring) {
-    providers = discover(wiring.capabilities);
-    wiring.channel.log("info", `skills: providers ${providers.map(([name]) => name).join(", ") || "(none)"}`, {
-      providers: providers.length,
-    });
+    routes = { ...wiring.capabilities };
+    providers = [];
+    void wiring.channel
+      .subscribe(["kernel.capabilities.changed"], (_topic, _seq, payload) => {
+        const table = (payload as { capabilities?: Record<string, Route> } | null)?.capabilities;
+        if (table === undefined || table === null) return;
+        routes = { ...table };
+        providers = reconcile(providers, routes);
+      })
+      .catch((error) => {
+        wiring.channel.log("warn", "skills could not watch the capability table", { error: messageOf(error) });
+      });
   },
 
   methods: {
+    register(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      if (!isSkillCapability(capability)) throw new CallError(-32602, `not a skill capability: ${capability}`);
+      requireRegistration(ctx, capability);
+      const current = providers.find(([registered]) => registered === capability);
+      if (current !== undefined && current[1].plugin !== ctx.caller) {
+        throw new CallError(-32602, `${capability} is already registered by ${current[1].plugin}`);
+      }
+      providers = providers.filter(([registered]) => registered !== capability);
+      providers.push([capability, { plugin: ctx.caller }]);
+      providers.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+      return { capability };
+    },
+
+    unregister(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      const current = providers.find(([registered]) => registered === capability);
+      if (current === undefined) return { removed: false };
+      requireRegistration(ctx, capability);
+      providers = providers.filter(([registered]) => registered !== capability);
+      return { removed: true };
+    },
+
     async list(params, ctx) {
       const cwd = typeof params?.cwd === "string" ? params.cwd : "";
       const touched = strings(params?.touched) ?? [];
@@ -267,6 +303,7 @@ export const definition: Definition = {
         throw new Error(`unexpected ${method}`);
       },
       log: (): void => {},
+      subscribe: async (): Promise<string> => "self-check",
     };
     const ctx = { channel, signal: new AbortController().signal } as unknown as Call;
 
@@ -280,7 +317,16 @@ export const definition: Definition = {
     };
     await definition.setup?.(wiring);
     await definition.start?.(wiring);
-    if (providers.length !== 2) problems.push(`discover picked ${providers.length} providers, expected 2`);
+    const register = definition.methods["register"];
+    await register?.(
+      { capability: "skill.high" },
+      { ...ctx, caller: "high", registration: { service: "skill", capability: "skill.high" } } as Call,
+    );
+    await register?.(
+      { capability: "skill.low" },
+      { ...ctx, caller: "low", registration: { service: "skill", capability: "skill.low" } } as Call,
+    );
+    if (providers.length !== 2) problems.push(`registry held ${providers.length} providers, expected 2`);
 
     const list = definition.methods["list"];
     const conflictList = definition.methods["conflicts"];
@@ -409,6 +455,12 @@ export const definition: Definition = {
     return problems;
   },
 };
+
+function requireRegistration(ctx: Call, capability: string): void {
+  if (ctx.registration?.service !== "skill" || ctx.registration.capability !== capability) {
+    throw new CallError(-32602, `${ctx.caller} did not declare registration of ${capability}`);
+  }
+}
 
 /// This package is spawned as the registry and imported by the providers for
 /// the dialect, so it serves only when the process was started with it.

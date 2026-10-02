@@ -3,21 +3,22 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { CallError, type Call } from "@maota/plugin-kit";
 import { failureOf, readModelFailure, type ModelRequest, type Message, type ResolvedModel } from "@maota/model-protocol";
 import { catalogSettings, keyFor } from "./catalog.ts";
+import { adapterRoute } from "./registry.ts";
 import { policyFor, retryDecision, type RetryTables } from "./retry.ts";
 
 export function adapterCapability(adapter: string): string {
   return `model.adapter.${adapter}`;
 }
 
-function requireAdapter(ctx: Call, adapter: string): string {
+function requireAdapter(adapter: string): string {
   const capability = adapterCapability(adapter);
-  if (ctx.capabilities[capability] === undefined) throw new CallError(-32602, `unknown adapter: ${adapter}`);
+  if (adapterRoute(adapter) === undefined) throw new CallError(-32602, `unknown adapter: ${adapter}`);
   return capability;
 }
 
 async function attempt(ctx: Call, request: ModelRequest, resolved: ResolvedModel): Promise<void> {
   const stream = await ctx.channel.stream(
-    requireAdapter(ctx, resolved.provider.adapter),
+    requireAdapter(resolved.provider.adapter),
     "chat",
     adapterParams(request, resolved),
     { signal: ctx.signal },
@@ -37,7 +38,7 @@ function adapterParams(request: ModelRequest, resolved: ResolvedModel): Record<s
 }
 
 export async function completeModel(ctx: Call, request: ModelRequest, resolved: ResolvedModel): Promise<{ message: Message; usage?: unknown }> {
-  const stream = await ctx.channel.stream(requireAdapter(ctx, resolved.provider.adapter), "chat", adapterParams(request, resolved), { signal: ctx.signal });
+  const stream = await ctx.channel.stream(requireAdapter(resolved.provider.adapter), "chat", adapterParams(request, resolved), { signal: ctx.signal });
   let message: Message | undefined;
   let usage: unknown;
   for await (const chunk of stream) {

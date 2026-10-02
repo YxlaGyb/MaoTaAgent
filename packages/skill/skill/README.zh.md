@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-一个包里住着两样东西，因为它们本来就是同一套词汇：每个提供者与消费方都说的方言，以及把提供者交上来的东西合并起来的注册表。方言是 frontmatter 投影、`SkillSummary` 与 `SkillCandidate` 两种形状、目录渲染器与正文渲染器。注册表提供 `skill`，方法有 `list`、`load` 和 `catalog`，它发现内核公布出来的每一个 `skill.*` 能力，并先按 rank、再按提供者名字裁决重名。提供者为这套词汇 import 这个包，profile 为那个能力拉起它，所以它只在以自己启动的进程里服务。
+一个包里住着两样东西，因为它们本来就是同一套词汇：每个提供者与消费方都说的方言，以及把提供者交上来的东西合并起来的注册表。方言是 frontmatter 投影、`SkillSummary` 与 `SkillCandidate` 两种形状、目录渲染器与正文渲染器。注册表提供 `skill`，方法有 `list`、`load` 和 `catalog`，它持有通过自己的 `register` 方法注册进来的 `skill.*` provider，并先按 rank、再按提供者名字裁决重名。提供者为这套词汇 import 这个包，profile 为那个能力拉起它，所以它只在以自己启动的进程里服务。
 
 ## 目录
 
@@ -86,11 +86,11 @@ kind: "package-reference"
 |---|---|
 | [`src/protocol.ts`](src/protocol.ts) | 方言：`isSkillName`、条目与摘要类型、`summarize`、`projectSkill`、`parseFrontmatter`、`renderCatalog` 与 `renderSkillContent`。 |
 | [`src/scan.ts`](src/scan.ts) | `scanSkillRoot`：把一个根读成目录包（`<name>/SKILL.md`，可嵌到这个根允许的深度）或扁平条目（`<name>.md`），外加 `rootStamp`，也就是带缓存的提供者比较的那个便宜签名。 |
-| [`src/index.ts`](src/index.ts) | 注册表：发现、`collect`、三个方法与 `selfCheck`。 |
+| [`src/index.ts`](src/index.ts) | 注册表：注册、`collect`、各方法与 `selfCheck`。 |
 
-### 发现、合并与失败
+### 注册、合并与失败
 
-`start` 读一次能力表，把每个以 `skill.` 开头的名字留下，就像工具分发器留下每个 `tool.` 名字一样。`list` 随后逐个问提供者，把候选先按 rank、再按提供者能力名、最后按该提供者给出的顺序排序，所以重名的赢家从不取决于某张表碰巧是怎么建起来的。两个提供者、同样的 rank、同样的能力名，那是配置错误，而不是这个包应该自己发明一条规则。
+provider 通过本服务注册 `skill.*` capability。`start` 保留当前路由快照以拒绝伪造 owner，capability 变化会清掉 provider 已消失的注册。`list` 随后逐个问已注册 provider，把候选先按 rank、再按提供者能力名、最后按该提供者给出的顺序排序，所以重名的赢家从不取决于某张表碰巧是怎么建起来的。两个提供者、同样的 rank、同样的能力名，那是配置错误，而不是这个包应该自己发明一条规则。
 
 抛错、或者答出这一版读不懂的东西的提供者，会被记一条 warning 并且把 `complete` 置为 false。其他提供者的候选照旧回来，因为一个坏掉的提供者应该只赔上它自己那些技能，而不是整份目录。
 

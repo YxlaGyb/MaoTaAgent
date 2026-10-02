@@ -92,6 +92,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: ["hook.memory", ...toolkit.provides],
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [],
   configKeys: ["memory_char_limit", "user_char_limit"],
 
   setup(wiring: Wiring) {

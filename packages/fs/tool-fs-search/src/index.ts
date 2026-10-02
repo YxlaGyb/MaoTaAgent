@@ -81,6 +81,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [],
   configKeys: ["max_glob_results", "follow_links", "max_matches", "max_line_chars", "max_file_bytes"],
 
   setup(wiring) {

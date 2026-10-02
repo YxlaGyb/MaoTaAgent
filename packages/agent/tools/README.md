@@ -1,5 +1,5 @@
 ---
-description: "The tools capability: the registry every tool plugin is discovered through, the list, call and classify methods the agent talks to, and the result budget that spills to disk."
+description: "The tools capability: the registry every tool plugin registers with, the list, call and classify methods the agent talks to, and the result budget that spills to disk."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The agent never calls a tool plugin directly. It calls this dispatcher, which discovers every capability named `tool.*` out of the capabilities the kernel published, sorts them by name, and answers three methods: `list` for the specs the model sees, `call` for the work, and `classify` for whether a call may run beside another. It keeps no cache of its own: the pool is rebuilt whenever the kernel announces a changed table, and a tool's policy is read again on each call. It owns the result budget: an answer too large to hand to the model is written to disk and replaced by a preview plus a path, and that directory is swept as it fills.
+The agent never calls a tool plugin directly. It calls this dispatcher, which holds the `tool.*` providers registered through its own `register` method, sorts them by name, and answers three methods: `list` for the specs the model sees, `call` for the work, and `classify` for whether a call may run beside another. It keeps no policy cache: a tool's policy is read again on each call. It owns the result budget: an answer too large to hand to the model is written to disk and replaced by a preview plus a path, and that directory is swept as it fills.
 
 ## Table of Contents
 
@@ -53,12 +53,12 @@ Over budget, `call` writes the whole answer and returns `{ spilled: true, path, 
 
 | File | Role |
 |---|---|
-| [`src/registry.ts`](src/registry.ts) | `TOOL_PREFIX`, `ToolRoute`, `discover` and `sorted`. |
-| [`src/index.ts`](src/index.ts) | The definition: config, discovery at `start`, the three methods, the budget and the spill. |
+| [`src/registry.ts`](src/registry.ts) | `TOOL_PREFIX`, `ToolRoute`, registration bookkeeping and `sorted`. |
+| [`src/index.ts`](src/index.ts) | The definition: config, register/unregister, the three methods, the budget and the spill. |
 
-### Discovery
+### Registration
 
-`discover` walks a capability table and keeps every name that starts with `tool.`, minus the prefix, skipping an empty remainder. The pool is built at `start` and rebuilt whenever the kernel publishes `kernel.capabilities.changed`, so a tool plugin mounted, restarted or dropped after start is noticed without restarting the dispatcher. A tool that does not answer `describe` is logged and left out rather than failing the list.
+Providers register their `tool.*` capabilities into this dispatcher after their own `start` returns. The dispatcher keeps the current routing snapshot to reject forged ownership and prunes a registration whenever `kernel.capabilities.changed` no longer maps that capability to the same plugin. A tool that does not answer `describe` is logged and left out rather than failing the list.
 
 ### Safety is asked, not assumed
 
@@ -66,7 +66,7 @@ Over budget, `call` writes the whole answer and returns `{ spilled: true, path, 
 
 ### The self check
 
-`selfCheck` covers the parts that are cheap to reach: discovery picks only `tool.*` names, `sorted` orders them, a pool rebuilt from an empty table is empty, an undeclared budget falls back to `max_result_chars`, `null` means never spill, a spill writes the whole text under `spill_dir` with the recorded char count, and a sweep drops what is past its age and trims the rest to the byte cap.
+`selfCheck` covers the parts that are cheap to reach: registration accepts only `tool.*` names, `sorted` orders them, stale entries are pruned from an empty table, an undeclared budget falls back to `max_result_chars`, `null` means never spill, a spill writes the whole text under `spill_dir` with the recorded char count, and a sweep drops what is past its age and trims the rest to the byte cap.
 
 Five facts bound this dispatcher. The budget measures text, counting a string as characters and anything else as its JSON rendering, so a large object can spill on its encoding rather than its content. The sweep runs before a write and not on a timer, so a directory nobody spills into again is left exactly as it was. A spilled result is a plain file under `spill_dir`, mode `0600`, so every result a session ever spilled stays readable to the process until the sweep takes it. A tool's arguments are passed through untouched, so what a tool accepts and refuses is its own business. And the dispatcher routes by name and checks no access, because there is no permission layer.
 

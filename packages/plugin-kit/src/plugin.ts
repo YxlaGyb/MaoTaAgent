@@ -5,11 +5,16 @@ import { Channel, CallError, type Route } from "./channel.ts";
 
 /// The other half of this number is `PROTOCOL_VERSION` in the kernel's
 /// `crates/protocol`; a mismatch fails startup with -32015.
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
-export interface Require {
+export interface Inject {
   capability: string;
   optional?: boolean;
+}
+
+export interface Registration {
+  service: string;
+  capability: string;
 }
 
 export interface Wiring {
@@ -22,6 +27,7 @@ export interface Call extends Wiring {
   capability: string;
   method: string;
   caller: string;
+  registration?: Registration;
   signal: AbortSignal;
   stream: ProviderStream | undefined;
 }
@@ -30,7 +36,9 @@ export type Method = (params: any, call: Call) => Promise<unknown> | unknown;
 
 export interface Definition {
   provides: string[];
-  requires?: Require[];
+  injects: Inject[];
+  registrations: Registration[];
+  hostCalls: string[];
   configKeys?: readonly string[];
   setup?(wiring: Wiring): void | Promise<void>;
   start?(wiring: Wiring): void | Promise<void>;
@@ -89,9 +97,11 @@ export class ProviderStream {
 export function serve(definition: Definition): void {
   const wiring: Wiring = { channel: null as unknown as Channel, config: {}, capabilities: {} };
   const aborts = new Map<number, AbortController>();
+  const registered: Registration[] = [];
 
   const channel = new Channel({
-    request: (method, params, reply) => handle(definition, wiring, aborts, method, params, reply),
+    request: (method, params, reply) =>
+      handle(definition, wiring, aborts, registered, method, params, reply),
     notification: (method, params) => {
       if (method !== "$/cancel") return;
       const requestId = params?.request_id;
@@ -126,6 +136,7 @@ async function handle(
   definition: Definition,
   wiring: Wiring,
   aborts: Map<number, AbortController>,
+  registered: Registration[],
   method: string,
   params: any,
   reply: (result: unknown) => void,
@@ -134,13 +145,24 @@ async function handle(
     case "initialize": {
       wiring.config = { ...(params?.config ?? {}) };
       warnUnknownConfig(definition, params, wiring);
+      const problems = declarationProblems(definition);
+      if (problems.length > 0) {
+        throw new CallError(-32602, `invalid plugin declaration: ${problems.join("; ")}`);
+      }
       await definition.setup?.(wiring);
-      reply({ protocol: PROTOCOL_VERSION, provides: definition.provides, requires: definition.requires ?? [] });
+      reply({
+        protocol: PROTOCOL_VERSION,
+        provides: definition.provides,
+        injects: definition.injects,
+        registrations: definition.registrations,
+        host_calls: definition.hostCalls,
+      });
       return;
     }
     case "start": {
       wiring.capabilities = { ...(params?.capabilities ?? {}) };
       await definition.start?.(wiring);
+      await registerAll(definition, wiring, registered);
       reply({});
       return;
     }
@@ -149,6 +171,7 @@ async function handle(
       return;
     }
     case "shutdown": {
+      await unregisterAll(wiring, registered);
       reply({});
       await definition.close?.(String(params?.reason ?? ""));
       process.exit(0);
@@ -156,6 +179,38 @@ async function handle(
     }
     default:
       throw new CallError(-32601, `no ${method} here`);
+  }
+}
+
+async function registerAll(definition: Definition, wiring: Wiring, registered: Registration[]): Promise<void> {
+  try {
+    for (const registration of definition.registrations) {
+      await wiring.channel.call(
+        registration.service,
+        "register",
+        { capability: registration.capability },
+        { timeout_ms: 5000 },
+      );
+      registered.push(registration);
+    }
+  } catch (error) {
+    await unregisterAll(wiring, registered);
+    throw error;
+  }
+}
+
+async function unregisterAll(wiring: Wiring, registered: Registration[]): Promise<void> {
+  while (registered.length > 0) {
+    const registration = registered.pop()!;
+    try {
+      await wiring.channel.call(
+        registration.service,
+        "unregister",
+        { capability: registration.capability },
+        { timeout_ms: 1000 },
+      );
+    } catch {
+    }
   }
 }
 
@@ -183,6 +238,9 @@ async function invoke(
     capability: String(params?.capability ?? ""),
     method,
     caller: String(meta.caller ?? ""),
+    ...(meta.authorized_registration === undefined || meta.authorized_registration === null
+      ? {}
+      : { registration: meta.authorized_registration as Registration }),
     signal: controller.signal,
     stream,
   };
@@ -236,13 +294,7 @@ function real(path: string): string | null {
 }
 
 async function check(definition: Definition): Promise<void> {
-  const problems: string[] = [];
-  if (definition.provides.length === 0) problems.push("provides is empty");
-  for (const capability of definition.provides) {
-    if (!/^[a-z][a-z0-9._-]*$/.test(capability)) {
-      problems.push(`capability "${capability}" should be a lowercase id`);
-    }
-  }
+  const problems = declarationProblems(definition);
   if (definition.configKeys === undefined) {
     problems.push("configKeys is not declared: list the config keys initialize reads ([] if none)");
   }
@@ -252,6 +304,63 @@ async function check(definition: Definition): Promise<void> {
     problems.push(`selfCheck threw: ${error instanceof Error ? error.message : String(error)}`);
   }
   const ok = problems.length === 0;
-  writeSync(1, `${JSON.stringify({ ok, provides: definition.provides, requires: definition.requires ?? [], problems })}\n`);
+  writeSync(1, `${JSON.stringify({
+    ok,
+    provides: definition.provides,
+    injects: definition.injects,
+    registrations: definition.registrations,
+    host_calls: definition.hostCalls,
+    problems,
+  })}\n`);
   process.exit(ok ? 0 : 1);
+}
+
+function declarationProblems(definition: Definition): string[] {
+  const problems: string[] = [];
+  const capabilityId = /^[a-z][a-z0-9._-]*$/;
+  if (definition.provides.length === 0) problems.push("provides is empty");
+  for (const capability of definition.provides) {
+    if (!capabilityId.test(capability)) {
+      problems.push(`capability "${capability}" should be a lowercase id`);
+    }
+  }
+  if (!Array.isArray(definition.injects)) problems.push("injects is not an array");
+  if (!Array.isArray(definition.registrations)) problems.push("registrations is not an array");
+  if (!Array.isArray(definition.hostCalls)) problems.push("hostCalls is not an array");
+  for (const inject of definition.injects ?? []) {
+    if (!capabilityId.test(String(inject?.capability ?? ""))) {
+      problems.push(`injection "${String(inject?.capability ?? "")}" is not a capability id`);
+    }
+    if (inject?.optional !== undefined && typeof inject.optional !== "boolean") {
+      problems.push(`injection "${inject.capability}" has a non-boolean optional flag`);
+    }
+  }
+  const provided = new Set(definition.provides);
+  const registered = new Set<string>();
+  for (const registration of definition.registrations ?? []) {
+    if (!capabilityId.test(String(registration?.service ?? ""))) {
+      problems.push(`registration service "${String(registration?.service ?? "")}" is not a capability id`);
+    }
+    if (!capabilityId.test(String(registration?.capability ?? ""))) {
+      problems.push(`registration capability "${String(registration?.capability ?? "")}" is not a capability id`);
+    }
+    if (!provided.has(registration.capability)) {
+      problems.push(`registration capability "${registration.capability}" is not in provides`);
+    }
+    if (registration.service === registration.capability) {
+      problems.push(`registration "${registration.capability}" cannot target itself`);
+    }
+    if (registered.has(registration.capability)) {
+      problems.push(`registration "${registration.capability}" is declared twice`);
+    }
+    registered.add(registration.capability);
+  }
+  const hostCalls = new Set<string>();
+  for (const capability of definition.hostCalls ?? []) {
+    if (!capabilityId.test(String(capability))) problems.push(`host call "${String(capability)}" is not a capability id`);
+    if (!provided.has(capability)) problems.push(`host call "${capability}" is not in provides`);
+    if (hostCalls.has(capability)) problems.push(`host call "${capability}" is declared twice`);
+    hostCalls.add(capability);
+  }
+  return problems;
 }

@@ -242,7 +242,9 @@ function refreshNext(record: ScheduleRecord, now: Date): void {
 
 export const definition: Definition = {
   provides: ["schedule"],
-  requires: [
+  hostCalls: ["schedule"],
+  registrations: [],
+  injects: [
     { capability: "agent.runner" },
     { capability: "shell" },
     { capability: "permission", optional: true },

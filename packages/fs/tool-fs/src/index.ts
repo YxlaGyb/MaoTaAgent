@@ -97,6 +97,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [],
   configKeys: ["max_read_bytes", "max_write_bytes", "spill_dir"],
 
   setup(wiring) {

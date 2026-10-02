@@ -25,6 +25,7 @@ import {
   type ProviderProfile,
   type ResolvedModel,
 } from "@maota/model-protocol";
+import { adapterEntries, adapterRoute } from "./registry.ts";
 
 export interface CatalogSettings {
   store: StoreSettings;
@@ -56,20 +57,15 @@ function save(value: ModelCatalog): ModelCatalog {
   return next;
 }
 
-function adapterCapability(adapter: string): string {
+function requireAdapter(adapter: string): string {
+  const route = adapterRoute(adapter);
+  if (route === undefined) throw new CallError(-32602, `unknown adapter: ${adapter}`);
   return `model.adapter.${adapter}`;
-}
-
-function requireAdapter(ctx: Call, adapter: string): string {
-  const capability = adapterCapability(adapter);
-  if (ctx.capabilities[capability] === undefined) throw new CallError(-32602, `unknown adapter: ${adapter}`);
-  return capability;
 }
 
 export async function adapterDescriptors(ctx: Call): Promise<AdapterDescriptor[]> {
   const found: AdapterDescriptor[] = [];
-  for (const capability of Object.keys(ctx.capabilities)) {
-    if (!capability.startsWith("model.adapter.")) continue;
+  for (const [, capability] of adapterEntries()) {
     const reply = await ctx.channel.call(capability, "describe", {}, { signal: ctx.signal });
     if (reply !== null && typeof reply === "object" && typeof (reply as { id?: unknown }).id === "string") {
       found.push(reply as AdapterDescriptor);
@@ -168,13 +164,13 @@ export async function discover(ctx: Call, params: Record<string, unknown>): Prom
   const base_url = typeof params.base_url === "string" ? params.base_url.trim() : "";
   const api_key = typeof params.api_key === "string" ? params.api_key.trim() : "";
   if (adapter === "" || base_url === "") throw new CallError(-32602, "discover needs adapter and base_url");
-  const models = await ctx.channel.call(requireAdapter(ctx, adapter), "discover", { base_url, api_key }, { signal: ctx.signal });
+  const models = await ctx.channel.call(requireAdapter(adapter), "discover", { base_url, api_key }, { signal: ctx.signal });
   return { verified: true, models };
 }
 
 export function saveProvider(ctx: Call, params: Record<string, unknown>): ModelCatalog {
   const input = readProviderInput(params);
-  requireAdapter(ctx, input.adapter);
+  requireAdapter(input.adapter);
   const current = catalog(ctx);
   requireRevision(current, params.expected_revision);
   const existing = input.id === undefined ? undefined : current.providers.find((item) => item.id === input.id);

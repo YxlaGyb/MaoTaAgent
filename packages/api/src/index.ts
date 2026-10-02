@@ -223,9 +223,11 @@ async function streamed(request: ReturnType<typeof readChat>, ctx: Call): Promis
 
 export const definition: Definition = {
   provides: ["api"],
+  hostCalls: [],
+  registrations: [],
   // A replacement is durable evidence, and the session is where durable
   // evidence lives; a deployment without one still replaces the request.
-  requires: [{ capability: "session", optional: true }],
+  injects: [{ capability: "session", optional: true }],
   configKeys: [
     "backend",
     "model",

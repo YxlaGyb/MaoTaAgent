@@ -62,8 +62,8 @@ kind: "package-reference"
 
 | 项 | 含义 |
 |---|---|
-| requires `shell ^1` | 本工具所调用的 provider 能力。`run` 转发给 `shell.run` 并渲染它的答案。 |
-| requires `permission ^1`（可选） | 闸门。没有它本工具照样加载，并把读不出的策略当成"会问"的那一档。 |
+| injects `shell` | 本工具所调用的 provider 能力。`run` 转发给 `shell.run` 并渲染它的答案。 |
+| injects `permission`（可选） | 闸门。没有它本工具照样加载，并把读不出的策略当成"会问"的那一档。 |
 | `configKeys` | `approval_timeout_ms`：一次审批最多等多久，缺省 300000。命令超时、输出上限与兜底目录都归 provider。 |
 
 -----

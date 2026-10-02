@@ -15,7 +15,7 @@ import {
   type ToolPolicy,
 } from "@maota/plugin-kit";
 
-import { discover, sorted, type ToolRoute } from "./registry.ts";
+import { add, nameOf, reconcile, sorted, type ToolRoute } from "./registry.ts";
 
 const DEFAULTS = {
   max_result_chars: 20000,
@@ -31,6 +31,7 @@ function defaultSpillDir(): string {
 
 let settings = { ...DEFAULTS, spill_dir: defaultSpillDir() };
 let tools = new Map<string, ToolRoute>();
+let routes: Record<string, Route> = {};
 let watch: { channel: Channel; id: string } | undefined;
 
 function message(error: unknown): string {
@@ -84,12 +85,11 @@ function budgetOf(policy: ToolPolicy | null): number | null {
   return declared === undefined ? settings.max_result_chars : declared;
 }
 
-/// The pool, rebuilt from whichever table is current. Nothing here caches a
-/// policy, so a tool that changed its mind about concurrency or its budget is
-/// believed on the next call rather than on the next list.
-function adopt(capabilities: Record<string, Route>, channel: Channel): void {
-  tools = discover(capabilities);
-  channel.log("info", `tools: ${[...tools.keys()].join(", ") || "(none)"}`, { count: tools.size });
+/// Registration is the pool's only source of new rows. The table is kept to
+/// reject a forged owner and to remove a row whose provider disappeared.
+function sync(capabilities: Record<string, Route>): void {
+  routes = { ...capabilities };
+  reconcile(tools, routes);
 }
 
 function spill(text: string, budget: number): { spilled: true; path: string; chars: number; preview: string } {
@@ -117,6 +117,9 @@ async function policyOf(tool: ToolRoute, ctx: Call): Promise<ToolPolicy | null> 
 
 export const definition: Definition = {
   provides: ["tools"],
+  hostCalls: [],
+  registrations: [],
+  injects: [],
   configKeys: ["max_result_chars", "preview_chars", "spill_dir", "spill_max_age_ms", "spill_max_bytes"],
 
   setup(wiring) {
@@ -133,15 +136,12 @@ export const definition: Definition = {
   },
 
   start(wiring) {
-    adopt(wiring.capabilities, wiring.channel);
-    // A tool plugin may be mounted, restarted or dropped after start, and the
-    // table handed over at start is only a snapshot, so the pool follows the
-    // kernel's own announcements rather than the one it was born with.
+    sync(wiring.capabilities);
     void wiring.channel
       .subscribe(["kernel.capabilities.changed"], (_topic, _seq, payload) => {
         const table = (payload as { capabilities?: Record<string, Route> } | null)?.capabilities;
         if (table === undefined || table === null) return;
-        adopt(table, wiring.channel);
+        sync(table);
       })
       .then((id) => {
         watch = { channel: wiring.channel, id };
@@ -159,6 +159,28 @@ export const definition: Definition = {
   },
 
   methods: {
+    register(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      const name = nameOf(capability);
+      if (name === null) throw new CallError(-32602, `not a tool capability: ${capability}`);
+      requireRegistration(ctx, capability);
+      const current = tools.get(name);
+      if (current !== undefined && current.plugin !== ctx.caller) {
+        throw new CallError(-32602, `${name} is already registered by ${current.plugin}`);
+      }
+      return add(tools, capability, ctx.caller);
+    },
+
+    unregister(params, ctx) {
+      const capability = String(params?.capability ?? "");
+      const name = nameOf(capability);
+      const current = name === null ? undefined : tools.get(name);
+      if (name === null || current === undefined || current.capability !== capability) return { removed: false };
+      requireRegistration(ctx, capability);
+      tools.delete(name);
+      return { removed: true };
+    },
+
     async list(_params, ctx) {
       const listed: unknown[] = [];
       for (const tool of sorted(tools)) {
@@ -202,14 +224,12 @@ export const definition: Definition = {
 
   async selfCheck() {
     const problems: string[] = [];
-    const found = discover({
-      "tool.pwsh": { plugin: "pwsh-local" },
-      api: { plugin: "api" },
-      "tool.read": { plugin: "tool-fs" },
-    });
-    if (found.size !== 2) problems.push(`discover picked ${found.size} tools, expected 2`);
-    if (!found.has("pwsh")) problems.push("discover lost tool.pwsh");
-    if (!found.has("read")) problems.push("discover lost tool.read");
+    const found = new Map<string, ToolRoute>();
+    add(found, "tool.read", "tool-fs");
+    add(found, "tool.pwsh", "pwsh-local");
+    if (found.size !== 2) problems.push(`registry held ${found.size} tools, expected 2`);
+    if (!found.has("pwsh")) problems.push("registry lost tool.pwsh");
+    if (!found.has("read")) problems.push("registry lost tool.read");
     if (sorted(found).map((tool) => tool.name).join(",") !== "pwsh,read") {
       problems.push("sorted lost the order");
     }
@@ -223,11 +243,12 @@ export const definition: Definition = {
     }
 
     const pool = tools;
-    const logging = { log: (): void => {} } as unknown as Channel;
-    adopt({ "tool.pwsh": { plugin: "pwsh-local" } }, logging);
-    if (tools.size !== 1 || !tools.has("pwsh")) problems.push("adopt did not rebuild the pool");
-    adopt({}, logging);
-    if (tools.size !== 0) problems.push("adopt kept a tool the table had dropped");
+    const table = { "tool.pwsh": { plugin: "pwsh-local" } };
+    add(tools, "tool.pwsh", "pwsh-local");
+    reconcile(tools, table);
+    if (tools.size !== 1 || !tools.has("pwsh")) problems.push("reconcile dropped a live tool");
+    reconcile(tools, {});
+    if (tools.size !== 0) problems.push("reconcile kept a tool the table had dropped");
     tools = pool;
 
     const dir = settings.spill_dir;
@@ -264,6 +285,12 @@ export const definition: Definition = {
     return problems;
   },
 };
+
+function requireRegistration(ctx: Call, capability: string): void {
+  if (ctx.registration?.service !== "tools" || ctx.registration.capability !== capability) {
+    throw new CallError(-32602, `${ctx.caller} did not declare registration of ${capability}`);
+  }
+}
 
 /// This package is spawned as the dispatcher and imported by nothing else, but
 /// a check that imports it to exercise a method must not start a server.

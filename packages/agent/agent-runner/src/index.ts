@@ -41,7 +41,9 @@ function requireRunner(): TurnQueue {
 
 export const definition: Definition = {
   provides: ["agent.runner"],
-  requires: [{ capability: "agent.loop" }, { capability: "jobs", optional: true }, { capability: "permission", optional: true }],
+  hostCalls: ["agent.runner"],
+  registrations: [],
+  injects: [{ capability: "agent.loop" }, { capability: "jobs", optional: true }, { capability: "permission", optional: true }],
   configKeys: ["max_parallel_turns", "max_system_turns", "max_consecutive_wakes"],
 
   setup(wiring) {

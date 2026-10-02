@@ -14,6 +14,9 @@ function text(value: unknown): string {
 
 export const definition: Definition = {
   provides: ["hook.deny"],
+  injects: [],
+  registrations: [],
+  hostCalls: [],
   configKeys: [],
 
   methods: {

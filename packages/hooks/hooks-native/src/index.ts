@@ -81,7 +81,9 @@ async function discover(channel: Channel, capabilities: Record<string, Route>): 
 
 export const definition: Definition = {
   provides: ["hooks"],
-  requires: [
+  hostCalls: [],
+  registrations: [],
+  injects: [
     { capability: "hook.agent-instructions", optional: true },
     { capability: "hook.memory", optional: true },
   ],

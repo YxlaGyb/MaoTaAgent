@@ -70,7 +70,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "session" }],
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [{ capability: "session" }],
   configKeys: ["max_items", "max_content_chars", "verify_nudge", "verify_min_items"],
 
   setup(wiring) {

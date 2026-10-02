@@ -68,7 +68,7 @@ kind: "package-group"
 <a id="bundles"></a>
 一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的三十个行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
-`pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`requires`、`configKeys` 与 `selfCheck`。
+`pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`injects`、`registrations`、`hostCalls`、`configKeys` 与 `selfCheck`。
 
 <a id="related-documentation"></a>
 ## 相关文档

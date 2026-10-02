@@ -25,7 +25,9 @@ function positive(value: unknown, fallback: number): number {
 
 export const definition: Definition = {
   provides: ["shell"],
-  requires: [{ capability: "jobs", optional: true }],
+  hostCalls: [],
+  registrations: [],
+  injects: [{ capability: "jobs", optional: true }],
   configKeys: ["timeout_ms", "max_output_bytes", "cwd"],
 
   setup(wiring) {

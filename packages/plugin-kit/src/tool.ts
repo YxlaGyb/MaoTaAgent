@@ -7,7 +7,7 @@ import {
   type JsonSchemaScalar,
   type JsonSchemaType,
 } from "./json-schema.ts";
-import type { Call, Method } from "./plugin.ts";
+import type { Call, Method, Registration } from "./plugin.ts";
 
 export type ParameterType = JsonSchemaType;
 
@@ -57,6 +57,7 @@ export type ToolMethodName = "describe" | "policy" | "run" | "classify";
 
 export interface ToolKit {
   provides: string[];
+  registrations: Registration[];
   methods: Record<ToolMethodName, Method>;
 }
 
@@ -271,6 +272,7 @@ export function defineTools(blueprints: readonly ToolBlueprint[]): ToolKit {
 
   return {
     provides,
+    registrations: provides.map((capability) => ({ service: "tools", capability })),
     methods: {
       describe: (_params, call) => lookup(call).spec,
       policy: (_params, call) => lookup(call).policy,

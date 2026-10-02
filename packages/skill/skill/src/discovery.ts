@@ -15,18 +15,19 @@ import {
   type SkillSummary,
 } from "./protocol.ts";
 
-const PREFIX = "skill.";
+export const SKILL_PREFIX = "skill.";
 
 export const DEFAULTS = { catalog_description_max: DEFAULT_DESCRIPTION_MAX, catalog_max_chars: DEFAULT_CATALOG_MAX };
 
-/// The registry finds its providers the way the tool dispatcher finds tools:
-/// by capability name, once, from the table `start` hands over. That table is
-/// the whole deployment rather than what has started so far, so no row order in
-/// the bundle is load bearing.
-export function discover(capabilities: Record<string, Route>): Array<[string, Route]> {
-  return Object.entries(capabilities)
-    .filter(([capability]) => capability.startsWith(PREFIX) && capability.length > PREFIX.length)
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+export function isSkillCapability(capability: string): boolean {
+  return capability.startsWith(SKILL_PREFIX) && capability.length > SKILL_PREFIX.length;
+}
+
+export function reconcile(
+  providers: Array<[string, Route]>,
+  capabilities: Record<string, Route>,
+): Array<[string, Route]> {
+  return providers.filter(([capability, route]) => capabilities[capability]?.plugin === route.plugin);
 }
 
 export function messageOf(error: unknown): string {

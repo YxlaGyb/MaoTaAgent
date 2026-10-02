@@ -30,7 +30,7 @@ English | [中文](README.zh.md)
 | `maota --version` | Print `maota <version>` and exit 0. |
 
 The first positional argument decides the mode. `serve` and `check` take no further arguments; `jobs` and `cron` take an action and its arguments. Any other positional argument starts a one-shot question whose remaining arguments are joined with spaces.
-`maota check` prints whatever the kernel prints. A plugin the kernel holds back because a capability it requires has no provider, and a plugin row switched off with `disabled = true`, are both warnings: the check still exits 0, and the report names them in `disabled` and `blocked` (the kernel documents both fields in `docs/PROTOCOL.md` section 14.1).
+`maota check` prints whatever the kernel prints. A plugin the kernel holds back because an injection or registration service has no provider, and a plugin row switched off with `disabled = true`, are both warnings: the check still exits 0, and the report names them in `disabled` and `blocked` (the kernel documents both fields in `docs/PROTOCOL.md` section 14.1).
 
 A subagent's work happens inside the turn that started it, so the CLI prints it indented rather than folding it into the turn's own output: every `agent.subagent.*` event naming the session this run drives becomes one line, such as `  [explore sub-3f2a] -> read src/a.ts`. Nothing else about the child reaches the terminal, and its answer still arrives as the result of the `task` call that started it.
 
@@ -92,7 +92,7 @@ roots = ["<repo>/apps", "<repo>/packages"]
 ```
 
 That plugin watches `roots` and publishes `dev.source.changed` with the path that changed. For every `kernel.plugin.started` event the CLI reads the plugin's resolved `cwd` and entry argument, walks that entry's static import graph ([`src/graph.ts`](src/graph.ts)), and remembers which plugin imports which file. Each `dev.source.changed` path is then resolved to exactly the plugins that import it, and those are restarted with `reason: "source"` ([`src/hmr.ts`](src/hmr.ts)). A shared file such as `packages/plugin-kit/src/index.ts` restarts every plugin that imports it; a path nobody imports restarts nothing. Without the row nothing is watched at all, so a production run carries no watcher and the CLI adds no watching of its own.
-When the kernel holds a plugin back because something it requires is missing, it publishes `kernel.plugin.blocked` with the plugin and the capabilities it waits for, and the CLI prints one stderr line: `MaoTa: <plugin> waits for <capability>`. That is the same waiting state the reloader leaves a running plugin in when its provider goes away, and the reload that brings the provider back starts it again.
+When the kernel holds a plugin back because an injection or registration service is missing, it publishes `kernel.plugin.blocked` with the plugin and the capabilities it waits for, and the CLI prints one stderr line: `MaoTa: <plugin> waits for <capability>`. That is the same waiting state the reloader leaves a running plugin in when its provider goes away, and the reload that brings the provider back starts it again.
 
 <a id="development"></a>
 ## Development

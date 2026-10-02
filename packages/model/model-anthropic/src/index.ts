@@ -284,6 +284,9 @@ function apply(
 
 export const definition: Definition = {
   provides: ["model.adapter.anthropic"],
+  hostCalls: [],
+  registrations: [{ service: "model", capability: "model.adapter.anthropic" }],
+  injects: [],
   configKeys: [],
   methods: {
     describe() {

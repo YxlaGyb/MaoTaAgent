@@ -21,7 +21,9 @@ async function chat(params: AdapterChatRequest, ctx: Call): Promise<void> {
 
 export const definition: Definition = {
   provides: ["model.adapter.api"],
-  requires: [{ capability: "api" }],
+  hostCalls: [],
+  registrations: [{ service: "model", capability: "model.adapter.api" }],
+  injects: [{ capability: "api" }],
   configKeys: [],
   methods: {
     describe() {

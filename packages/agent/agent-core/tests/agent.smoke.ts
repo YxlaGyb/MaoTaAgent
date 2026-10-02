@@ -180,14 +180,14 @@ const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
 const report = JSON.parse(line) as {
   ok?: boolean;
   provides?: string[];
-  requires?: Array<{ capability: string }>;
+  injects?: Array<{ capability: string }>;
   problems?: string[];
 };
 assert.equal(run.status, 0, `the agent entry exited ${run.status}: ${(run.stderr ?? "").slice(-400)}`);
 assert.equal(report.ok, true, `the agent selfCheck reported ${JSON.stringify(report.problems)}`);
 assert.deepEqual(report.provides, ["agent.loop"]);
 assert.deepEqual(
-  (report.requires ?? []).map((item) => item.capability),
+  (report.injects ?? []).map((item) => item.capability),
   ["model", "tools", "session", "system-prompt", "skill", "permission", "hooks"],
 );
 

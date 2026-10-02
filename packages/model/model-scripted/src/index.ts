@@ -64,6 +64,9 @@ async function chat(_params: AdapterChatRequest, ctx: Parameters<NonNullable<Def
 
 export const definition: Definition = {
   provides: ["model.adapter.scripted"],
+  hostCalls: [],
+  registrations: [{ service: "model", capability: "model.adapter.scripted" }],
+  injects: [],
   configKeys: ["script"],
   setup(wiring) {
     script = Array.isArray(wiring.config.script) ? wiring.config.script as Step[] : [];

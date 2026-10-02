@@ -14,6 +14,7 @@ import {
   setDefault,
   view,
 } from "../src/catalog.ts";
+import { addAdapter, setRoutes } from "../src/registry.ts";
 
 const home = mkdtempSync(join(tmpdir(), "maota-model-router-"));
 process.env.MAOTA_HOME = home;
@@ -34,6 +35,8 @@ function ctx(): Call {
 }
 
 const call = ctx();
+setRoutes({ "model.adapter.openai": { plugin: "model-openai" } });
+addAdapter("model.adapter.openai", "model-openai");
 const settings = configure({ file: join(home, "models.json") });
 assert.equal(settings.store.file, join(home, "models.json"));
 

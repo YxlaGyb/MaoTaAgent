@@ -25,7 +25,7 @@ MaoTa 一次处理一段对话，而对话是个不适合一次装下所有东�
 
 `@maota/tool-subagent` 持有请求侧：模型调用的 `task` 工具、它可以要的两种子代理、每种拿到的工具面与系统提示词、同时在跑的数量上限，以及答案的形态。`@maota/agent-core` 持有运行侧：`agent.loop` 长出了子运行模式（`origin`、`system`、`tools_allow`、`tools_deny`、`max_steps`），正是这个模式让子运行成其为子运行。
 
-这样分让静态依赖图保持无环。`tool-subagent` 依赖 `agent.loop` 的 `^1.3` 并调用它；`agent-core` 对委派工具一无所知，它像发现别的工具一样，通过 `tools.list` 发现它。没装配 `tool-subagent` 的部署就是没有 `task` 工具，而装了它却没装 `agent-core` 的部署会在 `requires` 上失败。
+这样分让静态依赖图保持无环。`tool-subagent` 注入 `agent.loop` 并调用它；`agent-core` 对委派工具一无所知，它像发现别的工具一样，通过 `tools.list` 发现它。没装配 `tool-subagent` 的部署就是没有 `task` 工具，而装了它却没装 `agent-core` 的部署会在 `injects` 上失败。
 
 <a id="the-two-kinds-of-subagent"></a>
 ## 两种子代理

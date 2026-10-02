@@ -89,7 +89,9 @@ const toolkit = defineTools([
 
 export const definition: Definition = {
   provides: toolkit.provides,
-  requires: [{ capability: "jobs" }, { capability: "system-prompt", optional: true }],
+  hostCalls: [],
+  registrations: toolkit.registrations,
+  injects: [{ capability: "jobs" }, { capability: "system-prompt", optional: true }],
   configKeys: [],
   async start(wiring) {
     channel = wiring.channel;
