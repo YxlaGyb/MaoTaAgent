@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { CallError, type Channel, type InboundStream } from "@maota/plugin-kit";
 
-import type { BridgeFacts, HostEvent, HostFailure, SessionFile, SubagentRef } from "./protocol.ts";
+import type { BridgeFacts, HostEvent, HostFailure, SessionFile, SettingsView, SubagentRef, WorkspaceView } from "./protocol.ts";
 
 interface LoopEvent {
   type?: string;
@@ -298,6 +298,50 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
           });
         case "sessions.children":
           return await channel.call("session", "children", { id: params.id, cwd: cwdOf(params) });
+        case "sessions.set_thinking":
+          return await channel.call("session", "set_thinking", {
+            id: params.id,
+            cwd: cwdOf(params),
+            thinking: params.thinking,
+          });
+        case "settings.get":
+          return await channel.call("settings", "get", {});
+        case "settings.update":
+          return await channel.call("settings", "update", {
+            patch: params.patch,
+            expected_revision: params.expected_revision,
+          });
+        case "workspace.get":
+          return await channel.call("workspace", "get", {});
+        case "workspace.register":
+          return await channel.call("workspace", "register", {
+            path: params.path,
+            ...(params.name === undefined ? {} : { name: params.name }),
+            expected_revision: params.expected_revision,
+          });
+        case "workspace.rename":
+          return await channel.call("workspace", "rename", {
+            path: params.path,
+            name: params.name,
+            expected_revision: params.expected_revision,
+          });
+        case "workspace.remove":
+          return await channel.call("workspace", "remove", {
+            path: params.path,
+            expected_revision: params.expected_revision,
+          });
+        case "workspace.set_pin":
+          return await channel.call("workspace", "set_pin", {
+            session_id: params.session_id,
+            pinned: params.pinned,
+            expected_revision: params.expected_revision,
+          });
+        case "workspace.set_archive":
+          return await channel.call("workspace", "set_archive", {
+            session_id: params.session_id,
+            archived: params.archived,
+            expected_revision: params.expected_revision,
+          });
         case "skills.list":
           return await channel.call("skill", "list", { cwd: cwdOf(params) });
         case "settings.set_key":
@@ -361,8 +405,16 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
     async open(): Promise<void> {
       try {
         subscription = await channel.subscribe(
-          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*", "jobs.registered", "jobs.progress", "jobs.settled", "jobs.removed", "agent.turn.*"],
+          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*", "jobs.registered", "jobs.progress", "jobs.settled", "jobs.removed", "agent.turn.*", "settings.changed", "workspace.changed"],
           (topic, _seq, payload) => {
+            if (topic === "settings.changed") {
+              emit({ event: "settings.changed", settings: payload as SettingsView });
+              return;
+            }
+            if (topic === "workspace.changed") {
+              emit({ event: "workspace.changed", workspace: payload as WorkspaceView });
+              return;
+            }
             const event = topic.startsWith("agent.subagent.")
               ? forwardSubagent(topic, payload)
               : topic.startsWith("agent.compact.")

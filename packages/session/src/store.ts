@@ -23,6 +23,7 @@ import {
 } from "./compaction.ts";
 import {
   SCHEMA_VERSION,
+  THINKING_LEVELS,
   assertId,
   assertParent,
   encodeDir,
@@ -30,6 +31,7 @@ import {
   modelRouteOf,
   projectMessages,
   readFileAt,
+  thinkingOf,
   trimCwd,
   type Limits,
   type SessionFile,
@@ -43,6 +45,7 @@ export {
   SESSION_ID,
   DEFAULT_DIRNAME,
   DEFAULT_MAX_EVENTS,
+  THINKING_LEVELS,
   messageSource,
   projectMessages,
   setWarner,
@@ -61,7 +64,9 @@ export type {
   SessionParent,
   SessionSummary,
   Limits,
+  ThinkingLevel,
   Warner,
+  thinkingOf,
 } from "./document.ts";
 export type {
   CompactSource,
@@ -99,6 +104,7 @@ export function load(
       compactions: [],
       parent: null,
       model_route: null,
+      thinking: "off",
       dangling: false,
     };
   }
@@ -113,6 +119,7 @@ export interface SaveInput {
   compactions?: unknown;
   parent?: unknown;
   model_route?: unknown;
+  thinking?: unknown;
 }
 
 /// A document keeps the events that built its plan, which without a ceiling
@@ -168,6 +175,10 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
     assertOwnership(found, id, workdir);
 
     const messages = projectMessages(input.messages, true);
+    const requestedThinking = input.thinking === undefined ? undefined : thinkingOf(input.thinking);
+    if (input.thinking !== undefined && requestedThinking === null) {
+      throw new CallError(-32602, `thinking must be one of ${THINKING_LEVELS.join(", ")}`);
+    }
     const compactions = input.compactions === undefined
       ? (found?.compactions ?? [])
       : (compactionsOf(input.compactions, true) ?? []);
@@ -183,6 +194,7 @@ export function save(root: string, input: SaveInput, limits: Limits, now = new D
       compactions,
       parent: assertParent(input.parent) ?? found?.parent ?? null,
       model_route: modelRouteOf(input.model_route) ?? found?.model_route ?? null,
+      thinking: requestedThinking ?? found?.thinking ?? "off",
       dangling: messages.at(-1)?.role === "user",
     };
 
@@ -261,6 +273,7 @@ export function commitCompaction(
       compactions: [...(found?.compactions ?? []), record],
       parent: assertParent(input.parent) ?? found?.parent ?? null,
       model_route: found?.model_route ?? null,
+      thinking: found?.thinking ?? "off",
       dangling: messages.at(-1)?.role === "user",
     };
     return writeDocument(path, join(root, encodeDir(workdir)), id, file, limits);
@@ -278,6 +291,21 @@ export function write(root: string, id: unknown, cwd: unknown, file: SessionFile
   });
   upsertIndex(root, summaryOf(written));
   return written;
+}
+
+export function setThinking(
+  root: string,
+  input: { id: unknown; cwd: unknown; thinking: unknown },
+  limits: Limits,
+  now = new Date().toISOString(),
+): SessionFile {
+  const thinking = thinkingOf(input.thinking);
+  if (thinking === null) {
+    throw new CallError(-32602, `thinking must be one of ${THINKING_LEVELS.join(", ")}`);
+  }
+  const found = load(root, input.id, input.cwd, limits, now);
+  if (found.thinking === thinking) return found;
+  return write(root, input.id, input.cwd, { ...found, updated_at: now, thinking }, limits);
 }
 
 export function todosOf(

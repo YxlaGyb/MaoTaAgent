@@ -45,6 +45,8 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | The gate a tool asks before a destructive command: the session's mode, the questions waiting for an answer, and the paired audit file. |
 | `@maota/pwsh-local` | [`shell/pwsh-local`](shell/pwsh-local/) | `shell` | The provider that runs a command with the local PowerShell. |
 | `@maota/session` | [`session`](session/) | `session` | Stored conversations, their titles and their working directories, and the parent link a subagent's document carries. |
+| `@maota/settings` | [`settings/settings`](settings/settings/) | `settings` | Host-owned locale and theme preferences. |
+| `@maota/workspace` | [`workspace/workspace`](workspace/workspace/) | `workspace` | Workspace registrations and the global session pin and archive sets. |
 | `@maota/skill` | [`skill/skill`](skill/skill/) | `skill` | The registry a turn lists skills through, loads one with, and renders a catalog from. |
 | `@maota/skill-bundled` | [`skill/skill-bundled`](skill/skill-bundled/) | `skill.bundled` | The six skills that ship with the repository. |
 | `@maota/skill-filesystem` | [`skill/skill-filesystem`](skill/skill-filesystem/) | `skill.filesystem` | Skills read from the local roots. |

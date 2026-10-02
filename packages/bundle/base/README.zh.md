@@ -40,6 +40,7 @@ import { rows } from "@maota/base";
 | `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
 | `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
 | `model-router` | `@maota/model-router` | `model` |
+| `settings` | `@maota/settings` | `settings` |
 | `i18n` | `@maota/i18n-native` | `i18n` |
 | `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
@@ -56,6 +57,7 @@ import { rows } from "@maota/base";
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
 | `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
+| `workspace` | `@maota/workspace` | `workspace` |
 | `hooks` | `@maota/hooks-native` | `hooks`，上下文预算 80 KiB |
 | `context-agent-instructions` | `@maota/context-agent-instructions` | `hook.agent-instructions` |
 | `memory` | `@maota/memory` | `hook.memory`、`tool.memory` |
@@ -68,7 +70,7 @@ import { rows } from "@maota/base";
 
 ### 顺序
 
-注册表先于向它注册的 provider 启动：`tools` 先于 `tool.*`，`skill` 先于 `skill.*`，`model` 先于 `model.adapter.*`。`agent-core` 注入 `model`、`tools`、`session`、`system-prompt`、`skill`、`permission` 与 `hooks`；`agent-runner` 注入 `agent.loop`；`schedule` 注入 `agent.runner`；`tool-cron` 向 `tools` 注册，同时注入 `schedule`。
+注册表先于向它注册的 provider 启动：`tools` 先于 `tool.*`，`skill` 先于 `skill.*`，`model` 先于 `model.adapter.*`。`i18n` 可选注入 `settings`；web 插件注入 `settings` 与 `workspace`。`agent-core` 注入 `model`、`tools`、`session`、`system-prompt`、`skill`、`permission` 与 `hooks`；`agent-runner` 注入 `agent.loop`；`schedule` 注入 `agent.runner`；`tool-cron` 向 `tools` 注册，同时注入 `schedule`。
 
 -----
 

@@ -45,6 +45,8 @@ kind: "package-group"
 | `@maota/permission` | [`interaction/permission`](interaction/permission/) | `permission` | 工具在破坏性命令前问的那道闸门：会话的档位、还在等回答的问题，以及成对留痕的审计文件。 |
 | `@maota/pwsh-local` | [`shell/pwsh-local`](shell/pwsh-local/) | `shell` | 用本机 PowerShell 跑命令的 provider。 |
 | `@maota/session` | [`session`](session/) | `session` | 存下来的会话、标题与工作目录，以及子代理文档带着的那条父链。 |
+| `@maota/settings` | [`settings/settings`](settings/settings/) | `settings` | Host 自有的语言与主题偏好。 |
+| `@maota/workspace` | [`workspace/workspace`](workspace/workspace/) | `workspace` | 项目注册，以及全局的会话置顶和归档集合。 |
 | `@maota/skill` | [`skill/skill`](skill/skill/) | `skill` | 一轮用来列出技能、加载其中一个、并渲染目录的注册表。 |
 | `@maota/skill-bundled` | [`skill/skill-bundled`](skill/skill-bundled/) | `skill.bundled` | 随仓库一起发布的六个技能。 |
 | `@maota/skill-filesystem` | [`skill/skill-filesystem`](skill/skill-filesystem/) | `skill.filesystem` | 从本地根目录读取的技能。 |

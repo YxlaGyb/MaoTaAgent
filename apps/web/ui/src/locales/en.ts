@@ -45,6 +45,7 @@ export const messages = defineMessages({
   defaultProject: "No project",
   pinned: "Pinned",
   archived: "Archived",
+  ungrouped: "Ungrouped",
   newSession: "New session",
   more: "More",
   rename: "Rename",

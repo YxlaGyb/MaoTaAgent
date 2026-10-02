@@ -31,7 +31,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 1. `maota` 定下配置文件与内核二进制。
 2. 它拉起内核，等内核答出能力表。
 3. 内核把 `[plugins.<id>]` 每一项当自己的子进程起起来，按各插件的 `provides` 路由能力。
-4. 前端 invoke 能力：CLI 与 Web 驱动 `agent.runner`，Web 还通过自己的桥使用 `session`；runner 负责串行 turn 并调用 `agent.loop`。
+4. 前端 invoke 能力：CLI 与 Web 驱动 `agent.runner`，Web 还通过自己的桥使用 `session`、`settings` 与 `workspace`；runner 负责串行 turn 并调用 `agent.loop`。
 5. 停机时内核收到 `ui_quit` 或 `kernel_exit`，停掉插件并以宿主报出的码退出。
 
 开发运行还可能带上 `hmr` 插件（生成的那一行默认关着）：它把改动过的路径发布成 `dev.source.changed`。CLI 从每个 `kernel.plugin.started` 里读出解析后的入口，走一遍入口的静态 import 图，维护一份"文件 → 插件"索引；于是每条改动路径都精确落到 import 它的那几个插件上，再让内核以 `reason: "source"` 重启它们。

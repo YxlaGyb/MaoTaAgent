@@ -40,6 +40,7 @@ import { rows } from "@maota/base";
 | `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
 | `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
 | `model-router` | `@maota/model-router` | `model` |
+| `settings` | `@maota/settings` | `settings` |
 | `i18n` | `@maota/i18n-native` | `i18n` |
 | `jobs` | `@maota/jobs` | `jobs` |
 | `pwsh-local` | `@maota/pwsh-local` | `shell` |
@@ -56,6 +57,7 @@ import { rows } from "@maota/base";
 | `skill-filesystem` | `@maota/skill-filesystem` | `skill.filesystem` |
 | `skill-bundled` | `@maota/skill-bundled` | `skill.bundled` |
 | `session` | `@maota/session` | `session` |
+| `workspace` | `@maota/workspace` | `workspace` |
 | `hooks` | `@maota/hooks-native` | `hooks`, with an 80 KiB context budget |
 | `context-agent-instructions` | `@maota/context-agent-instructions` | `hook.agent-instructions` |
 | `memory` | `@maota/memory` | `hook.memory`, `tool.memory` |
@@ -68,7 +70,7 @@ import { rows } from "@maota/base";
 
 ### Order
 
-Registries start before the providers that register with them: `tools` precedes `tool.*`, `skill` precedes `skill.*`, and `model` precedes `model.adapter.*`. `agent-core` injects `model`, `tools`, `session`, `system-prompt`, `skill`, `permission` and `hooks`; `agent-runner` injects `agent.loop`; `schedule` injects `agent.runner`; and `tool-cron` registers with `tools` while injecting `schedule`.
+Registries start before the providers that register with them: `tools` precedes `tool.*`, `skill` precedes `skill.*`, and `model` precedes `model.adapter.*`. `i18n` optionally injects `settings`; the web plugin injects `settings` and `workspace`. `agent-core` injects `model`, `tools`, `session`, `system-prompt`, `skill`, `permission` and `hooks`; `agent-runner` injects `agent.loop`; `schedule` injects `agent.runner`; and `tool-cron` registers with `tools` while injecting `schedule`.
 
 -----
 

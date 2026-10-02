@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, and the plan the model keeps. Eight methods answer a caller: `list`, `load`, `save`, `delete`, `children`, the plan pair `todos` and `save_todos`, and `events`. The document is version 5, written whole to a temporary file and renamed into place under a lock a second host pointed at the same directory also honours. Saving the messages never drops the plan, and a document written by version 1, 2 or 3 is normalized on the way in and written back as version 5. A document may carry a parent link, which is how a subagent's session is stored: it stays in its parent's folder, and both `children` and `list` carry the link.
+Stored conversations: one JSON document per session and working directory, holding the messages of a turn, the title a session is listed under, the session thinking level and the plan the model keeps. Nine methods answer a caller: `list`, `load`, `save`, `set_thinking`, `delete`, `children`, the plan pair `todos` and `save_todos`, and `events`. The document is version 6, written whole to a temporary file and renamed into place under a lock a second host pointed at the same directory also honours. Saving the messages never drops the plan, and a document written by version 1 through 5 is normalized on the way in and written back as version 6. A document may carry a parent link, which is how a subagent's session is stored: it stays in its parent's folder, and both `children` and `list` carry the link.
 
 ## Table of Contents
 
@@ -28,7 +28,8 @@ Stored conversations: one JSON document per session and working directory, holdi
 |---|---|---|
 | `list` | none | `{ dir, sessions }`, sorted by `updated_at`, newest first: every session the index holds, a subagent's included, each with the link that says who spawned it. |
 | `load` | `{ id, cwd }` | The document, with `dangling` worked out. A session that has never been written reads as an empty one. |
-| `save` | `{ id, cwd, title?, messages, parent? }` | The document as written. |
+| `save` | `{ id, cwd, title?, messages, parent?, thinking? }` | The document as written. |
+| `set_thinking` | `{ id, cwd, thinking }` | The document after changing only its thinking level. |
 | `delete` | `{ id, cwd }` | `{ deleted }`. Publishes `session.deleted` when a document was removed. |
 | `children` | `{ id, cwd }` | `{ children }`: the subagent sessions this one spawned, oldest first, each a summary of the shape `list` uses. |
 | `todos` | `{ id, cwd }` | The plan projection. |
@@ -43,7 +44,7 @@ A successful `delete` publishes `session.deleted` with `{ id, cwd }`. Jobs and s
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `5`, for every document this version writes. |
+| `schema_version` | `6`, for every document this version writes. |
 | `id` | The session id. |
 | `cwd` | The working directory this session belongs to, trimmed of trailing separators. |
 | `title` | What `list` shows. A `save` that omits it keeps the title already stored. |
@@ -52,6 +53,7 @@ A successful `delete` publishes `session.deleted` with `{ id, cwd }`. Jobs and s
 | `messages` | The transcript: the same array `agent-core` assembles and hands back. A message may carry a `source`: a skill catalog note, or a system delivery with `kind: "job"` or `kind: "schedule"` plus an id. `messageSource` validates it at the file boundary and drops a value this build cannot read. |
 | `events` | One entry per plan write, `{ kind: "todos.write", at, todos }`, plus a `{ kind: "todos.snapshot", at, todos }` standing in for the writes that fell past `max_events`. A document this version writes always carries the field, empty at first. |
 | `parent` | `null` for a session a person opened, or the link to the session that spawned this one: `{ id, cwd, call_id, type, description }`. |
+| `thinking` | `off`, `low`, `medium` or `high`; absent in older documents and read as `off`. |
 | `dangling` | Not stored: `load` sets it when the last message is a user message, which is what a turn that never finished looks like. |
 
 ### The parent link
@@ -93,6 +95,7 @@ Writing an empty list clears the plan and still moves the revision, so a caller 
 | `todos must be an array` | A plan write carried something else. |
 | `invalid todos: ...` | An item is not an object, its content is blank or over 2000 characters, its status is not one of the three, or it carries a field beyond `content` and `status`. Every reason is listed in one message. |
 | `parent must name the session that spawned this one, got ...` | The link handed to `save` is not an object with a usable session id in it. |
+| `thinking must be one of off, low, medium, high` | A write handed another level. |
 | `session document stayed locked for 5000ms; another writer is busy` | Another process held the document''s lock for the whole wait window. |
 
 -----
@@ -104,7 +107,7 @@ Writing an empty list clears the plan and still moves the revision, so a caller 
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The capability: config, the eight methods, and `selfCheck`. |
+| [`src/index.ts`](src/index.ts) | The capability: config, the nine methods, and `selfCheck`. |
 | [`src/store.ts`](src/store.ts) | The document layer: paths, reading, the atomic write, the plan read and append, and the child lookup. |
 | [`src/plan.ts`](src/plan.ts) | The plan itself: item shapes, the ceilings, the projection and the event filter. |
 | [`src/selfcheck.ts`](src/selfcheck.ts) | The self-check over the documents, links, index, lock and folding, run against a throwaway root. |
@@ -119,7 +122,7 @@ Both write paths go through `serially`, keyed by the working directory and the s
 
 ### Versions
 
-`load` accepts a document whose `schema_version` is 1, 2 or 3, filling in an empty `events` and no parent, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after such a read writes the document back at version 5, so the migration costs one write and needs no separate command. An event, or a parent link, whose shape this version cannot trust is dropped while the rest of the document is kept.
+`load` accepts a document whose `schema_version` is 1 through 5, filling in an empty `events`, no parent and `thinking: "off"`, and a document with no version field at all the same way. Anything else is read as an unreadable file, which is also what a corrupt document gets. The first `save` after such a read writes the document back at version 6, so the migration costs one write and needs no separate command. An event, or a parent link, whose shape this version cannot trust is dropped while the rest of the document is kept.
 
 ### A child is found through its link
 

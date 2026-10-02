@@ -46,6 +46,7 @@ export const messages = defineMessages({
   defaultProject: "无项目",
   pinned: "置顶",
   archived: "已归档",
+  ungrouped: "未分组",
   newSession: "新建会话",
   more: "更多",
   rename: "重命名",

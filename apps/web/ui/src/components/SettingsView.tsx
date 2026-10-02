@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { MaoSegmented, MaoSelect } from "maotaui";
 
-import { LANGS, setLang, useLangPref, useT } from "../lib/i18n.ts";
-import type { AppInfo } from "../lib/rpc.ts";
+import { LANGS, useT } from "../lib/i18n.ts";
+import type { AppInfo, ThemePreference } from "../lib/rpc.ts";
 import { Icon, ICON, type IconName } from "./Icon.tsx";
 import { ModelsSettings } from "./ModelsSettings.tsx";
 
@@ -23,17 +23,20 @@ interface Section {
 export function SettingsView({
   info,
   theme,
+  locale,
   onTheme,
+  onLanguage,
   onModels,
   onBack,
 }: {
   info: AppInfo | null;
   theme: string;
-  onTheme: (theme: string) => void;
+  locale: string;
+  onTheme: (theme: ThemePreference) => void;
+  onLanguage: (locale: string) => void;
   onModels: (models: NonNullable<AppInfo["models"]>) => void;
   onBack: () => void;
 }) {
-  const lang = useLangPref();
   const t = useT();
   const [section, setSection] = useState("general");
   const [query, setQuery] = useState("");
@@ -53,8 +56,8 @@ export function SettingsView({
               className="settings-lang"
               aria-label={t("language")}
               options={[{ value: "system", label: t("followSystem") }, ...LANGS]}
-              value={lang}
-              onChange={(event) => setLang(event.target.value)}
+              value={locale}
+              onChange={(event) => onLanguage(event.target.value)}
             />
           ),
         },
@@ -77,7 +80,7 @@ export function SettingsView({
                 { value: "light", label: t("light") },
               ]}
               value={theme}
-              onChange={onTheme}
+              onChange={(value) => onTheme(value as ThemePreference)}
             />
           ),
         },

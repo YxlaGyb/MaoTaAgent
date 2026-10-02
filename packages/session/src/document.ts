@@ -109,6 +109,15 @@ export interface SessionModelRoute {
   reasoning?: string;
 }
 
+export const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+export function thinkingOf(value: unknown): ThinkingLevel | null {
+  return typeof value === "string" && (THINKING_LEVELS as readonly string[]).includes(value)
+    ? value as ThinkingLevel
+    : null;
+}
+
 export interface SessionFile {
   schema_version: number;
   id: string;
@@ -121,6 +130,7 @@ export interface SessionFile {
   compactions: CompactionRecord[];
   parent: SessionParent | null;
   model_route: SessionModelRoute | null;
+  thinking: ThinkingLevel;
   dangling: boolean;
 }
 
@@ -288,6 +298,7 @@ export function inspect(path: string): Read {
         compactions,
         parent: parentOf((parsed as { parent?: unknown }).parent),
         model_route: modelRouteOf((parsed as { model_route?: unknown }).model_route),
+        thinking: thinkingOf((parsed as { thinking?: unknown }).thinking) ?? "off",
         dangling: false,
       },
     };

@@ -69,7 +69,6 @@ v5 那一轮重写了技能链、hook 点和权限闸门，那份计划里还有
 - **换模型**：没有备用模型。`packages/api/src/index.ts` 每个档位只有一个 `model`，恢复那条路上没有任何地方能点到第二个。
 - **撤回是整段的**：重试会把整个已流出的尝试撤回起点，而不是只撤回值得替换的那一部分（`apps/web/ui/src/components/MessageList.tsx`）。
 - **CLI 只有英文**：`apps/cli/` 没有字典、也从不问存储，所以被翻译的界面只有 web UI，CLI 打出的每个字符串都是字面量（`apps/cli/src/index.ts`）。计划是把 CLI 也算作前端的。
-- **应用自己的语言选择**：web UI 把它放在 `localStorage` 的 `maota.lang` 里，而档位另有自己的 `locale`，于是浏览器和无界面运行可能对语言有分歧、而且谁都不知道（`apps/web/ui/src/lib/i18n.ts`）。
 - **`translate` 不做格式化**：它原样回答那个词，有值要填的调用方自己调 `format`（`i18n/i18n-native/src/plugin.ts`）。
 - **词是平铺字符串**：没有复数形式也没有标记，所以需要其中任一的语言会被拆成好几个键（`i18n/i18n-protocol/src/index.ts`）。
 - **一次发现只读一遍交付者**：能力表变了存储才重建，交付者自己的词变了不会（`i18n/i18n-native/src/plugin.ts`）。

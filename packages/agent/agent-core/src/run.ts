@@ -70,10 +70,11 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   const allow = readNames(params?.tools_allow, "tools_allow");
   const deny = readNames(params?.tools_deny, "tools_deny") ?? [];
   const maxSteps = readSteps(params?.max_steps, settings.max_steps);
+  const level = readLevel(params?.thinking);
   const identity = origin?.parent_session_id ?? sessionId;
   const base: LevelSetting = sub
     ? { ...(active.get(identity) ?? { tools: true }) }
-    : resolveLevel(settings.thinking, readLevel(params?.thinking));
+    : resolveLevel(settings.thinking, level);
   const chosen = params?.route === undefined ? undefined : readRoute(params.route);
   const resolved = await ctx.channel.call(
     "model",
@@ -81,8 +82,8 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
     sub && base.route !== undefined
       ? { route: base.route }
       : chosen === undefined
-        ? { level: readLevel(params?.thinking), ...(base.model === undefined ? {} : { model: base.model }) }
-        : { route: chosen, level: readLevel(params?.thinking) },
+        ? { level, ...(base.model === undefined ? {} : { model: base.model }) }
+        : { route: chosen, level },
     { signal: ctx.signal },
   ) as ResolvedModel;
   const setting: LevelSetting = {
@@ -269,7 +270,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
   if (note !== null) history.push(note);
 
   const title = origin !== null && origin.description !== "" ? origin.description : titleOf(first?.content);
-  await persist(ctx, sessionId, cwd, history, title, origin, runRoute);
+  await persist(ctx, sessionId, cwd, history, title, origin, runRoute, level);
 
   const messages: Message[] = [
     { role: "system", content: await assemblePrompt(ctx, identity, cwd, mode, system) },
@@ -437,7 +438,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         text: cancelled ? "this turn was cancelled" : `this turn ended against an unexpected failure: ${detail}`,
       });
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
       stream.push({ type: "done", steps: ending.steps, text: cancelled ? "" : detail, reason });
     }
     if (outcome !== null) {
@@ -457,7 +458,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
       const stopping = subagentPayload();
       if (stopping !== null) await record("SubagentStop", stopping);
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
       announceSub("agent.subagent.finished", {
         steps: outcome.steps,
         reason: outcome.reason,
@@ -481,7 +482,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
     flush();
     // What the last two points said belongs to the turn like everything else,
     // or a hook that only speaks at the end is never heard at all.
-    if (messages.length > before) await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute);
+    if (messages.length > before) await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
     if (!sub) active.delete(sessionId);
     depths.delete(sessionId);
     // A hook a tool brought belongs to the run that tool ran in, so it is

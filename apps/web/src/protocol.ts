@@ -75,6 +75,26 @@ export interface ModelCatalogView {
   adapters: AdapterView[];
 }
 
+export type ThemePreference = "system" | "dark" | "light";
+
+export interface SettingsView {
+  revision: number;
+  locale: string | null;
+  theme: ThemePreference | null;
+}
+
+export interface WorkspaceProjectView {
+  path: string;
+  name: string | null;
+}
+
+export interface WorkspaceView {
+  revision: number;
+  projects: WorkspaceProjectView[];
+  pinned_sessions: string[];
+  archived_sessions: string[];
+}
+
 export interface SessionSummary {
   id: string;
   cwd: string;
@@ -173,6 +193,7 @@ export interface SessionFile {
   messages: SessionMessage[];
   compactions?: CompactionRecord[];
   model_route?: ModelRoute | null;
+  thinking?: "off" | "low" | "medium" | "high";
   dangling: boolean;
 }
 
@@ -218,6 +239,8 @@ export interface HostEvent {
   chars_after?: number;
   status?: string;
   error?: string;
+  settings?: SettingsView;
+  workspace?: WorkspaceView;
 }
 
 export interface Approval {

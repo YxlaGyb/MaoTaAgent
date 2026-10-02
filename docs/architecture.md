@@ -31,7 +31,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 1. `maota` resolves the config file and the kernel binary.
 2. It spawns the kernel and waits for the capability table.
 3. The kernel starts every `[plugins.<id>]` entry as its own child process and routes capabilities by each plugin's `provides`.
-4. The front end invokes capabilities: the CLI and Web drive `agent.runner`, while the web app also uses `session` through its bridge; the runner serializes turns and calls `agent.loop`.
+4. The front end invokes capabilities: the CLI and Web drive `agent.runner`, while the web app also uses `session`, `settings` and `workspace` through its bridge; the runner serializes turns and calls `agent.loop`.
 5. Shutdown asks the kernel for `ui_quit` or `kernel_exit`; the kernel stops its plugins and exits with the code the host reports.
 
 A development run may also carry the `hmr` plugin, whose generated row ships disabled: it publishes `dev.source.changed` with the path that changed. From each `kernel.plugin.started` event the CLI reads the resolved entry and walks that entry's static import graph, keeping a file-to-plugin index; a changed path is then resolved to exactly the plugins that import it, and those are restarted with `reason: "source"`.

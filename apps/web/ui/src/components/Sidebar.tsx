@@ -70,6 +70,7 @@ function SessionRow({
 
 export function Sidebar({
   groups,
+  ungrouped,
   recent,
   pinned,
   archived,
@@ -94,6 +95,7 @@ export function Sidebar({
   onSearch,
 }: {
   groups: ProjectGroup[];
+  ungrouped: SessionSummary[];
   recent: SessionSummary[];
   pinned: SessionSummary[];
   archived: SessionSummary[];
@@ -181,6 +183,13 @@ export function Sidebar({
           <div className="side-block">
             <div className="side-head">{t("pinned")}</div>
             {pinned.map((session) => row(session, true, false))}
+          </div>
+        )}
+
+        {ungrouped.length === 0 ? null : (
+          <div className="side-block">
+            <div className="side-head">{t("ungrouped")}</div>
+            {ungrouped.map((session) => row(session, pinnedIds.has(session.id), false))}
           </div>
         )}
 

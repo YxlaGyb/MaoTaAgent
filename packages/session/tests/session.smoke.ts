@@ -14,6 +14,7 @@ import {
   list,
   load,
   save,
+  setThinking,
   type Limits,
 } from "../src/store.ts";
 
@@ -26,8 +27,9 @@ const messages = [
 const link = { id: "parent", cwd: "E:\\proj", call_id: "call_0", type: "explore", description: "look at it" };
 
 try {
-  const born = save(root, { id: "child-a", cwd: "E:\\proj", title: "look at it", messages, parent: link }, limits);
+  const born = save(root, { id: "child-a", cwd: "E:\\proj", title: "look at it", messages, parent: link, thinking: "high" }, limits);
   assert.equal(born.parent?.id, "parent", "save should keep the link it was handed");
+  assert.equal(born.thinking, "high", "save should keep the session thinking level");
   assert.equal(born.parent?.call_id, "call_0");
   assert.equal(born.parent?.cwd, "E:\\proj");
   save(root, { id: "child-b", cwd: "E:\\proj", title: "then this", messages, parent: link }, limits);
@@ -37,6 +39,7 @@ try {
   assert.equal(read.parent?.type, "explore", "a child should know what kind of subagent it was");
   assert.equal(read.parent?.description, "look at it");
   assert.equal(read.title, "look at it", "a child keeps its own title");
+  assert.equal(read.thinking, "high", "a child keeps its own thinking level");
   assert.equal(load(root, "parent", "E:\\proj", limits).parent, null, "a session nobody spawned has no link");
 
   const listed = list(root);
@@ -81,11 +84,15 @@ try {
   const upgraded = load(root, "old", "E:\\proj", limits);
   assert.equal(upgraded.schema_version, SCHEMA_VERSION, "a version 2 document should read as the current one");
   assert.equal(upgraded.parent, null, "a document from before the link should read as unlinked");
+  assert.equal(upgraded.thinking, "off", "a document from before thinking should default to off");
   assert.deepEqual(upgraded.messages, messages, "a migration should not touch the messages");
   save(root, { id: "old", cwd: "E:\\proj", messages, parent: link }, limits);
   const written = JSON.parse(readFileSync(path, "utf8")) as { schema_version?: number; parent?: { id?: string } };
   assert.equal(written.schema_version, SCHEMA_VERSION, "the next write should store the current version");
   assert.equal(written.parent?.id, "parent", "the next write should store the link");
+  const changed = setThinking(root, { id: "old", cwd: "E:\\proj", thinking: "medium" }, limits);
+  assert.equal(changed.thinking, "medium", "setThinking should store the level");
+  assert.equal(load(root, "old", "E:\\proj", limits).thinking, "medium", "setThinking should be durable");
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

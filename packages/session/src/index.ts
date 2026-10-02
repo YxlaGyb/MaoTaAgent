@@ -16,6 +16,7 @@ import {
   save,
   serially,
   setWarner,
+  setThinking,
   todosOf,
   type Limits,
 } from "./store.ts";
@@ -81,9 +82,20 @@ export const definition: Definition = {
             messages: params?.messages,
             compactions: params?.compactions,
             parent: params?.parent,
+            thinking: params?.thinking,
           },
           settings.limits,
         ),
+      );
+    },
+
+    set_thinking(params) {
+      return serially(keyOf(params), () =>
+        setThinking(settings.root, {
+          id: params?.id,
+          cwd: params?.cwd,
+          thinking: params?.thinking,
+        }, settings.limits),
       );
     },
 

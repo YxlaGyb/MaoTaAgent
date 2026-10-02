@@ -69,7 +69,6 @@ Recovery decides what to do about a failed model call, and the translation store
 - **Another model**: there is no fallback model. `packages/api/src/index.ts` holds one `model` per profile, and nothing in the recovery path can name a second.
 - **The retraction is whole**: a retry retracts the entire streamed attempt back to its start rather than the part worth replacing (`apps/web/ui/src/components/MessageList.tsx`).
 - **The CLI is English only**: `apps/cli/` holds no dictionary and never asks the store, so the translated interface is the web UI alone, and every string the CLI prints is a literal (`apps/cli/src/index.ts`). The plan counts the CLI as a front end.
-- **The app's own language choice**: the web UI keeps it in `localStorage` under `maota.lang` while the profile holds a `locale` of its own, so a browser and a headless run can disagree about the language and neither knows (`apps/web/ui/src/lib/i18n.ts`).
 - **`translate` does not format**: it answers the word as written, so a caller with values to fill in calls `format` itself (`i18n/i18n-native/src/plugin.ts`).
 - **Words are flat strings**: no plural forms and no markup, so a language that needs either is written as several keys (`i18n/i18n-protocol/src/index.ts`).
 - **A contributor is read once per discovery**: the store rebuilds when the capability table changes and not when a contributor's own words do (`i18n/i18n-native/src/plugin.ts`).

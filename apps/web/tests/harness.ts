@@ -25,6 +25,8 @@ const PLUGINS: Array<[string, string]> = [
   ["model-router", "packages/model/model-router/src/index.ts"],
   ["model-scripted", "packages/model/model-scripted/src/index.ts"],
   ["model-openai", "packages/model/model-openai/src/index.ts"],
+  ["settings", "packages/settings/settings/src/index.ts"],
+  ["workspace", "packages/workspace/workspace/src/index.ts"],
   ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
   ["permission", "packages/interaction/permission/src/index.ts"],
   ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],

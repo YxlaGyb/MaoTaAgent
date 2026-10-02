@@ -43,6 +43,43 @@ await check("app.info", async () => {
   assert.deepEqual((await call("sessions.list")).sessions, [], "a fresh home should list no sessions");
 });
 
+await check("settings", async () => {
+  const initial = await call("settings.get");
+  assert.deepEqual(initial, { revision: 0, locale: null, theme: null }, "settings should start empty");
+  const saved = await call("settings.update", {
+    patch: { locale: "en", theme: "dark" },
+    expected_revision: initial.revision,
+  });
+  assert.deepEqual(saved, { revision: 1, locale: "en", theme: "dark" }, "settings should return the accepted view");
+  await assert.rejects(
+    call("settings.update", { patch: { theme: "light" }, expected_revision: initial.revision }),
+    (error: { code?: number }) => error.code === -32060,
+    "a stale settings revision should be refused",
+  );
+});
+
+await check("workspace", async () => {
+  const initial = await call("workspace.get");
+  assert.deepEqual(initial, { revision: 0, projects: [], pinned_sessions: [], archived_sessions: [] });
+  const registered = await call("workspace.register", { path: home, name: "Smoke", expected_revision: 0 });
+  assert.equal(registered.projects[0]?.path, home, "workspace registration should be durable in the returned view");
+  const pinned = await call("workspace.set_pin", { session_id: "smoke-one", pinned: true, expected_revision: registered.revision });
+  assert.deepEqual(pinned.pinned_sessions, ["smoke-one"]);
+  const archived = await call("workspace.set_archive", { session_id: "smoke-one", archived: true, expected_revision: pinned.revision });
+  assert.deepEqual(archived.pinned_sessions, [], "archiving should clear the pin");
+  assert.deepEqual(archived.archived_sessions, ["smoke-one"]);
+  const removed = await call("workspace.remove", { path: home, expected_revision: archived.revision });
+  assert.deepEqual(removed.projects, [], "removing a workspace should remove only its registration");
+  const readded = await call("workspace.register", { path: home, expected_revision: removed.revision });
+  assert.equal(readded.projects[0]?.path, home, "re-registering the same path should restore the group");
+});
+
+await check("session thinking", async () => {
+  await call("sessions.set_thinking", { id: "smoke-one", cwd: "", thinking: "high" });
+  const loaded = await call("sessions.load", { id: "smoke-one", cwd: "" });
+  assert.equal(loaded.thinking, "high", "thinking should be stored on the session");
+});
+
 await check("ui", async () => {
   const page = await fetch(`${base}/`);
   if (existsSync(join(root, "apps", "web", "dist", "index.html"))) {

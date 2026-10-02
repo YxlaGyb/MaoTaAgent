@@ -432,6 +432,7 @@ export async function persist(
   title: string,
   parent: SubagentOrigin | null,
   route: ModelRoute | null,
+  thinking: string,
 ): Promise<void> {
   await ctx.channel.call(
     "session",
@@ -442,6 +443,7 @@ export async function persist(
       title,
       messages,
       model_route: route,
+      thinking,
       ...(parent === null
         ? {}
         : {

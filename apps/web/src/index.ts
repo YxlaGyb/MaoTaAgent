@@ -265,6 +265,8 @@ export const definition: Definition = {
     { capability: "agent.runner", optional: true },
     { capability: "permission", optional: true },
     { capability: "i18n", optional: true },
+    { capability: "settings" },
+    { capability: "workspace" },
   ],
   configKeys: ["port", "host", "dev", "open"],
 

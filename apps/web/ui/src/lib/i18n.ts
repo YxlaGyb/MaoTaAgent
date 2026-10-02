@@ -33,8 +33,6 @@ import { fallback as zhFallback, locale as zhLocale, messages as zhMessages } fr
 /// in.
 const NAMESPACE = "web";
 
-const KEY = "maota.lang";
-
 interface Dictionary {
   locale: string;
   fallback: string | null;
@@ -88,20 +86,11 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-function read(): string {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw === SYSTEM_PREFERENCE || (raw !== null && DICT[raw] !== undefined) ? raw : SYSTEM_PREFERENCE;
-  } catch {
-    return SYSTEM_PREFERENCE;
-  }
-}
-
 function spoken(): string {
   return typeof navigator === "undefined" ? "" : navigator.language;
 }
 
-let preference = read();
+let preference = SYSTEM_PREFERENCE;
 let lang = resolveLocale(preference, LANGUAGES, spoken());
 
 export function getLang(): string {
@@ -113,13 +102,9 @@ export function getLangPref(): string {
 }
 
 export function setLang(next: string): void {
-  if (next !== SYSTEM_PREFERENCE && DICT[next] === undefined) return;
+  if (next !== SYSTEM_PREFERENCE && next.trim() === "") return;
   preference = next;
   lang = resolveLocale(next, LANGUAGES, spoken());
-  try {
-    localStorage.setItem(KEY, next);
-  } catch {
-  }
   document.documentElement.lang = lang;
   for (const listener of listeners) listener();
 }

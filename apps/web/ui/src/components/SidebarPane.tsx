@@ -14,7 +14,6 @@ export function SidebarPane({
   names,
   pinned,
   archived,
-  removed,
   project,
   running,
   onNew,
@@ -40,7 +39,6 @@ export function SidebarPane({
   names: Record<string, string>;
   pinned: string[];
   archived: string[];
-  removed: string[];
   project: string;
   running: string[];
   onNew: (cwd: string) => void;
@@ -61,13 +59,8 @@ export function SidebarPane({
   onSearch: () => void;
 }) {
   const groups = useMemo(() => {
-    const cwds = new Set<string>([project, ...projects]);
-    for (const session of sessions) {
-      const cwd = session.cwd === "" ? DEFAULT_PROJECT : session.cwd;
-      if (cwd !== DEFAULT_PROJECT) cwds.add(cwd);
-    }
-    return [...cwds]
-      .filter((cwd) => cwd !== DEFAULT_PROJECT && !removed.includes(cwd))
+    return [...new Set([project, ...projects])]
+      .filter((cwd) => cwd !== DEFAULT_PROJECT)
       .map((cwd) => ({
         cwd,
         sessions: sessions
@@ -84,7 +77,21 @@ export function SidebarPane({
         const rightName = projectLabel(right.cwd, "", names[right.cwd] ?? "");
         return leftName.localeCompare(rightName);
       });
-  }, [archived, names, pinned, project, projects, removed, sessions]);
+  }, [archived, names, pinned, project, projects, sessions]);
+
+  const ungrouped = useMemo(() => {
+    const registered = new Set(projects);
+    return sessions
+      .filter((session) => {
+        const cwd = session.cwd === "" ? DEFAULT_PROJECT : session.cwd;
+        return cwd !== DEFAULT_PROJECT && !registered.has(cwd) && !archived.includes(session.id);
+      })
+      .sort(
+        (left, right) =>
+          Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
+          right.updated_at.localeCompare(left.updated_at),
+      );
+  }, [archived, pinned, projects, sessions]);
 
   const recent = useMemo(
     () =>
@@ -112,6 +119,7 @@ export function SidebarPane({
   return (
     <Sidebar
       groups={groups}
+      ungrouped={ungrouped}
       recent={recent}
       pinned={pinnedRows}
       archived={archivedRows}

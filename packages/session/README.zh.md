@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-存下来的对话：每个会话、每个工作目录一个 JSON 文档，装着这一轮的消息、会话在列表里显示用的标题，以及模型持有那份计划。八个方法回答调用方：`list`、`load`、`save`、`delete`、`children`、计划那一对 `todos` 与 `save_todos`，以及 `events`。文档是版本 5，整份写进临时文件再改名就位，写入时的锁，指向同一目录的第二个 host 同样认。保存消息永远不会丢掉计划，版本 1、2 或 3 的文档在读入时被规范化，再写回时就是版本 5。文档可以带一条父链，子代理的会话就是这样存的：它留在父的目录里，`children` 与 `list` 都带着这条链。
+存下来的对话：每个会话、每个工作目录一个 JSON 文档，装着这一轮的消息、会话在列表里显示用的标题、会话的思考档位，以及模型持有那份计划。九个方法回答调用方：`list`、`load`、`save`、`set_thinking`、`delete`、`children`、计划那一对 `todos` 与 `save_todos`，以及 `events`。文档是版本 6，整份写进临时文件再改名就位，写入时的锁，指向同一目录的第二个 host 同样认。保存消息永远不会丢掉计划，版本 1 到 5 的文档在读入时被规范化，再写回时就是版本 6。文档可以带一条父链，子代理的会话就是这样存的：它留在父的目录里，`children` 与 `list` 都带着这条链。
 
 ## 目录
 
@@ -28,7 +28,8 @@ kind: "package-reference"
 |---|---|---|
 | `list` | 无 | `{ dir, sessions }`，按 `updated_at` 倒序，最新的在前：索引里每一段会话都在，子代理的也在，每一项都带着「谁派出了它」的那条链。 |
 | `load` | `{ id, cwd }` | 文档，并把 `dangling` 算出来。从未写过的会话读出来是一份空会话。 |
-| `save` | `{ id, cwd, title?, messages, parent? }` | 写下去的那份文档。 |
+| `save` | `{ id, cwd, title?, messages, parent?, thinking? }` | 写下去的那份文档。 |
+| `set_thinking` | `{ id, cwd, thinking }` | 只改思考档位后写下去的文档。 |
 | `delete` | `{ id, cwd }` | `{ deleted }`。删除成功时发布 `session.deleted`。 |
 | `children` | `{ id, cwd }` | `{ children }`：这段会话派出的子会话，最早的在最前，每一项都是 `list` 用的那种摘要。 |
 | `todos` | `{ id, cwd }` | 计划的投影。 |
@@ -43,7 +44,7 @@ kind: "package-reference"
 
 | 字段 | 含义 |
 |---|---|
-| `schema_version` | 本版本写出的每份文档都是 `5`。 |
+| `schema_version` | 本版本写出的每份文档都是 `6`。 |
 | `id` | 会话 id。 |
 | `cwd` | 这个会话所属的工作目录，去掉结尾的分隔符。 |
 | `title` | `list` 显示的内容。`save` 不带它时，保留已经存着的标题。 |
@@ -52,6 +53,7 @@ kind: "package-reference"
 | `messages` | 消息记录：就是 `agent-core` 组装并交回来的那个数组。消息可以带一个 `source`：技能目录注记，或带 `kind: "job"` 或 `kind: "schedule"` 与 id 的系统投递。`messageSource` 在文件边界上校验它，并丢掉本版本读不动的值。 |
 | `events` | 每次计划写入一条：`{ kind: "todos.write", at, todos }`；越过 `max_events` 的那些被一条 `{ kind: "todos.snapshot", at, todos }` 顶替。本版本写出的文档总是带这个字段，一开始是空的。 |
 | `parent` | 人打开的会话是 `null`；子代理的会话是那条指回派出它的会话的链接：`{ id, cwd, call_id, type, description }`。 |
+| `thinking` | `off`、`low`、`medium` 或 `high`；旧文档缺失时读成 `off`。 |
 | `dangling` | 不落盘：当最后一条消息是用户消息时由 `load` 置上，那正是「一轮没结束」的样子。 |
 
 ### 父链
@@ -93,6 +95,7 @@ kind: "package-reference"
 | `todos must be an array` | 计划写入带的是别的东西。 |
 | `invalid todos: ...` | 某项不是对象、内容全空白或超过 2000 字符、状态不是三个值之一，或带了 `content` 与 `status` 之外的字段。所有理由在一条消息里列全。 |
 | `parent must name the session that spawned this one, got ...` | 交给 `save` 的链接不是对象，或其中没有一个可用的会话 id。 |
+| `thinking must be one of off, low, medium, high` | 写入带了别的思考档位。 |
 | `session document stayed locked for 5000ms; another writer is busy` | 另一个进程把这份文档的锁攥满了整个等待窗口。 |
 
 -----
@@ -104,7 +107,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 能力本体：配置、八个方法与 `selfCheck`。 |
+| [`src/index.ts`](src/index.ts) | 能力本体：配置、九个方法与 `selfCheck`。 |
 | [`src/store.ts`](src/store.ts) | 文档层：路径、读取、原子写入，计划的读取与追加，以及子会话的查找。 |
 | [`src/plan.ts`](src/plan.ts) | 计划本身：单项形状、上下限、投影与事件过滤。 |
 | [`src/selfcheck.ts`](src/selfcheck.ts) | 对文档、父子链接、索引、锁与折叠的自检，跑在一个用完即弃的根目录上。 |
@@ -119,7 +122,7 @@ kind: "package-reference"
 
 ### 版本
 
-`load` 接受 `schema_version` 为 1、2 或 3 的文档，补上一个空的 `events` 与「没有父链」；完全没有版本字段的文档同样处理。其余情况按读不动的文件处理，损坏的文档也是这个下场。这样读过之后的第一次 `save` 会把文档写回版本 5，所以迁移只花一次写入，不需要单独的命令。形状不被本版本信任的事件或父链会被丢掉，文档的其余部分保留。
+`load` 接受 `schema_version` 为 1 到 5 的文档，补上一个空的 `events`、没有父链与 `thinking: "off"`；完全没有版本字段的文档同样处理。其余情况按读不动的文件处理，损坏的文档也是这个下场。这样读过之后的第一次 `save` 会把文档写回版本 6，所以迁移只花一次写入，不需要单独的命令。形状不被本版本信任的事件或父链会被丢掉，文档的其余部分保留。
 
 ### 子会话顺着链接找出来
 

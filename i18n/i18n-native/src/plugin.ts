@@ -33,6 +33,7 @@ let settings: Settings = { locale: SYSTEM_PREFERENCE, languages: BUILTIN_LANGUAG
 let catalog: Catalog = emptyCatalog(BUILTIN_LANGUAGES);
 let namespaces: string[] = [];
 let problems: string[] = [];
+let localePreference: string | null = null;
 /// Nothing here outlives the process; the controller exists so a discovery call
 /// still in flight when the kernel says goodbye stops with it.
 const life = new AbortController();
@@ -74,6 +75,11 @@ function machineLocale(): string {
   }
 }
 
+function applyLocalePreference(value: unknown): void {
+  const locale = (value as { locale?: unknown } | null)?.locale;
+  localePreference = typeof locale === "string" && locale.trim() !== "" ? locale : null;
+}
+
 async function discover(channel: Channel, capabilities: Record<string, Route>): Promise<void> {
   const contributions = await collectContributions(channel, capabilities, life.signal);
   const built = buildCatalog(settings.languages, contributions);
@@ -90,7 +96,7 @@ async function discover(channel: Channel, capabilities: Record<string, Route>): 
 
 export const definition: Definition = {
   provides: ["i18n"],
-  injects: [],
+  injects: [{ capability: "settings", optional: true }],
   registrations: [],
   hostCalls: [],
   configKeys: ["locale", "languages"],
@@ -106,9 +112,20 @@ export const definition: Definition = {
     catalog = emptyCatalog(settings.languages);
     namespaces = [];
     problems = [];
+    localePreference = null;
   },
 
   async start(wiring: Wiring) {
+    if (wiring.capabilities["settings"] !== undefined) {
+      try {
+        applyLocalePreference(await wiring.channel.call("settings", "get", {}));
+        await wiring.channel.subscribe(["settings.changed"], (_topic, _seq, payload) => {
+          applyLocalePreference(payload);
+        });
+      } catch (error) {
+        wiring.channel.log("warn", `i18n: could not read the settings locale: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     const broken = languageProblems(settings.languages);
     for (const problem of broken) wiring.channel.log("warn", `i18n: ${problem}`);
     await discover(wiring.channel, { ...wiring.capabilities });
@@ -128,7 +145,7 @@ export const definition: Definition = {
     /// word is never waited for.
     catalog() {
       return {
-        locale: resolveLocale(settings.locale, settings.languages, machineLocale()),
+        locale: resolveLocale(localePreference ?? settings.locale, settings.languages, machineLocale()),
         languages: settings.languages,
         namespaces,
         catalog,
@@ -139,7 +156,7 @@ export const definition: Definition = {
     /// The same lookup, asked by something already on this side of the wire,
     /// which is what a message the host itself writes uses.
     translate(params) {
-      const locale = resolveLocale(text(params?.locale) || settings.locale, settings.languages, "");
+      const locale = resolveLocale(text(params?.locale) || localePreference || settings.locale, settings.languages, "");
       return {
         locale,
         text: lookup(

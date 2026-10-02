@@ -84,6 +84,9 @@ importers:
       '@maota/session':
         specifier: workspace:^
         version: link:packages/session
+      '@maota/settings':
+        specifier: workspace:^
+        version: link:packages/settings/settings
       '@maota/skill':
         specifier: workspace:^
         version: link:packages/skill/skill
@@ -129,6 +132,9 @@ importers:
       '@maota/web-bundle':
         specifier: workspace:^
         version: link:packages/bundle/web
+      '@maota/workspace':
+        specifier: workspace:^
+        version: link:packages/workspace/workspace
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
@@ -437,6 +443,12 @@ importers:
         specifier: workspace:^
         version: link:../plugin-kit
 
+  packages/settings/settings:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
   packages/shell/pwsh-local:
     dependencies:
       '@maota/plugin-kit':
@@ -497,6 +509,12 @@ importers:
         version: link:../../plugin-kit
 
   packages/todo/tool-todo:
+    dependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:^
+        version: link:../../plugin-kit
+
+  packages/workspace/workspace:
     dependencies:
       '@maota/plugin-kit':
         specifier: workspace:^

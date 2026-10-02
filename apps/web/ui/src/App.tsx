@@ -1,37 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MainPane } from "./components/MainPane.tsx";
-import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
+import type { LiveTurn } from "./components/MessageList.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { DEFAULT_PROJECT } from "./components/Sidebar.tsx";
 import { SidebarPane } from "./components/SidebarPane.tsx";
 import { useContextCompact } from "./useContextCompact.ts";
-import { describe, errorText, failureText } from "./lib/errors.ts";
-import { adoptCatalog } from "./lib/i18n.ts";
-import { load, remember } from "./lib/storage.ts";
+import { useHostState } from "./useHostState.ts";
+import { useHostEvents } from "./useHostEvents.ts";
+import { describe } from "./lib/errors.ts";
+import { adoptCatalog, setLang } from "./lib/i18n.ts";
 import {
   call,
   subscribe,
   type AppInfo,
   type Approval,
-  type HostEvent,
   type ModelRoute,
   type SessionFile,
   type SessionMessage,
   type SessionSummary,
 } from "./lib/rpc.ts";
+
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [kernelError, setKernelError] = useState<string | null>(null);
+  const { settings, workspace, adoptSettings, adoptWorkspace, updateSettings, updateWorkspace } = useHostState({
+    localeFallback: info?.i18n?.locale,
+    onError: setKernelError,
+  });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [projects, setProjects] = useState<string[]>(() => load<string[]>("maota.projects", []));
-  const [names, setNames] = useState<Record<string, string>>(() => load<Record<string, string>>("maota.names", {}));
-  const [removed, setRemoved] = useState<string[]>(() => load<string[]>("maota.removed", []));
-  const [pinned, setPinned] = useState<string[]>(() => load<string[]>("maota.pinned", []));
-  const [archived, setArchived] = useState<string[]>(() => load<string[]>("maota.archived", []));
-  const [project, setProject] = useState<string>(() => load<string>("maota.project", DEFAULT_PROJECT));
-  const [active, setActive] = useState<{ id: string; cwd: string } | null>(() =>
-    load<{ id: string; cwd: string } | null>("maota.active", null),
-  );
+  const [project, setProject] = useState<string>(DEFAULT_PROJECT);
+  const [active, setActive] = useState<{ id: string; cwd: string } | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
@@ -39,17 +37,25 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
-  const [thinking, setThinking] = useState<string>(() => load<string>("maota.thinking", "off"));
+  const [thinking, setThinking] = useState<string>("off");
   const [modelRoute, setModelRoute] = useState<ModelRoute | null>(null);
   const [permission, setPermission] = useState<string>("ask");
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [theme, setTheme] = useState<string>(() => load<string>("maota.theme", "system"));
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
   const [spawned, setSpawned] = useState<Record<string, SessionSummary[]>>({});
   const activeRef = useRef(active);
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
   const drafts = useRef(new Set<string>());
+  const projects = useMemo(() => workspace.projects.map((item) => item.path), [workspace.projects]);
+  const names = useMemo(
+    () => Object.fromEntries(workspace.projects.filter((item) => item.name !== null).map((item) => [item.path, item.name!])),
+    [workspace.projects],
+  );
+  const pinned = workspace.pinned_sessions;
+  const archived = workspace.archived_sessions;
+  const theme = settings.theme ?? "system";
+  const language = settings.locale ?? info?.i18n?.locale ?? "system";
   const { context, clearContext, compactNow, loadContext, onCompactEvent } = useContextCompact({
     activeRef,
     info,
@@ -67,6 +73,7 @@ export function App() {
   const newDraft = useCallback((cwd: string): { id: string; cwd: string } => {
     clearSessionView();
     setModelRoute(null);
+    setThinking("off");
     const fresh = { id: crypto.randomUUID(), cwd };
     drafts.current.add(fresh.id);
     activeRef.current = fresh;
@@ -75,16 +82,7 @@ export function App() {
   }, [clearSessionView]);
   useEffect(() => {
     activeRef.current = active;
-    remember("maota.active", active);
   }, [active]);
-  useEffect(() => remember("maota.projects", projects), [projects]);
-  useEffect(() => remember("maota.names", names), [names]);
-  useEffect(() => remember("maota.removed", removed), [removed]);
-  useEffect(() => remember("maota.pinned", pinned), [pinned]);
-  useEffect(() => remember("maota.archived", archived), [archived]);
-  useEffect(() => remember("maota.project", project), [project]);
-  useEffect(() => remember("maota.thinking", thinking), [thinking]);
-  useEffect(() => remember("maota.theme", theme), [theme]);
   useEffect(() => {
     const system = window.matchMedia("(prefers-color-scheme: light)");
     const paint = (): void => {
@@ -101,6 +99,7 @@ export function App() {
       const file = await call<SessionFile>("sessions.load", { id, cwd });
       if (seq !== loadSeq.current) return;
       setModelRoute(file.model_route?.provider === "api" ? null : file.model_route ?? null);
+      setThinking(file.thinking ?? "off");
       setMessages(file.messages ?? []);
       void loadContext(id, cwd);
     } catch (error) {
@@ -136,8 +135,15 @@ export function App() {
   }, []);
   const loadInfo = useCallback(async (): Promise<void> => {
     try {
-      const next = await call<AppInfo>("app.info");
+      const [next, prefs, space] = await Promise.all([
+        call<AppInfo>("app.info"),
+        call<typeof settings>("settings.get"),
+        call<typeof workspace>("workspace.get"),
+      ]);
       adoptCatalog(next.i18n);
+      adoptSettings(prefs);
+      adoptWorkspace(space);
+      setLang(prefs.locale ?? next.i18n?.locale ?? "system");
       setInfo(next);
       setKernelError(null);
     } catch (error) {
@@ -161,79 +167,29 @@ export function App() {
       setApprovals([]);
     }
   }, []);
-  const handleEvent = useCallback(
-    (event: HostEvent) => {
-      if (onCompactEvent(event)) return;
-      if (event.event === "permission.request") {
-        const id = event.request_id ?? "";
-        if (id === "") return;
-        const asked: Approval = {
-          id,
-          session_id: event.session_id ?? "",
-          tool: event.tool ?? "",
-          ...(event.call_id === undefined ? {} : { call_id: event.call_id }),
-          ...(event.reason === undefined ? {} : { reason: event.reason }),
-          ...(event.subagent === undefined ? {} : { subagent: event.subagent }),
-        };
-        setApprovals((prev) => (prev.some((item) => item.id === id) ? prev : [...prev, asked]));
-        return;
-      }
-      if (event.event === "permission.settled") {
-        const id = event.request_id ?? "";
-        setApprovals((prev) => prev.filter((item) => item.id !== id));
-        return;
-      }
-      const turnId = event.turn_id ?? "";
-      if (turnId === "") return;
-      if (event.event === "turn.start") {
-        const sessionId = event.session_id ?? "";
-        if (sessionId === "") return;
-        turns.current.set(turnId, sessionId);
-        setLives((prev) => ({
-          ...prev,
-          [sessionId]: {
-            turn_id: turnId,
-            text: "",
-            reasoning: "",
-            step: 0,
-            mark: { text: 0, reasoning: 0 },
-            tools: [],
-            subagents: [],
-            running: true,
-          },
-        }));
-        return;
-      }
-      const sessionId = turns.current.get(turnId);
-      if (sessionId === undefined) return;
-      if (event.event === "turn.done" || event.event === "turn.cancelled" || event.event === "turn.error") {
-        turns.current.delete(turnId);
-        setLives((prev) => {
-          const next = { ...prev };
-          delete next[sessionId];
-          return next;
-        });
-        setPending(null);
-        if (event.event === "turn.error") {
-          setFailure({ session: sessionId, text: errorText(event.code ?? -32603, event.message ?? "") });
-        } else if (event.failure !== undefined) {
-          setFailure({ session: sessionId, text: failureText(event.failure) });
-        }
-        void refreshSessions();
-        const current = activeRef.current;
-        if (current !== null && current.id === sessionId) {
-          void openSession(sessionId, current.cwd);
-          void loadSpawned(sessionId, current.cwd);
-        }
-        return;
-      }
-      setLives((prev) => {
-        const turn = prev[sessionId];
-        return turn === undefined ? prev : { ...prev, [sessionId]: applyEvent(turn, event) };
-      });
-    },
-    [loadSpawned, onCompactEvent, openSession, refreshSessions],
-  );
+  const changeThinking = useCallback((level: string): void => {
+    setThinking(level);
+    const current = activeRef.current;
+    if (current === null || drafts.current.has(current.id)) return;
+    void call("sessions.set_thinking", { id: current.id, cwd: current.cwd, thinking: level }).catch((error: unknown) => {
+      setFailure({ session: current.id, text: describe(error) });
+    });
+  }, []);
+  const handleEvent = useHostEvents({
+    activeRef,
+    turns,
+    onCompactEvent,
+    adoptSettings,
+    adoptWorkspace,
+    loadSpawned,
+    openSession,
+    rebuildApprovals,
+    refreshSessions,
+    setApprovals,
+    setLives,
+    setPending,
+    setFailure,
+  });
   useEffect(() => {
     void loadInfo();
     void refreshSessions();
@@ -350,7 +306,6 @@ export function App() {
     setFailure(null);
     setPending(null);
     setPage("chat");
-    setRemoved((prev) => prev.filter((item) => item !== cwd));
     newDraft(cwd);
   };
 
@@ -361,10 +316,9 @@ export function App() {
     setActive({ id: session.id, cwd: session.cwd === "" ? DEFAULT_PROJECT : session.cwd });
   };
 
-  const addProject = (cwd: string): void => {
-    setProjects((prev) => (prev.includes(cwd) ? prev : [...prev, cwd]));
-    setRemoved((prev) => prev.filter((item) => item !== cwd));
-    setProject(cwd);
+  const addProject = async (cwd: string): Promise<void> => {
+    const next = await updateWorkspace("workspace.register", { path: cwd });
+    if (next !== undefined) setProject(cwd);
   };
 
   const pickProject = async (): Promise<void> => {
@@ -372,7 +326,7 @@ export function App() {
     setPicking(true);
     try {
       const reply = await call<{ path: string | null }>("workspace.pick");
-      if (reply.path !== null) addProject(reply.path);
+      if (reply.path !== null) await addProject(reply.path);
     } catch {
       setManualPath(true);
     } finally {
@@ -386,25 +340,21 @@ export function App() {
   }, [active, sessions]);
 
   const renameProject = (cwd: string, name: string): void => {
-    setNames((prev) => {
-      const next = { ...prev };
-      if (name === "") delete next[cwd];
-      else next[cwd] = name;
-      return next;
-    });
+    void updateWorkspace("workspace.rename", { path: cwd, name });
   };
 
   const removeProject = (cwd: string): void => {
-    setProjects((prev) => prev.filter((item) => item !== cwd));
-    setRemoved((prev) => (prev.includes(cwd) ? prev : [...prev, cwd]));
-    if (project === cwd) setProject(DEFAULT_PROJECT);
+    void updateWorkspace("workspace.remove", { path: cwd }).then((next) => {
+      if (next !== undefined && project === cwd) setProject(DEFAULT_PROJECT);
+    });
   };
 
-  const flip = (list: string[], id: string): string[] =>
-    list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
-
-  const flipPin = (id: string): void => setPinned((prev) => flip(prev, id));
-  const flipArchive = (id: string): void => setArchived((prev) => flip(prev, id));
+  const flipPin = (id: string): void => {
+    void updateWorkspace("workspace.set_pin", { session_id: id, pinned: !pinned.includes(id) });
+  };
+  const flipArchive = (id: string): void => {
+    void updateWorkspace("workspace.set_archive", { session_id: id, archived: !archived.includes(id) });
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -422,7 +372,9 @@ export function App() {
       <SettingsView
         info={info}
         theme={theme}
-        onTheme={setTheme}
+        locale={language}
+        onTheme={(next) => void updateSettings({ theme: next })}
+        onLanguage={(next) => void updateSettings({ locale: next })}
         onModels={(models) => {
           setInfo((current) => current === null ? current : { ...current, models });
         }}
@@ -440,7 +392,6 @@ export function App() {
         names={names}
         pinned={pinned}
         archived={archived}
-        removed={removed}
         project={project}
         running={Object.keys(lives)}
         onNew={newChat}
@@ -486,7 +437,7 @@ export function App() {
         onPickProject={() => void pickProject()}
         onOpen={open}
         onRetry={() => void loadInfo()}
-        onThinking={setThinking}
+        onThinking={changeThinking}
         onModelRoute={setModelRoute}
         onPermission={(mode) => void changePermission(mode)}
         onAnswer={(id, decision) => void answer(id, decision)}

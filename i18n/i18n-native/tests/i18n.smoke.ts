@@ -203,6 +203,16 @@ await definition.setup?.(wiring(refused, { languages: broken }, capabilities));
 await definition.start?.(wiring(refused, { languages: broken }, capabilities));
 assert.equal(refused.logs.some((line) => line.includes("falls back on gone, which is not declared")), true);
 
+const host = stubChannel({ ...table, settings: { get: { revision: 1, locale: "en", theme: null } } });
+const hostCapabilities = { ...capabilities, settings: route(["settings"]) };
+await definition.setup?.(wiring(host, { locale: "zh-CN" }, hostCapabilities));
+await definition.start?.(wiring(host, { locale: "zh-CN" }, hostCapabilities));
+assert.equal(
+  (definition.methods["catalog"]!({}, call(host)) as { locale: string }).locale,
+  "en",
+  "a Host settings locale should override the profile locale",
+);
+
 definition.close?.("test");
 
 console.log("i18n ok: discovery, skips, catalog, translate, declared languages");
